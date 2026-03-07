@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAC WALL | PORTFOLIO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #FF2A2A;
+            --line-color: #333;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 4rem 10%;
+        }
+
+        header {
+            margin-bottom: 4rem;
+            border-left: 5px solid var(--accent-color);
+            padding-left: 1.5rem;
+            /* Flexbox added to push elements to opposite sides */
+            display: flex;
+            justify-content: space-between;
+            align-items: center; 
+        }
+
+        h1 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 4rem;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .back-link {
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: var(--accent-color); }
+
+        /* The Project Grid */
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .project-card {
+            border: 1px solid var(--line-color);
+            padding: 2rem;
+            text-decoration: none;
+            color: var(--text-color);
+            transition: all 0.2s ease-out;
+            display: flex;
+            flex-direction: column;
+            background: #1a1a1a;
+        }
+
+        .project-card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-5px);
+        }
+
+        .project-card h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.5rem;
+            margin: 0 0 1rem 0;
+            color: #fff;
+        }
+
+        .project-card p {
+            font-size: 1rem;
+            color: #aaa;
+            line-height: 1.5;
+            flex-grow: 1;
+        }
+
+        .project-card .tags {
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Data Portfolio</h1>
+        <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Home</a>
+    </header>
+
+    <div class="project-grid">
+        <a href="movie-reviews.html" class="project-card">
+            <h2>Audience Score Distributions</h2>
+            <p>An interactive, browser-only dashboard analyzing the score distribution of millions of individual movie reviews using DuckDB-Wasm and D3.js.</p>
+            <div class="tags">Python • DuckDB • D3.js</div>
+        </a>
+    </div>
+
+</body>
+</html>
