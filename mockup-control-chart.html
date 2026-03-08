@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trend & Confidence Control Chart</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --panel-bg: #151515;
+            --text-main: #ffffff;
+            --accent-red: #FF2A2A;
+            --accent-muted: rgba(255, 42, 42, 0.15);
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .chart-panel {
+            background: var(--panel-bg);
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 30px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .title-block h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 24px;
+            letter-spacing: 1px;
+            margin: 0 0 5px 0;
+            text-transform: uppercase;
+        }
+
+        .title-block p {
+            color: #888;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #aaa;
+            font-weight: 500;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-box {
+            width: 12px; height: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+
+        /* D3 CSS Overrides */
+        .domain { display: none; } /* Hides the solid axis lines for a cleaner look */
+        .tick line { stroke: #333; stroke-dasharray: 4, 4; } /* Subtle gridlines */
+        .tick text { fill: #777; font-family: 'Inter', sans-serif; font-size: 12px; }
+        
+        .btn-regenerate {
+            margin-top: 30px;
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-regenerate:hover { background: var(--accent-red); border-color: var(--accent-red); }
+
+    </style>
+</head>
+<body>
+
+    <div class="chart-panel">
+        <div class="panel-header">
+            <div class="title-block">
+                <h2>Longitudinal Score Variance</h2>
+                <p>Average rating overlayed with 95% Confidence Intervals</p>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-box" style="background: var(--accent-red);"></div> Annual Mean</div>
+                <div class="legend-item"><div class="legend-box" style="background: var(--accent-muted); border: 1px solid var(--accent-red);"></div> 95% Confidence Band</div>
+                <div class="legend-item"><div class="legend-box" style="background: transparent; border-top: 2px dashed #666;"></div> Global Mean</div>
+            </div>
+        </div>
+        
+        <div id="d3-canvas" class="chart-container"></div>
+    </div>
+
+    <button class="btn-regenerate" onclick="drawChart()">Regenerate Simulated Data</button>
+
+    <script>
+        // --- 1. SIMULATE DATABASE DATA ---
+        function generateData() {
+            let data = [];
+            let currentAvg = 3.5;
+            
+            for (let year = 1990; year <= 2025; year++) {
+                // Random walk for the average score
+                currentAvg += (Math.random() - 0.5) * 0.4;
+                if (currentAvg > 4.8) currentAvg = 4.8;
+                if (currentAvg < 2.0) currentAvg = 2.0;
+                
+                // Simulate variance: older years have wider confidence intervals (fewer reviews)
+                // Newer years have very tight bands (lots of reviews)
+                let varianceBase = (2025 - year) * 0.02 + 0.1; 
+                let marginOfError = varianceBase + (Math.random() * 0.15);
+
+                data.push({
+                    year: year,
+                    avg: currentAvg,
+                    upper: Math.min(5.0, currentAvg + marginOfError),
+                    lower: Math.max(0.5, currentAvg - marginOfError)
+                });
+            }
+            return data;
+        }
+
+        // --- 2. D3 RENDER LOGIC ---
+        function drawChart() {
+            const data = generateData();
+            const globalMean = d3.mean(data, d => d.avg);
+
+            // Clear previous chart
+            d3.select("#d3-canvas").selectAll("*").remove();
+
+            const container = document.getElementById("d3-canvas");
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const margin = {top: 20, right: 20, bottom: 30, left: 40};
+            
+            const svg = d3.select("#d3-canvas").append("svg")
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .style("width", "100%")
+                .style("height", "100%")
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // SCALES
+            const x = d3.scaleLinear()
+                .domain(d3.extent(data, d => d.year))
+                .range([0, width - margin.left - margin.right]);
+
+            const y = d3.scaleLinear()
+                .domain([1.5, 5.0]) // Fixing Y axis to show spread clearly
+                .range([height - margin.top - margin.bottom, 0]);
+
+            // AXES (With subtle gridlines)
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(x).tickFormat(d3.format("d")).tickSize(-height).ticks(10))
+                .call(g => g.select(".domain").remove());
+
+            svg.append("g")
+                .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
+                .call(g => g.select(".domain").remove());
+
+            // THE CONFIDENCE INTERVAL BAND
+            const area = d3.area()
+                .curve(d3.curveMonotoneX)
+                .x(d => x(d.year))
+                .y0(d => y(d.lower))
+                .y1(d => y(d.upper));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "rgba(255, 42, 42, 0.15)")
+                .attr("stroke", "rgba(255, 42, 42, 0.3)")
+                .attr("stroke-width", 1)
+                .attr("d", area);
+
+            // THE GLOBAL MEAN DASHED LINE
+            svg.append("line")
+                .attr("x1", 0)
+                .attr("x2", width - margin.left - margin.right)
+                .attr("y1", y(globalMean))
+                .attr("y2", y(globalMean))
+                .attr("stroke", "#666")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "5,5");
+
+            // THE ANNUAL AVERAGE LINE
+            const line = d3.line()
+                .curve(d3.curveMonotoneX)
+                .x(d => x(d.year))
+                .y(d => y(d.avg));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "#FF2A2A")
+                .attr("stroke-width", 3)
+                .attr("d", line);
+
+            // DATA POINTS
+            svg.selectAll(".dot")
+                .data(data)
+                .join("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.year))
+                .attr("cy", d => y(d.avg))
+                .attr("r", 4)
+                .attr("fill", "#0a0a0a")
+                .attr("stroke", "#FF2A2A")
+                .attr("stroke-width", 2);
+        }
+
+        // Boot it up
+        drawChart();
+        
+        // Handle window resize
+        window.addEventListener('resize', drawChart);
+    </script>
+</body>
+</html>
