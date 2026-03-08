@@ -17,7 +17,6 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
-        // 1. BOOT UP DUCKDB
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
@@ -26,7 +25,6 @@ async function initializeDashboard() {
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         URL.revokeObjectURL(worker_url);
 
-        // 2. MOUNT DATA
         loadingText.innerText = "Mounting Parquet Files...";
         const [mRes, rRes] = await Promise.all([
             fetch('movies.parquet?v=' + Date.now()),
@@ -36,7 +34,6 @@ async function initializeDashboard() {
         await db.registerFileBuffer('ratings.parquet', new Uint8Array(await rRes.arrayBuffer()));
         conn = await db.connect();
 
-        // 3. PRE-AGGREGATE AVERAGES
         loadingText.innerText = "Calculating Averages...";
         await conn.query(`
             CREATE TABLE movie_averages AS 
@@ -45,7 +42,6 @@ async function initializeDashboard() {
             GROUP BY movieId
         `);
 
-        // 4. SETUP UI
         setupDistributionChart();
         setupTrendChart();
         
@@ -55,52 +51,56 @@ async function initializeDashboard() {
         loadingText.style.display = 'none';
         mainStage.style.opacity = '1';
         
-        // 5. UNLOCK INPUTS
         const searchBar = document.getElementById('searchBar');
         searchBar.disabled = false;
         document.querySelectorAll('.filter-group input').forEach(input => input.disabled = false);
 
-        // --- UNIFIED EVENT LISTENERS --- //
-        
         async function handleUIChange() {
             mainStage.style.opacity = '0.5'; 
             scoreRange = null;
             selectedYears.clear();
             if(distBrushGroup) distBrushGroup.call(brush.move, null);
+            document.getElementById('clear-dist-btn').style.display = 'none';
+            document.getElementById('clear-trend-btn').style.display = 'none';
             
             await refreshFilters(); 
             await applyUnifiedFilters();
             mainStage.style.opacity = '1'; 
         }
 
-        // Search Bar Listener
         searchBar.addEventListener('input', async (e) => {
             const val = e.target.value.trim();
-            // Only trigger if cleared, or if it exactly matches a known movie
-            if (val === "" || allMovieTitles.includes(val)) {
-                await handleUIChange();
-            }
+            if (val === "" || allMovieTitles.includes(val)) await handleUIChange();
         });
 
-        // Dropdown Listeners
         document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
             input.addEventListener('change', handleUIChange);
         });
 
-        // Reset Button
         document.getElementById('resetBtn').addEventListener('click', async () => {
             mainStage.style.opacity = '0.5';
             document.querySelectorAll('.filter-group input, #searchBar').forEach(input => input.value = "");
             scoreRange = null;
             selectedYears.clear();
             if(distBrushGroup) distBrushGroup.call(brush.move, null);
+            document.getElementById('clear-dist-btn').style.display = 'none';
+            document.getElementById('clear-trend-btn').style.display = 'none';
 
             await refreshFilters();
             await applyUnifiedFilters();
             mainStage.style.opacity = '1';
         });
 
-        // 6. DEFAULT LOAD
+        // NEW: Clear Chart Selection Buttons
+        document.getElementById('clear-dist-btn').addEventListener('click', () => {
+            if(distBrushGroup) distBrushGroup.call(brush.move, null);
+        });
+
+        document.getElementById('clear-trend-btn').addEventListener('click', () => {
+            selectedYears.clear();
+            applyCrossFilters('trend');
+        });
+
         await applyUnifiedFilters(); 
 
     } catch (error) {
@@ -109,7 +109,6 @@ async function initializeDashboard() {
     }
 }
 
-// HELPER: Read datalist input
 function getFilterValue(id) {
     const el = document.getElementById(id);
     if (!el) return "All";
@@ -117,12 +116,10 @@ function getFilterValue(id) {
     return (val === "") ? "All" : val;
 }
 
-// OMNI-DIRECTIONAL FILTERS
 async function refreshFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : null;
-        
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
@@ -146,16 +143,10 @@ async function refreshFilters() {
         const whereForActor = buildWhere([srcClause, gClause, dClause, sClause]);              
 
         let joinClause = "";
-        
-        if (scoreRange) {
-            joinClause += ` JOIN movie_averages avg_filt ON m.movieId = avg_filt.movieId AND avg_filt.avg_rating >= ${scoreRange[0]} AND avg_filt.avg_rating <= ${scoreRange[1]} `;
-        }
-        if (selectedYears.size > 0) {
-            joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
-        }
+        if (scoreRange) joinClause += ` JOIN movie_averages avg_filt ON m.movieId = avg_filt.movieId AND avg_filt.avg_rating >= ${scoreRange[0]} AND avg_filt.avg_rating <= ${scoreRange[1]} `;
+        if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
         const baseFrom = `FROM 'movies.parquet' m ${joinClause}`;
-
         const dirWhereStr = whereForDir ? `${whereForDir} AND m.director != 'Unknown'` : `WHERE m.director != 'Unknown'`;
         const stdWhereStr = whereForStudio ? `${whereForStudio} AND m.studio != 'N/A'` : `WHERE m.studio != 'N/A'`;
         const actWhereStr = whereForActor ? `${whereForActor} AND m."cast" != 'N/A'` : `WHERE m."cast" != 'N/A'`;
@@ -176,7 +167,6 @@ async function refreshFilters() {
         updateDatalist('directorList', dRes.toArray().map(r => r.toJSON().director));
         updateDatalist('studioList', sRes.toArray().map(r => r.toJSON().studio));
         updateDatalist('actorList', aRes.toArray().map(r => r.toJSON().a));
-
     } catch (error) {
         console.error("Filter Sync Failed:", error);
     }
@@ -194,7 +184,6 @@ function updateDatalist(id, list) {
     });
 }
 
-// MASTER UPDATE FUNCTION (Combines Search + Metadata)
 async function applyUnifiedFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
@@ -213,10 +202,8 @@ async function applyUnifiedFilters() {
         
         const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
 
-        // Determine sampling and text based on active filters
         let query;
         if (searchVal !== "" && allMovieTitles.includes(searchVal)) {
-            // Specific Movie
             const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
             const movieData = movieRes.toArray().map(row => row.toJSON())[0];
             
@@ -229,7 +216,6 @@ async function applyUnifiedFilters() {
 
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
         } else if (clauses.length > 0) {
-            // Filtered Aggregate
             document.getElementById('ui-title').innerText = "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
@@ -244,7 +230,6 @@ async function applyUnifiedFilters() {
                 USING SAMPLE 2 PERCENT (bernoulli)
             `;
         } else {
-            // Global Load
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
             document.getElementById('ui-desc').innerText = "Viewing the aggregate distribution of the MovieLens dataset. Use the filters above or drag a selection box over the charts.";
@@ -265,7 +250,6 @@ async function applyUnifiedFilters() {
     }
 }
 
-// BRIDGE: D3 Visuals <-> UI State
 function applyCrossFilters(source) {
     if (source !== 'dist') {
         const distScores = selectedYears.size === 0 
@@ -281,6 +265,10 @@ function applyCrossFilters(source) {
         updateTrendChart(trendData);
     }
 
+    // Toggle the explicit clear buttons based on selection state
+    document.getElementById('clear-dist-btn').style.display = scoreRange ? 'inline' : 'none';
+    document.getElementById('clear-trend-btn').style.display = selectedYears.size > 0 ? 'inline' : 'none';
+
     if (scoreRange || selectedYears.size > 0) {
         document.getElementById('ui-title').innerText = "Visual Filter Active";
         document.getElementById('ui-tags').innerText = "DYNAMIC SELECTION";
@@ -294,10 +282,8 @@ function applyCrossFilters(source) {
     filterDebounce = setTimeout(() => { refreshFilters(); }, 400); 
 }
 
-// --- D3 VISUALIZATION COMPONENTS (WITH VIEWBOX) ---
-
 function setupDistributionChart() {
-    const width = 800, height = 300; // Fixed logical dimensions
+    const width = 800, height = 300; 
     distSvg = d3.select("#dist-container").append("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
@@ -364,7 +350,7 @@ function updateDistributionChart(scores) {
 }
 
 function setupTrendChart() {
-    const width = 800, height = 300; // Fixed logical dimensions
+    const width = 800, height = 300; 
     const margin = {top: 20, right: 20, bottom: 30, left: 45};
     
     trendSvg = d3.select("#trend-container").append("svg")
