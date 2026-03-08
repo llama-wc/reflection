@@ -37,16 +37,24 @@
         }
         .back-btn:hover { color: var(--text-main); }
 
+        /* --- PERFECT ALIGNMENT FILTER GROUP --- */
         .filter-group {
             display: flex; gap: 15px; padding: 20px 40px;
             background: #111; border-bottom: 1px solid #222; flex-wrap: wrap;
-            align-items: stretch; /* Forces equal heights */
+            align-items: center; 
+        }
+        .search-wrapper { 
+            position: relative; flex: 1; min-width: 150px; 
+            display: flex; align-items: stretch;
+        }
+        .filter-group > input, .search-wrapper {
+            flex: 1; min-width: 150px;
         }
         .filter-group input {
             background: var(--bg-color); color: var(--text-main);
             border: 1px solid #333; padding: 10px 15px; border-radius: 4px;
-            font-family: 'Inter', sans-serif; flex: 1; min-width: 150px; color-scheme: dark; 
-            box-sizing: border-box; margin: 0;
+            font-family: 'Inter', sans-serif; box-sizing: border-box; 
+            width: 100%; margin: 0; color-scheme: dark;
         }
         .filter-group input:focus { outline: none; border-color: var(--accent-color); }
         
@@ -54,9 +62,26 @@
             background: var(--accent-color); color: white; border: none;
             padding: 10px 20px; border-radius: 4px; cursor: pointer;
             font-family: 'Oswald', sans-serif; font-size: 16px; transition: opacity 0.2s;
+            height: 100%; box-sizing: border-box;
         }
         #resetBtn:hover { opacity: 0.8; }
 
+        /* --- AUTOCOMPLETE DROPDOWN --- */
+        .autocomplete-overlay {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: #1e1e1e; border: 1px solid #333; border-top: none;
+            max-height: 250px; overflow-y: auto; z-index: 9999;
+            border-radius: 0 0 6px 6px; box-shadow: 0 15px 35px rgba(0,0,0,0.9);
+            display: none; flex-direction: column; margin-top: 2px;
+        }
+        .autocomplete-item {
+            padding: 12px 15px; border-bottom: 1px solid #2a2a2a;
+            cursor: pointer; color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
+        }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
+
+        /* --- DASHBOARD LAYOUT --- */
         #main-stage {
             display: grid; grid-template-columns: 350px 1fr; 
             gap: 30px; padding: 40px; opacity: 0; transition: opacity 0.5s ease;
@@ -84,24 +109,20 @@
         }
 
         /* --- THE HERO SQUARE CSS --- */
-        .hero-container {
-            display: flex; justify-content: center; align-items: center;
-            height: 100%; min-height: 350px;
-        }
         .hero-square {
-            width: 100%; max-width: 350px; aspect-ratio: 1 / 1;
+            width: 100%; max-width: 300px; aspect-ratio: 1 / 1;
             border-radius: 12px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; position: relative;
             background-color: #121212; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             transition: background-color 0.4s ease;
         }
         .score-text {
-            font-family: 'Oswald', sans-serif; font-size: 10rem; line-height: 1;
+            font-family: 'Oswald', sans-serif; font-size: 8rem; line-height: 1;
             margin: 0; color: #ffffff; text-shadow: 0 8px 16px rgba(0,0,0,0.5); z-index: 2;
         }
         .sub-text {
-            font-size: 1.1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
-            color: rgba(255,255,255,0.95); z-index: 2; margin-top: -10px; text-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+            color: rgba(255,255,255,0.95); z-index: 2; margin-top: -5px; text-shadow: 0 4px 8px rgba(0,0,0,0.5);
         }
 
         /* --- CONTROL CHART CSS --- */
@@ -110,7 +131,7 @@
         .tick line { stroke: #333; stroke-dasharray: 4, 4; } 
         .tick text { fill: #777; font-family: 'Inter', sans-serif; font-size: 12px; }
 
-        .legend { display: flex; gap: 20px; font-size: 13px; color: #aaa; font-weight: 500; margin-top: -10px; margin-bottom: 20px; }
+        .legend { display: flex; gap: 20px; font-size: 13px; color: #aaa; font-weight: 500; margin-bottom: 10px; }
         .legend-item { display: flex; align-items: center; gap: 8px; }
         .legend-gradient { width: 40px; height: 12px; border-radius: 2px; background: linear-gradient(to right, #FF2A2A, #FF9F00, #00E676); }
         .legend-dashed { width: 20px; height: 0px; border-top: 2px dashed #666; }
@@ -135,7 +156,10 @@
     </div>
 
     <div class="filter-group">
-        <input type="text" id="searchBar" placeholder="Search for a movie title (e.g., Matrix)..." disabled>
+        <div class="search-wrapper">
+            <input type="text" id="searchBar" placeholder="Search for a movie title (e.g., Matrix)..." disabled>
+            <div class="autocomplete-overlay" id="autocompleteOverlay"></div>
+        </div>
         <input type="text" id="genreFilter" list="genreList" placeholder="All Genres" disabled>
         <datalist id="genreList"></datalist>
         <input type="text" id="directorFilter" list="directorList" placeholder="All Directors" disabled>
@@ -162,9 +186,9 @@
             <div id="ui-desc">Initializing dataset...</div>
         </div>
 
-        <div class="panel">
+        <div class="panel" style="display: flex; flex-direction: column;">
             <h3 class="chart-title">Global Average Rating</h3>
-            <div class="hero-container">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
                 <div class="hero-square" id="heroSquare">
                     <h1 class="score-text" id="scoreDisplay">-</h1>
                     <div class="sub-text" id="reviewCount">0 REVIEWS</div>
@@ -173,13 +197,13 @@
         </div>
 
         <div class="panel" style="grid-column: 1 / -1;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
                 <div>
                     <h3 class="chart-title" style="margin-bottom: 5px;">
                         Longitudinal Variance & Trend
                         <span id="clear-trend-btn" style="display:none; font-size:12px; color:var(--accent-color); cursor:pointer; text-transform:none; margin-left: 15px;">✖ Clear Selected Years</span>
                     </h3>
-                    <p style="color: #888; font-size: 13px; margin-top: 0; margin-bottom: 20px;">Average rating overlayed with ±1 Standard Deviation boundaries</p>
+                    <p style="color: #888; font-size: 13px; margin-top: 0;">Average rating overlayed with ±1 Standard Deviation boundaries</p>
                 </div>
                 <div class="legend">
                     <div class="legend-item"><div class="legend-gradient"></div> Score Scale</div>
@@ -191,6 +215,6 @@
 
     </div>
 
-    <script type="module" src="test-dashboard.js?v=11"></script>
+    <script type="module" src="test-dashboard.js?v=12"></script>
 </body>
 </html>
