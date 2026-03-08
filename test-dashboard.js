@@ -20,6 +20,45 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
+        // --- INJECT CUSTOM MOBILE-FRIENDLY AUTOCOMPLETE ---
+        const style = document.createElement('style');
+        style.textContent = `
+            .autocomplete-list {
+                position: absolute; top: 100%; left: 0; right: 0;
+                background: #1e1e1e; border: 1px solid #333; border-top: none;
+                max-height: 250px; overflow-y: auto; margin: 0; padding: 0;
+                list-style: none; z-index: 2000; display: none;
+                border-radius: 0 0 4px 4px; box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+            }
+            .autocomplete-list li {
+                padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #2a2a2a;
+                color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
+            }
+            .autocomplete-list li:hover { background: #ff4b4b; color: #fff; }
+        `;
+        document.head.appendChild(style);
+
+        const searchBar = document.getElementById('searchBar');
+        searchBar.removeAttribute('list'); 
+        const oldDatalist = document.getElementById('movie-suggestions');
+        if (oldDatalist) oldDatalist.remove();
+
+        const wrapper = document.createElement('div');
+        wrapper.style.flex = "1";
+        wrapper.style.position = "relative";
+        wrapper.style.minWidth = "150px";
+        wrapper.style.display = "flex";
+        
+        searchBar.parentNode.insertBefore(wrapper, searchBar);
+        wrapper.appendChild(searchBar);
+        searchBar.style.width = "100%"; 
+
+        const autocompleteList = document.createElement('ul');
+        autocompleteList.id = 'custom-autocomplete';
+        autocompleteList.className = 'autocomplete-list';
+        wrapper.appendChild(autocompleteList);
+        // ---------------------------------------------------
+
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
@@ -54,7 +93,6 @@ async function initializeDashboard() {
         loadingText.style.display = 'none';
         mainStage.style.opacity = '1';
         
-        const searchBar = document.getElementById('searchBar');
         searchBar.disabled = false;
         document.querySelectorAll('.filter-group input').forEach(input => input.disabled = false);
 
@@ -71,32 +109,61 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // 1. THE NEW AUTOCOMPLETE ENGINE (Fires as you type)
+        // --- THE NEW AUTOCOMPLETE ENGINE ---
         let searchDebounce;
+        
+        searchBar.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                autocompleteList.style.display = 'none';
+                searchBar.blur(); 
+                handleUIChange();
+            }
+        });
+
         searchBar.addEventListener('input', (e) => {
             const val = e.target.value.trim();
             clearTimeout(searchDebounce);
             
-            // Wait until they type 2 letters to save processing power
             if (val.length < 2) {
-                updateDatalist('movie-suggestions', []);
+                autocompleteList.style.display = 'none';
                 return;
             }
 
-            // Quick query for the dropdown list
             searchDebounce = setTimeout(async () => {
-                const safeVal = val.replace(/'/g, "''");
-                const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '%${safeVal}%' ORDER BY title_clean LIMIT 15`);
-                const suggestions = res.toArray().map(r => r.toJSON().title_clean);
-                updateDatalist('movie-suggestions', suggestions);
-            }, 300);
+                const terms = val.split(' ').filter(t => t.trim() !== '');
+                const likes = terms.map(t => `title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+                
+                try {
+                    const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE ${likes} ORDER BY title_clean LIMIT 10`);
+                    const suggestions = res.toArray().map(r => r.toJSON().title_clean);
+                    
+                    if (suggestions.length > 0) {
+                        autocompleteList.innerHTML = suggestions.map(s => `<li>${s}</li>`).join('');
+                        autocompleteList.style.display = 'block';
+                        
+                        autocompleteList.querySelectorAll('li').forEach(li => {
+                            li.addEventListener('click', async () => {
+                                searchBar.value = li.innerText;
+                                autocompleteList.style.display = 'none';
+                                await handleUIChange();
+                            });
+                        });
+                    } else {
+                        autocompleteList.innerHTML = `<li style="color:#777; font-style:italic;">No matches found...</li>`;
+                        autocompleteList.style.display = 'block';
+                    }
+                } catch(err) { console.error(err); }
+            }, 250);
         });
 
-        // 2. THE DASHBOARD UPDATE ENGINE (Fires when you select or hit Enter)
-        searchBar.addEventListener('change', async (e) => {
-            await handleUIChange();
+        document.addEventListener('click', (e) => {
+            if (e.target !== searchBar && e.target !== autocompleteList) {
+                autocompleteList.style.display = 'none';
+            }
         });
 
+        // --- STANDARD LISTENERS ---
         document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
             input.addEventListener('change', handleUIChange);
         });
@@ -144,11 +211,16 @@ async function refreshFilters() {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : null;
 
-        // Check database for exact match directly
-        let exactMatch = null;
+        let exactMovieData = null;
+        let searchWhereStr = null;
+
         if (searchVal) {
-            const matchRes = await conn.query(`SELECT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
-            if (matchRes.toArray().length > 0) exactMatch = matchRes.toArray()[0].toJSON().title_clean;
+            const exactRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (exactRes.toArray().length > 0) exactMovieData = exactRes.toArray()[0].toJSON();
+            else {
+                const terms = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = terms.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+            }
         }
 
         const genre = getFilterValue('genreFilter');
@@ -157,11 +229,8 @@ async function refreshFilters() {
         const actor = getFilterValue('actorFilter');
 
         let srcClause = null;
-        if (searchVal) {
-            srcClause = exactMatch 
-                ? `m.title_clean = '${exactMatch.replace(/'/g, "''")}'` 
-                : `m.title_clean ILIKE '%${searchVal.replace(/'/g, "''")}%'`;
-        }
+        if (exactMovieData) srcClause = `m.movieId = ${exactMovieData.movieId}`;
+        else if (searchWhereStr) srcClause = `(${searchWhereStr})`;
 
         const gClause = genre !== "All" ? `m.genres LIKE '%${genre.replace(/'/g, "''")}%'` : null;
         const dClause = director !== "All" ? `m.director = '${director.replace(/'/g, "''")}'` : null;
@@ -222,10 +291,17 @@ async function applyUnifiedFilters() {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : "";
         
-        let exactMatch = null;
+        let exactMovieData = null;
+        let searchWhereStr = null;
+
         if (searchVal !== "") {
-            const matchRes = await conn.query(`SELECT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
-            if (matchRes.toArray().length > 0) exactMatch = matchRes.toArray()[0].toJSON().title_clean;
+            const exactRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (exactRes.toArray().length > 0) {
+                exactMovieData = exactRes.toArray()[0].toJSON();
+            } else {
+                const terms = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = terms.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+            }
         }
 
         const genre = getFilterValue('genreFilter');
@@ -234,22 +310,17 @@ async function applyUnifiedFilters() {
         const actor = getFilterValue('actorFilter');
 
         let clauses = [];
-        if (searchVal !== "") {
-            if (exactMatch) clauses.push(`m.title_clean = '${exactMatch.replace(/'/g, "''")}'`);
-            else clauses.push(`m.title_clean ILIKE '%${searchVal.replace(/'/g, "''")}%'`);
-        }
-        
+        if (searchWhereStr) clauses.push(`(${searchWhereStr})`);
         if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
         if (director !== "All") clauses.push(`m.director = '${director.replace(/'/g, "''")}'`);
         if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
         if (actor !== "All") clauses.push(`m."cast" LIKE '%${actor.replace(/'/g, "''")}%'`);
         
-        const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
-
         let query;
-        if (exactMatch) {
-            const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${exactMatch.replace(/'/g, "''")}' LIMIT 1`);
-            const movieData = movieRes.toArray().map(row => row.toJSON())[0];
+
+        // 1. EXACT MATCH (Single Movie)
+        if (exactMovieData && genre === "All" && director === "All" && studio === "All" && actor === "All") {
+            const movieData = exactMovieData;
             
             document.getElementById('ui-title').innerText = movieData.title_clean;
             document.getElementById('ui-tags').innerText = `${movieData.release_year} • ${movieData.genres.split('|')[0]} • ${movieData.runtime}`;
@@ -259,12 +330,16 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-desc').innerText = movieData.description;
 
             const exactStats = await conn.query(`SELECT COUNT(rating) as c, AVG(rating) as a FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`);
-            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
-            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+            if(exactStats.toArray().length > 0 && exactStats.toArray()[0].toJSON().c !== null) {
+                currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+                currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+            }
 
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
             
-        } else if (clauses.length > 0) {
+        } 
+        // 2. FILTERED MATCH (Fuzzy Search or Metadata)
+        else if (clauses.length > 0 || exactMovieData) {
             document.getElementById('ui-title').innerText = "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
@@ -272,21 +347,31 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
             document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
 
+            if (exactMovieData) clauses.push(`m.movieId = ${exactMovieData.movieId}`);
+            const finalWhereStr = `WHERE ${clauses.join(' AND ')}`;
+
             const exactStats = await conn.query(`
-                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${whereStr})
+                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
                 SELECT COUNT(r.rating) as c, AVG(r.rating) as a FROM 'ratings.parquet' r
                 JOIN filtered_movies m ON r.movieId = m.movieId
             `);
-            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
-            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+            
+            if(exactStats.toArray().length > 0 && exactStats.toArray()[0].toJSON().c !== null) {
+                currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+                currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+            } else {
+                currentExactCount = 0; currentExactAvg = 0;
+            }
 
             query = `
-                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${whereStr})
+                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
                 SELECT r.rating, r.review_year FROM 'ratings.parquet' r
                 JOIN filtered_movies m ON r.movieId = m.movieId
                 USING SAMPLE 2 PERCENT (bernoulli)
             `;
-        } else {
+        } 
+        // 3. GLOBAL (No Filters)
+        else {
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
             document.getElementById('ui-desc').innerText = "Viewing the aggregate distribution of the MovieLens dataset. Use the filters above or drag a selection box over the charts.";
@@ -387,7 +472,7 @@ function setupDistributionChart() {
 }
 
 function updateDistributionChart(scores, exactAvg = null, exactCount = null) {
-    if(!scores || scores.length === 0) {
+    if(!scores || scores.length === 0 || exactCount === 0) {
         distPath.transition().duration(400).attr("opacity", 0);
         distAvgLine.transition().duration(400).attr("opacity", 0);
         distAvgText.text("");
