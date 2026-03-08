@@ -2,23 +2,31 @@ import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0
 
 // Global State
 let conn;
-let distSvg, distPath, distX, distY, distAvgLine, distAvgText, distBrushGroup, brush; 
 let trendSvg, trendPath, trendX, trendY, trendArea, trendDots; 
-let allMovieTitles = []; 
-let currentRatingsData = []; 
-let resizeTimeout; 
-let filterDebounce;
+let currentTrendData = []; 
+
+// Exact Stats State
+let currentExactAvg = 0;
+let currentExactCount = 0;
 
 // Interactive States
 let selectedYears = new Set(); 
-let scoreRange = null; 
+
+// PURE FLAT COLOR SCALE 
+const colorScale = d3.scaleLinear()
+    .domain([0.5, 2.75, 5.0]) 
+    .range(["#FF2A2A", "#FF9F00", "#00E676"]) 
+    .interpolate(d3.interpolateRgb); 
 
 async function initializeDashboard() {
     const loadingText = document.getElementById('loading-overlay');
     const mainStage = document.getElementById('main-stage');
 
     try {
-        // 1. BOOT UP DUCKDB
+        const searchBar = document.getElementById('searchBar');
+        const autocompleteOverlay = document.getElementById('autocompleteOverlay');
+
+        // BOOT DUCKDB
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
@@ -27,28 +35,16 @@ async function initializeDashboard() {
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         URL.revokeObjectURL(worker_url);
 
-        // 2. MOUNT DATA
         loadingText.innerText = "Mounting Parquet Files...";
+        
+        // PRODUCTION UPDATE: Removed ?v=Date.now() to allow browser caching
         const [mRes, rRes] = await Promise.all([
-            fetch('movies.parquet?v=' + Date.now()),
-            fetch('ratings.parquet?v=' + Date.now())
+            fetch('movies.parquet'),
+            fetch('ratings.parquet')
         ]);
         await db.registerFileBuffer('movies.parquet', new Uint8Array(await mRes.arrayBuffer()));
         await db.registerFileBuffer('ratings.parquet', new Uint8Array(await rRes.arrayBuffer()));
         conn = await db.connect();
-
-        // 3. PRE-AGGREGATE AVERAGES (For D3 Brushing)
-        loadingText.innerText = "Calculating Averages...";
-        await conn.query(`
-            CREATE TABLE movie_averages AS 
-            SELECT movieId, AVG(rating) as avg_rating 
-            FROM 'ratings.parquet' 
-            GROUP BY movieId
-        `);
-
-        // 4. SETUP UI
-        setupDistributionChart();
-        setupTrendChart();
         
         loadingText.innerText = "Indexing Metadata...";
         await refreshFilters(); 
@@ -56,79 +52,102 @@ async function initializeDashboard() {
         loadingText.style.display = 'none';
         mainStage.style.opacity = '1';
         
-        // 5. UNLOCK INPUTS
-        const searchBar = document.getElementById('searchBar');
         searchBar.disabled = false;
         document.querySelectorAll('.filter-group input').forEach(input => input.disabled = false);
 
-        // --- STRICT EVENT LISTENER ISOLATION --- //
+        async function handleUIChange() {
+            mainStage.style.opacity = '0.5'; 
+            selectedYears.clear();
+            document.getElementById('clear-trend-btn').style.display = 'none';
+            await refreshFilters(); 
+            await applyUnifiedFilters();
+            mainStage.style.opacity = '1'; 
+        }
 
-        // Listener A: Search Bar Only
+        // TOKENIZED FUZZY SEARCH LOGIC
+        let searchDebounce;
         searchBar.addEventListener('input', async (e) => {
             const val = e.target.value.trim();
+            clearTimeout(searchDebounce);
             
-            if (val === "") {
-                // If cleared, revert to active dropdown filters
-                mainStage.style.opacity = '0.5';
-                await applyMetadataFilters();
-                mainStage.style.opacity = '1';
-            } 
-            else if (allMovieTitles.includes(val)) {
-                // Exact match found
-                mainStage.style.opacity = '0.5';
-                await searchAndRender(val);
-                mainStage.style.opacity = '1';
+            if (val.length === 0) {
+                autocompleteOverlay.style.display = 'none';
+                await handleUIChange();
+                return;
+            }
+
+            if (val.length < 2) {
+                autocompleteOverlay.style.display = 'none';
+                return;
+            }
+
+            searchDebounce = setTimeout(async () => {
+                const tokens = val.split(' ').filter(t => t.trim() !== '');
+                const likeClauses = tokens.map(t => `title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+                
+                try {
+                    const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE ${likeClauses} ORDER BY title_clean LIMIT 10`);
+                    const suggestions = res.toArray().map(r => r.toJSON().title_clean);
+                    
+                    if (suggestions.length > 0) {
+                        autocompleteOverlay.innerHTML = suggestions.map(s => `<div class="autocomplete-item">${s}</div>`).join('');
+                        autocompleteOverlay.style.display = 'flex';
+                        
+                        autocompleteOverlay.querySelectorAll('.autocomplete-item').forEach(div => {
+                            div.addEventListener('click', async () => {
+                                searchBar.value = div.innerText;
+                                autocompleteOverlay.style.display = 'none';
+                                await handleUIChange();
+                            });
+                        });
+                    } else {
+                        autocompleteOverlay.innerHTML = `<div class="autocomplete-item" style="color:#777; font-style:italic;">No matches found...</div>`;
+                        autocompleteOverlay.style.display = 'flex';
+                    }
+                } catch(err) { console.error(err); }
+            }, 250); 
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target !== searchBar && !autocompleteOverlay.contains(e.target)) {
+                autocompleteOverlay.style.display = 'none';
             }
         });
 
-        // Listener B: Metadata Datalists Only (Excludes Search Bar)
-        document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
-            input.addEventListener('change', async () => {
-                mainStage.style.opacity = '0.5'; 
-                
-                // Reset D3 interactions when parent dropdowns change
-                scoreRange = null;
-                selectedYears.clear();
-                if(distBrushGroup) distBrushGroup.call(brush.move, null);
-                document.getElementById('searchBar').value = ""; // Clear search bar to avoid conflicts
-                
-                await refreshFilters(); 
-                await applyMetadataFilters();
-                mainStage.style.opacity = '1'; 
-            });
+        searchBar.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                autocompleteOverlay.style.display = 'none';
+                searchBar.blur(); 
+                await handleUIChange();
+            }
         });
 
-        // Listener C: Reset Button
+        document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
+            input.addEventListener('change', handleUIChange);
+        });
+
         document.getElementById('resetBtn').addEventListener('click', async () => {
             mainStage.style.opacity = '0.5';
-            
-            document.querySelectorAll('.filter-group input').forEach(input => input.value = "");
-            scoreRange = null;
+            document.querySelectorAll('.filter-group input, #searchBar').forEach(input => input.value = "");
             selectedYears.clear();
-            if(distBrushGroup) distBrushGroup.call(brush.move, null);
+            document.getElementById('clear-trend-btn').style.display = 'none';
 
             await refreshFilters();
-            await searchAndRender(null); // Load global state
+            await applyUnifiedFilters();
             mainStage.style.opacity = '1';
         });
 
-        // Listener D: Window Resize
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                if (currentRatingsData && currentRatingsData.length > 0) {
-                    document.getElementById('dist-container').innerHTML = '';
-                    document.getElementById('trend-container').innerHTML = '';
-                    setupDistributionChart();
-                    setupTrendChart();
-                    if (scoreRange) distBrushGroup.call(brush.move, [distX(scoreRange[0]), distX(scoreRange[1])]);
-                    applyCrossFilters('resize'); 
-                }
-            }, 150);
+        document.getElementById('clear-trend-btn').addEventListener('click', () => {
+            selectedYears.clear();
+            applyCrossFilters();
         });
 
-        // 6. DEFAULT LOAD
-        await searchAndRender(null); 
+        await applyUnifiedFilters(); 
+        
+        window.addEventListener('resize', () => {
+            if(currentTrendData.length > 0) updateTrendChart(currentTrendData, currentExactAvg);
+        });
 
     } catch (error) {
         console.error("Dashboard Engine Failed:", error);
@@ -136,7 +155,6 @@ async function initializeDashboard() {
     }
 }
 
-// HELPER: Read datalist input
 function getFilterValue(id) {
     const el = document.getElementById(id);
     if (!el) return "All";
@@ -144,13 +162,32 @@ function getFilterValue(id) {
     return (val === "") ? "All" : val;
 }
 
-// OMNI-DIRECTIONAL FILTERS (Prunes Datalists)
 async function refreshFilters() {
     try {
+        const searchEl = document.getElementById('searchBar');
+        const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : null;
+
+        let exactMovieData = null;
+        let searchWhereStr = null;
+
+        if (searchVal) {
+            const exactRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (exactRes.toArray().length > 0) {
+                exactMovieData = exactRes.toArray()[0].toJSON();
+            } else {
+                const tokens = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+            }
+        }
+
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
+
+        let srcClause = null;
+        if (exactMovieData) srcClause = `m.movieId = ${exactMovieData.movieId}`;
+        else if (searchWhereStr) srcClause = `(${searchWhereStr})`;
 
         const gClause = genre !== "All" ? `m.genres LIKE '%${genre.replace(/'/g, "''")}%'` : null;
         const dClause = director !== "All" ? `m.director = '${director.replace(/'/g, "''")}'` : null;
@@ -162,52 +199,32 @@ async function refreshFilters() {
             return valid.length > 0 ? `WHERE ${valid.join(' AND ')}` : "";
         };
 
-        const whereAll = buildWhere([gClause, dClause, sClause, aClause]);           
-        const whereForGenre = buildWhere([dClause, sClause, aClause]);               
-        const whereForDir = buildWhere([gClause, sClause, aClause]);                 
-        const whereForStudio = buildWhere([gClause, dClause, aClause]);              
-        const whereForActor = buildWhere([gClause, dClause, sClause]);              
+        const whereForGenre = buildWhere([srcClause, dClause, sClause, aClause]);               
+        const whereForDir = buildWhere([srcClause, gClause, sClause, aClause]);                 
+        const whereForStudio = buildWhere([srcClause, gClause, dClause, aClause]);              
+        const whereForActor = buildWhere([srcClause, gClause, dClause, sClause]);              
 
         let joinClause = "";
-        
-        if (scoreRange) {
-            joinClause += ` 
-            JOIN movie_averages avg_filt 
-              ON m.movieId = avg_filt.movieId 
-             AND avg_filt.avg_rating >= ${scoreRange[0]} 
-             AND avg_filt.avg_rating <= ${scoreRange[1]} 
-            `;
-        }
-        if (selectedYears.size > 0) {
-            joinClause += ` 
-            JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt 
-              ON m.movieId = y_filt.movieId 
-            `;
-        }
+        if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
         const baseFrom = `FROM 'movies.parquet' m ${joinClause}`;
-
         const dirWhereStr = whereForDir ? `${whereForDir} AND m.director != 'Unknown'` : `WHERE m.director != 'Unknown'`;
         const stdWhereStr = whereForStudio ? `${whereForStudio} AND m.studio != 'N/A'` : `WHERE m.studio != 'N/A'`;
         const actWhereStr = whereForActor ? `${whereForActor} AND m."cast" != 'N/A'` : `WHERE m."cast" != 'N/A'`;
 
         const queries = [
-            conn.query(`SELECT m.title_clean ${baseFrom} ${whereAll} ORDER BY m.title_clean`),
             conn.query(`SELECT DISTINCT trim(unnest(string_split(m.genres, '|'))) as g ${baseFrom} ${whereForGenre} ORDER BY g`),
             conn.query(`SELECT DISTINCT m.director ${baseFrom} ${dirWhereStr} ORDER BY m.director`),
             conn.query(`SELECT DISTINCT m.studio ${baseFrom} ${stdWhereStr} ORDER BY m.studio`),
             conn.query(`SELECT DISTINCT trim(unnest(string_split(m."cast", ','))) as a ${baseFrom} ${actWhereStr} ORDER BY a`)
         ];
 
-        const [tRes, gRes, dRes, sRes, aRes] = await Promise.all(queries);
+        const [gRes, dRes, sRes, aRes] = await Promise.all(queries);
 
-        allMovieTitles = tRes.toArray().map(r => r.toJSON().title_clean);
-        updateDatalist('movie-suggestions', allMovieTitles);
         updateDatalist('genreList', gRes.toArray().map(r => r.toJSON().g));
         updateDatalist('directorList', dRes.toArray().map(r => r.toJSON().director));
         updateDatalist('studioList', sRes.toArray().map(r => r.toJSON().studio));
         updateDatalist('actorList', aRes.toArray().map(r => r.toJSON().a));
-
     } catch (error) {
         console.error("Filter Sync Failed:", error);
     }
@@ -225,228 +242,294 @@ function updateDatalist(id, list) {
     });
 }
 
-// SEARCH RENDER (Global or Specific Movie)
-async function searchAndRender(searchTerm) {
+async function applyUnifiedFilters() {
     try {
-        const isGlobal = !searchTerm || searchTerm === "";
+        const searchEl = document.getElementById('searchBar');
+        const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : "";
+        
+        let exactMovieData = null;
+        let searchWhereStr = null;
 
-        if (isGlobal) {
-            document.getElementById('ui-title').innerText = "All Movies";
-            document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
-            document.getElementById('ui-desc').innerText = "Viewing the aggregate distribution of the MovieLens dataset. Use the filters above or drag a selection box over the charts.";
-            document.getElementById('ui-director').innerText = "-";
-            document.getElementById('ui-studio').innerText = "-";
-            document.getElementById('ui-cast').innerText = "-";
-            
-            const res = await conn.query(`SELECT rating, review_year FROM 'ratings.parquet' USING SAMPLE 0.2 PERCENT (bernoulli)`);
-            currentRatingsData = res.toArray().map(row => row.toJSON());
-        } else {
-            const safeSearch = searchTerm.replace(/'/g, "''");
-            const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${safeSearch}' LIMIT 1`);
-            const movieData = movieRes.toArray().map(row => row.toJSON())[0];
-
-            if (!movieData) return;
-            
-            // Clear D3 Interactions if a specific movie is loaded
-            scoreRange = null;
-            selectedYears.clear();
-            if(distBrushGroup) distBrushGroup.call(brush.move, null);
-
-            document.getElementById('ui-title').innerText = movieData.title_clean;
-            document.getElementById('ui-tags').innerText = `${movieData.release_year} • ${movieData.genres.split('|')[0]} • ${movieData.runtime}`;
-            document.getElementById('ui-director').innerText = movieData.director;
-            document.getElementById('ui-studio').innerText = movieData.studio;
-            document.getElementById('ui-cast').innerText = movieData.cast;
-            document.getElementById('ui-desc').innerText = movieData.description;
-
-            const ratingsRes = await conn.query(`SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`);
-            currentRatingsData = ratingsRes.toArray().map(row => row.toJSON());
+        if (searchVal !== "") {
+            const exactRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (exactRes.toArray().length > 0) {
+                exactMovieData = exactRes.toArray()[0].toJSON();
+            } else {
+                const tokens = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+            }
         }
 
-        updateDistributionChart(currentRatingsData.map(d => d.rating));
-        updateTrendChart(currentRatingsData);
-    } catch (error) {
-        console.error("Render Failed:", error);
-    }
-}
-
-// APPLY METADATA FILTERS
-async function applyMetadataFilters() {
-    try {
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
 
-        if (genre === "All" && director === "All" && studio === "All" && actor === "All") return searchAndRender(null);
-
         let clauses = [];
+        if (searchWhereStr) clauses.push(`(${searchWhereStr})`);
         if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
         if (director !== "All") clauses.push(`m.director = '${director.replace(/'/g, "''")}'`);
         if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
         if (actor !== "All") clauses.push(`m."cast" LIKE '%${actor.replace(/'/g, "''")}%'`);
-        const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
+        
+        let finalWhereStr = "";
 
-        const query = `
-            WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${whereStr})
-            SELECT r.rating, r.review_year 
+        if (exactMovieData && genre === "All" && director === "All" && studio === "All" && actor === "All") {
+            document.getElementById('ui-title').innerText = exactMovieData.title_clean;
+            document.getElementById('ui-tags').innerText = `${exactMovieData.release_year} • ${exactMovieData.genres.split('|')[0]} • ${exactMovieData.runtime}`;
+            document.getElementById('ui-director').innerText = exactMovieData.director;
+            document.getElementById('ui-studio').innerText = exactMovieData.studio;
+            document.getElementById('ui-cast').innerText = exactMovieData.cast;
+            document.getElementById('ui-desc').innerText = exactMovieData.description;
+            finalWhereStr = `WHERE m.movieId = ${exactMovieData.movieId}`;
+        } 
+        else if (clauses.length > 0 || exactMovieData) {
+            document.getElementById('ui-title').innerText = exactMovieData ? exactMovieData.title_clean : "Filtered Results";
+            document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
+            document.getElementById('ui-desc').innerText = "Viewing exact aggregate data based on your selected text filters.";
+            document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
+            document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
+            document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
+            
+            if (exactMovieData) clauses.push(`m.movieId = ${exactMovieData.movieId}`);
+            finalWhereStr = `WHERE ${clauses.join(' AND ')}`;
+        } 
+        else {
+            document.getElementById('ui-title').innerText = "All Movies";
+            document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
+            document.getElementById('ui-desc').innerText = "Viewing the exact aggregate math for the entire MovieLens dataset.";
+            document.getElementById('ui-director').innerText = "-";
+            document.getElementById('ui-studio').innerText = "-";
+            document.getElementById('ui-cast').innerText = "-";
+        }
+
+        let statsQuery = `
+            SELECT COUNT(r.rating) as c, AVG(r.rating) as a 
             FROM 'ratings.parquet' r
-            JOIN filtered_movies m ON r.movieId = m.movieId
-            USING SAMPLE 2 PERCENT (bernoulli)
         `;
-        
-        const res = await conn.query(query);
-        currentRatingsData = res.toArray().map(row => row.toJSON());
-        
-        document.getElementById('ui-title').innerText = "Filtered Results";
-        document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
-        document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
-        document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
-        document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
-        document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
+        if (finalWhereStr !== "") {
+            statsQuery = `
+                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
+                SELECT COUNT(r.rating) as c, AVG(r.rating) as a FROM 'ratings.parquet' r
+                JOIN filtered_movies m ON r.movieId = m.movieId
+            `;
+        }
+        const exactStats = await conn.query(statsQuery);
+        if(exactStats.toArray().length > 0 && exactStats.toArray()[0].toJSON().c !== null) {
+            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+        } else {
+            currentExactCount = 0; currentExactAvg = 0;
+        }
 
-        updateDistributionChart(currentRatingsData.map(d => d.rating));
-        updateTrendChart(currentRatingsData);
+        let yearlyQuery = `
+            SELECT 
+                r.review_year as year, 
+                AVG(r.rating) as avg, 
+                COALESCE(STDDEV_POP(r.rating), 0) as std, 
+                COUNT(r.rating) as count 
+            FROM 'ratings.parquet' r
+            GROUP BY r.review_year
+            ORDER BY r.review_year
+        `;
+        if (finalWhereStr !== "") {
+            yearlyQuery = `
+                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
+                SELECT 
+                    r.review_year as year, 
+                    AVG(r.rating) as avg, 
+                    COALESCE(STDDEV_POP(r.rating), 0) as std, 
+                    COUNT(r.rating) as count 
+                FROM 'ratings.parquet' r
+                JOIN filtered_movies m ON r.movieId = m.movieId
+                GROUP BY r.review_year
+                ORDER BY r.review_year
+            `;
+        }
+        
+        const yearlyRes = await conn.query(yearlyQuery);
+        currentTrendData = yearlyRes.toArray().map(row => row.toJSON());
+
+        updateHeroMetric(currentExactAvg, currentExactCount);
+        updateTrendChart(currentTrendData, currentExactAvg);
+
     } catch (error) {
-        console.error("Filter Apply Failed:", error);
+        console.error("Master Filter Failed:", error);
     }
 }
 
-// BRIDGE: D3 Visuals <-> UI State
-function applyCrossFilters(source) {
-    if (source !== 'dist') {
-        const distScores = selectedYears.size === 0 
-            ? currentRatingsData.map(d => d.rating) 
-            : currentRatingsData.filter(d => selectedYears.has(d.review_year)).map(d => d.rating);
-        updateDistributionChart(distScores);
-    }
-    
-    if (source !== 'trend') {
-        const trendData = scoreRange 
-            ? currentRatingsData.filter(d => d.rating >= scoreRange[0] && d.rating <= scoreRange[1])
-            : currentRatingsData;
-        updateTrendChart(trendData);
+// --- 6. HERO SQUARE RENDERER ---
+function updateHeroMetric(avg, count) {
+    const displayElement = document.getElementById('scoreDisplay');
+    const countElement = document.getElementById('reviewCount');
+    const heroSquare = document.getElementById('heroSquare');
+
+    if (count === 0) {
+        displayElement.innerText = "N/A";
+        countElement.innerText = "0 REVIEWS";
+        heroSquare.style.backgroundColor = "#121212";
+        return;
     }
 
-    if (scoreRange || selectedYears.size > 0) {
-        document.getElementById('searchBar').value = ""; // Clear Search
+    const currentVal = parseFloat(displayElement.innerText) || 0;
+    const targetVal = parseFloat(avg); 
+    
+    d3.select(displayElement)
+      .transition()
+      .duration(750)
+      .tween("text", function() {
+          const i = d3.interpolate(currentVal, targetVal);
+          return function(t) {
+              this.textContent = i(t).toFixed(1);
+          };
+      });
+
+    countElement.innerText = `${count.toLocaleString()} REVIEWS`;
+    heroSquare.style.backgroundColor = colorScale(avg);
+}
+
+// --- 7. CONTROL CHART RENDERER ---
+function updateTrendChart(data, globalMean) {
+    const container = document.getElementById("trend-container");
+    if(!container) return;
+
+    d3.select("#trend-container").selectAll("*").remove();
+
+    if(!data || data.length === 0) return;
+
+    const clean = data.filter(d => d.year != null && !isNaN(d.year));
+    if(clean.length === 0) return;
+
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 350;
+    const margin = {top: 20, right: 20, bottom: 30, left: 40};
+    
+    const svg = d3.select("#trend-container").append("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .style("width", "100%")
+        .style("height", "100%")
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleLinear()
+        .domain(d3.extent(clean, d => d.year))
+        .range([0, width - margin.left - margin.right]);
+
+    const y = d3.scaleLinear()
+        .domain([0.5, 5.0]) 
+        .range([height - margin.top - margin.bottom, 0]);
+
+    const defs = svg.append("defs");
+    const gradientId = "score-gradient-" + Math.random().toString(36).substring(2, 9); 
+    
+    const gradient = defs.append("linearGradient")
+        .attr("id", gradientId)
+        .attr("gradientUnits", "userSpaceOnUse")
+        .attr("x1", 0).attr("y1", y(5.0))  
+        .attr("x2", 0).attr("y2", y(0.5)); 
+
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", "#00E676"); 
+    gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
+
+    let xTicksCount = 10;
+    if (width < 450) xTicksCount = 3;      
+    else if (width < 700) xTicksCount = 5; 
+
+    svg.append("g")
+        .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")).tickSize(-height).ticks(xTicksCount))
+        .call(g => g.select(".domain").remove());
+
+    svg.append("g")
+        .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
+        .call(g => g.select(".domain").remove());
+
+    const area = d3.area()
+        .curve(d3.curveMonotoneX)
+        .x(d => x(d.year))
+        .y0(d => y(Math.max(0.5, d.avg - d.std))) 
+        .y1(d => y(Math.min(5.0, d.avg + d.std))); 
+
+    svg.append("path")
+        .datum(clean)
+        .attr("fill", `url(#${gradientId})`)
+        .attr("opacity", 0.15) 
+        .attr("d", area);
+
+    svg.append("line")
+        .attr("x1", 0)
+        .attr("x2", width - margin.left - margin.right)
+        .attr("y1", y(globalMean))
+        .attr("y2", y(globalMean))
+        .attr("stroke", "#666")
+        .attr("stroke-width", 2)
+        .attr("stroke-dasharray", "5,5");
+
+    const line = d3.line()
+        .curve(d3.curveMonotoneX)
+        .x(d => x(d.year))
+        .y(d => y(d.avg));
+
+    svg.append("path")
+        .datum(clean)
+        .attr("fill", "none")
+        .attr("stroke", `url(#${gradientId})`)
+        .attr("stroke-width", 3)
+        .attr("d", line);
+
+    const dotRadius = width < 500 ? 3 : 5;
+
+    svg.selectAll(".dot")
+        .data(clean)
+        .join("circle")
+        .attr("class", "dot")
+        .attr("cx", d => x(d.year))
+        .attr("cy", d => y(d.avg))
+        .attr("r", dotRadius)
+        .attr("fill", d => selectedYears.has(d.year) ? "#fff" : "#0a0a0a") 
+        .attr("stroke", d => colorScale(d.avg)) 
+        .attr("stroke-width", 2.5)
+        .style("cursor", "pointer")
+        .on("click", (e, d) => {
+            if(selectedYears.has(d.year)) selectedYears.delete(d.year); 
+            else selectedYears.add(d.year);
+            applyCrossFilters();
+        });
+}
+
+// --- 8. CROSS FILTERING ---
+function applyCrossFilters() {
+    const isFiltered = selectedYears.size > 0;
+    
+    let displayAvg = currentExactAvg;
+    let displayCount = currentExactCount;
+
+    if (isFiltered) {
+        const subset = currentTrendData.filter(d => selectedYears.has(d.year));
+        displayCount = d3.sum(subset, d => d.count);
+        if (displayCount > 0) {
+            displayAvg = d3.sum(subset, d => d.avg * d.count) / displayCount;
+        } else {
+            displayAvg = 0;
+        }
+    }
+    
+    updateHeroMetric(displayAvg, displayCount);
+    updateTrendChart(currentTrendData, currentExactAvg);
+
+    document.getElementById('clear-trend-btn').style.display = isFiltered ? 'inline' : 'none';
+
+    if (isFiltered) {
         document.getElementById('ui-title').innerText = "Visual Filter Active";
-        document.getElementById('ui-tags').innerText = "DYNAMIC SELECTION";
-        document.getElementById('ui-desc').innerText = `Filtering dataset by chart selection. Text inputs and search bar have been updated to only show movies matching these constraints.`;
+        document.getElementById('ui-tags').innerText = "DYNAMIC TIME SELECTION";
+        document.getElementById('ui-desc').innerText = `Filtering dataset to specific years selected on the timeline.`;
         document.getElementById('ui-director').innerText = "-";
         document.getElementById('ui-studio').innerText = "-";
         document.getElementById('ui-cast').innerText = "-";
+    } else {
+        refreshFilters();
     }
-
-    clearTimeout(filterDebounce);
-    filterDebounce = setTimeout(() => { refreshFilters(); }, 400); 
-}
-
-// --- D3 VISUALIZATION COMPONENTS ---
-
-function setupDistributionChart() {
-    const container = document.getElementById('dist-container');
-    const width = container.clientWidth, height = 300;
-    distSvg = d3.select("#dist-container").append("svg").attr("width", width).attr("height", height).append("g");
-    
-    const grad = distSvg.append("defs").append("linearGradient").attr("id", "dist-gradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "100%").attr("y2", "0%");
-    grad.append("stop").attr("offset", "0%").attr("stop-color", "#ff4b4b");
-    grad.append("stop").attr("offset", "50%").attr("stop-color", "#ffd166");
-    grad.append("stop").attr("offset", "100%").attr("stop-color", "#06d6a0");
-
-    distX = d3.scaleLinear().domain([0.5, 5.0]).range([30, width - 30]);
-    distY = d3.scaleLinear().range([height - 20, 20]); 
-    
-    distPath = distSvg.append("path").attr("fill", "url(#dist-gradient)").attr("opacity", 0.9);
-    distAvgLine = distSvg.append("line").attr("stroke", "#fff").attr("stroke-width", 3).style("filter", "drop-shadow(0 0 5px white)");
-    distAvgText = distSvg.append("text").attr("fill", "#fff").attr("font-size", "4rem").attr("font-weight", "700");
-
-    brush = d3.brushX()
-        .extent([[30, 0], [width - 30, height]])
-        .on("end", (event) => {
-            if (!event.selection) {
-                scoreRange = null;
-            } else {
-                const [x0, x1] = event.selection;
-                scoreRange = [distX.invert(x0), distX.invert(x1)];
-            }
-            if (event.sourceEvent) applyCrossFilters('dist');
-        });
-
-    distBrushGroup = distSvg.append("g").attr("class", "brush").call(brush);
-}
-
-function updateDistributionChart(scores) {
-    if(!scores || scores.length === 0) {
-        distPath.transition().duration(400).attr("opacity", 0);
-        distAvgLine.transition().duration(400).attr("opacity", 0);
-        distAvgText.text("");
-        return;
-    }
-    
-    distPath.transition().duration(400).attr("opacity", 0.9);
-    distAvgLine.transition().duration(400).attr("opacity", 1);
-
-    const avg = d3.mean(scores);
-    const kde = (kernel, X) => V => X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
-    const epanechnikov = k => v => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
-    const density = kde(epanechnikov(0.3), distX.ticks(50))(scores);
-    
-    distY.domain([0, d3.max(density, d => d[1]) * 1.1]);
-    distPath.datum(density).transition().duration(750).attr("d", d3.area().curve(d3.curveBasis).x(d => distX(d[0])).y0(280).y1(d => distY(d[1])));
-    distAvgLine.transition().duration(750).attr("x1", distX(avg)).attr("x2", distX(avg)).attr("y1", 280).attr("y2", 0);
-
-    const isRight = avg > 3.5;
-    distAvgText.transition().duration(750)
-        .attr("x", distX(avg) + (isRight ? -35 : 35)).attr("text-anchor", isRight ? "end" : "start").attr("y", 150)
-        .textTween(function() {
-            const i = d3.interpolate(parseFloat(this.textContent) || 0, avg);
-            return t => i(t).toFixed(1);
-        });
-
-    if(distBrushGroup) distBrushGroup.raise();
-}
-
-function setupTrendChart() {
-    const container = document.getElementById('trend-container');
-    const width = container.clientWidth, height = 300;
-    const margin = {top: 20, right: 20, bottom: 30, left: 45};
-    
-    trendSvg = d3.select("#trend-container").append("svg").attr("width", width).attr("height", height).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-    trendX = d3.scaleLinear().range([0, width - margin.left - margin.right]);
-    trendY = d3.scaleLinear().domain([0.5, 5.0]).range([height - margin.top - margin.bottom, 0]);
-    
-    trendSvg.append("g").attr("class", "x-axis").attr("transform", `translate(0,${height - margin.top - margin.bottom})`).attr("color", "#666");
-    trendSvg.append("g").attr("class", "y-axis").attr("color", "#666").call(d3.axisLeft(trendY).ticks(5));
-    
-    trendArea = trendSvg.append("path").attr("fill", "rgba(255, 42, 42, 0.1)");
-    trendPath = trendSvg.append("path").attr("fill", "none").attr("stroke", "#FF2A2A").attr("stroke-width", 3);
-    trendDots = trendSvg.append("g");
-}
-
-function updateTrendChart(data) {
-    if(!data || data.length === 0) {
-        trendPath.attr("d", null); trendArea.attr("d", null); trendDots.selectAll(".trend-dot").remove();
-        return;
-    }
-    
-    const grouped = d3.rollup(data, v => d3.mean(v, d => d.rating), d => d.review_year);
-    const clean = Array.from(grouped, ([year, avg]) => ({year, avg})).filter(d => !isNaN(d.year)).sort((a,b) => a.year - b.year);
-    
-    trendX.domain(d3.extent(clean, d => d.year));
-    trendSvg.select(".x-axis").transition().duration(750).call(d3.axisBottom(trendX).tickFormat(d3.format("d")));
-    trendPath.datum(clean).transition().duration(750).attr("d", d3.line().curve(d3.curveMonotoneX).x(d => trendX(d.year)).y(d => trendY(d.avg)));
-    trendArea.datum(clean).transition().duration(750).attr("d", d3.area().curve(d3.curveMonotoneX).x(d => trendX(d.year)).y0(trendY(0.5)).y1(d => trendY(d.avg)));
-
-    trendDots.selectAll(".trend-dot").data(clean).join("circle").attr("class", "trend-dot")
-        .attr("fill", d => selectedYears.has(d.year) ? "#FF2A2A" : "#121212")
-        .attr("stroke", "#FF2A2A").attr("stroke-width", 2).attr("r", d => selectedYears.has(d.year) ? 8 : 5)
-        .style("cursor", "pointer")
-        .on("click", (e, d) => {
-            if(selectedYears.has(d.year)) selectedYears.delete(d.year); else selectedYears.add(d.year);
-            applyCrossFilters('trend');
-        })
-        .transition().duration(750).attr("cx", d => trendX(d.year)).attr("cy", d => trendY(d.avg));
 }
 
 initializeDashboard();
