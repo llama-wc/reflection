@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieLens Analytics Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-main: #ffffff;
+            --text-muted: #a0a0a0;
+            --accent-color: #ff4b4b;
+        }
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        /* Header & Filters */
+        .header {
+            padding: 20px 40px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-family: 'Oswald', sans-serif;
+            margin: 0;
+            font-size: 24px;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
+        }
+
+                .back-btn {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            transition: color 0.2s ease;
+        }
+
+        .back-btn:hover {
+            color: var(--text-main);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            padding: 20px 40px;
+            background: #181818;
+            border-bottom: 1px solid #333;
+        }
+        .filter-group input {
+            background: var(--bg-color);
+            color: var(--text-main);
+            border: 1px solid #333;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            flex: 1;
+            color-scheme: dark; /* Helps style the datalist dropdown in modern browsers */
+        }
+        .filter-group input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        #resetBtn {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Oswald', sans-serif;
+            font-size: 16px;
+            transition: opacity 0.2s;
+        }
+        #resetBtn:hover { opacity: 0.8; }
+
+        /* Main Stage Layout */
+        #main-stage {
+            display: grid;
+            grid-template-columns: 350px 1fr 1fr;
+            gap: 30px;
+            padding: 40px;
+            opacity: 0; 
+            transition: opacity 0.5s ease;
+        }
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #2a2a2a;
+        }
+
+        /* Left Panel Metadata */
+        #ui-title {
+            font-family: 'Oswald', sans-serif;
+            font-size: 42px;
+            text-transform: uppercase;
+            margin: 0 0 5px 0;
+            line-height: 1.1;
+        }
+        #ui-tags {
+            color: var(--accent-color);
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 80px 1fr;
+            gap: 10px 15px;
+            font-size: 14px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 25px;
+        }
+        .meta-label { color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
+        #ui-desc { color: #d0d0d0; line-height: 1.6; font-size: 15px; }
+
+        /* Chart Panels */
+        .chart-title {
+            font-family: 'Oswald', sans-serif;
+            color: var(--text-muted);
+            font-size: 18px;
+            letter-spacing: 1px;
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        .chart-container { width: 100%; height: 300px; position: relative; }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Oswald', sans-serif;
+            font-size: 24px; color: var(--accent-color);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+  <div class="header">
+        <h1>SCORE DISTRIBUTION</h1>
+        <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
+    </div>
+
+    <div class="filter-group">
+        <input type="text" id="searchBar" list="movie-suggestions" placeholder="Search for a movie title (e.g., Matrix)..." disabled>
+        <datalist id="movie-suggestions"></datalist>
+
+        <input type="text" id="genreFilter" list="genreList" placeholder="All Genres" disabled>
+        <datalist id="genreList"></datalist>
+
+        <input type="text" id="directorFilter" list="directorList" placeholder="All Directors" disabled>
+        <datalist id="directorList"></datalist>
+
+        <input type="text" id="studioFilter" list="studioList" placeholder="All Studios" disabled>
+        <datalist id="studioList"></datalist>
+
+        <input type="text" id="actorFilter" list="actorList" placeholder="All Actors" disabled>
+        <datalist id="actorList"></datalist>
+
+        <button id="resetBtn">RESET</button>
+    </div>
+
+    <div id="loading-overlay">Booting Analytics Engine...</div>
+
+    <div id="main-stage">
+
+        <div class="panel">
+            <h2 id="ui-title">Loading...</h2>
+            <div id="ui-tags">--</div>
+            <div class="meta-grid">
+                <div class="meta-label">DIRECTOR</div><div id="ui-director">-</div>
+                <div class="meta-label">STUDIO</div><div id="ui-studio">-</div>
+                <div class="meta-label">CAST</div><div id="ui-cast">-</div>
+            </div>
+            <div id="ui-desc">Initializing dataset...</div>
+        </div>
+
+        <div class="panel">
+            <h3 class="chart-title">Reviews Over Time</h3>
+            <div id="trend-container" class="chart-container"></div>
+        </div>
+
+        <div class="panel">
+            <h3 class="chart-title">Score Distribution (0.5 - 5.0)</h3>
+            <div id="dist-container" class="chart-container"></div>
+        </div>
+
+    </div>
+
+    <script type="module" src="dashboard.js"></script>
+</body>
+<div class="panel" style="grid-column: 1 / -1;">
+            <h3 class="chart-title">Project Architecture & Methodology</h3>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-top: 0;">
+                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata—including Directors, Studios, and Casts—directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+            </p>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. The application utilizes omni-directional cross-filtering: brushing over chart ranges or typing into the cascading text filters instantly triggers Common Table Expressions (CTEs) that re-query and synchronize the entire application state without relying on a remote server.
+            </p>
+        </div>
+</html>
