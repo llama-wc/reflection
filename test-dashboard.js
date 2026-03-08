@@ -350,20 +350,19 @@ async function applyUnifiedFilters() {
     }
 }
 
-// --- 6. THE FIXED HERO SQUARE RENDERER ---
+// --- 6. HERO SQUARE RENDERER ---
 function updateHeroMetric(avg, count) {
     const displayElement = document.getElementById('scoreDisplay');
     const countElement = document.getElementById('reviewCount');
     const heroSquare = document.getElementById('heroSquare');
 
     if (count === 0) {
-        displayElement.innerText = "-";
+        displayElement.innerText = "N/A";
         countElement.innerText = "0 REVIEWS";
         heroSquare.style.backgroundColor = "#121212";
         return;
     }
 
-    // Convert both values to hard numbers to prevent D3 from crashing
     const currentVal = parseFloat(displayElement.innerText) || 0;
     const targetVal = parseFloat(avg); 
     
@@ -381,7 +380,7 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
-// --- 7. CONTROL CHART RENDERER ---
+// --- 7. CONTROL CHART RENDERER (Mobile Optimized) ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -425,9 +424,12 @@ function updateTrendChart(data, globalMean) {
     gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
     gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
 
+    // MOBILE OVERLAP FIX: Dynamically reduce X-Axis labels based on screen width
+    const xTicksCount = width < 600 ? 5 : 12;
+
     svg.append("g")
         .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
-        .call(d3.axisBottom(x).tickFormat(d3.format("d")).tickSize(-height).ticks(10))
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")).tickSize(-height).ticks(xTicksCount))
         .call(g => g.select(".domain").remove());
 
     svg.append("g")
@@ -467,16 +469,20 @@ function updateTrendChart(data, globalMean) {
         .attr("stroke-width", 3)
         .attr("d", line);
 
+    // MOBILE OVERLAP FIX: Dynamically shrink dot size on small screens
+    const dotRadius = width < 600 ? 2 : 5;
+    const strokeWidth = width < 600 ? 1 : 2.5;
+
     svg.selectAll(".dot")
         .data(clean)
         .join("circle")
         .attr("class", "dot")
         .attr("cx", d => x(d.year))
         .attr("cy", d => y(d.avg))
-        .attr("r", 5)
+        .attr("r", dotRadius)
         .attr("fill", d => selectedYears.has(d.year) ? "#fff" : "#0a0a0a") 
         .attr("stroke", d => colorScale(d.avg)) 
-        .attr("stroke-width", 2.5)
+        .attr("stroke-width", strokeWidth)
         .style("cursor", "pointer")
         .on("click", (e, d) => {
             if(selectedYears.has(d.year)) selectedYears.delete(d.year); 
