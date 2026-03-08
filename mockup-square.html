@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hero Metric Mockup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-main: #ffffff;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* The Solid Square Chart Object */
+        .hero-square {
+            width: 350px;
+            height: 350px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            
+            /* The Fluid 3-Color Palette: Dusty Rose -> Warm Sand -> Sage Green */
+            background: linear-gradient(135deg, #d06a7b, #e6a176, #5b9279);
+            background-size: 300% 300%;
+            background-position: 100% 50%; /* Starts at Green (High Score) */
+            transition: background-position 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* Inner Glow for Depth */
+        .hero-square::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 16px;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.2);
+            pointer-events: none;
+        }
+
+        /* The Massive Average Score */
+        .score-text {
+            font-family: 'Oswald', sans-serif;
+            font-size: 10rem; /* Massive text filling the box */
+            line-height: 1;
+            margin: 0;
+            text-shadow: 2px 4px 10px rgba(0,0,0,0.3);
+            z-index: 2;
+        }
+
+        /* The Supporting Subtext */
+        .sub-text {
+            font-size: 1.2rem;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            opacity: 0.85;
+            z-index: 2;
+            margin-top: -10px;
+            text-shadow: 1px 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* Interactive Controls (Just for the Mockup) */
+        .mockup-controls {
+            margin-top: 50px;
+            background: #1e1e1e;
+            padding: 25px 40px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            text-align: center;
+            width: 350px;
+            box-sizing: border-box;
+        }
+
+        .mockup-controls h3 {
+            margin-top: 0;
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 1px;
+            color: #a0a0a0;
+            text-transform: uppercase;
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: #e6a176;
+            cursor: pointer;
+        }
+
+        .mockup-label {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hero-square" id="heroSquare">
+        <h1 class="score-text" id="scoreDisplay">4.2</h1>
+        <div class="sub-text" id="reviewCount">25M REVIEWS</div>
+    </div>
+
+    <div class="mockup-controls">
+        <h3>Simulate Database Score</h3>
+        <input type="range" id="scoreSlider" min="0.5" max="5.0" step="0.1" value="4.2">
+        <div class="mockup-label">Drag to see the background fluidly shift between Rose, Sand, and Sage based on the rating.</div>
+    </div>
+
+    <script>
+        const slider = document.getElementById('scoreSlider');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const heroSquare = document.getElementById('heroSquare');
+
+        // Function to map the score to the background gradient position
+        function updateHeroMetric(score) {
+            // Update the text
+            scoreDisplay.innerText = parseFloat(score).toFixed(1);
+
+            // Math to shift the gradient:
+            // Score 5.0 = 100% position (Sage Green)
+            // Score 2.75 = 50% position (Warm Sand)
+            // Score 0.5 = 0% position (Dusty Rose)
+            
+            const minScore = 0.5;
+            const maxScore = 5.0;
+            const percentage = ((score - minScore) / (maxScore - minScore)) * 100;
+            
+            // Shift the CSS background based on the score percentage
+            heroSquare.style.backgroundPosition = `${percentage}% 50%`;
+        }
+
+        // Listen for slider movement
+        slider.addEventListener('input', (e) => {
+            updateHeroMetric(e.target.value);
+        });
+    </script>
+</body>
+</html>
