@@ -4,7 +4,6 @@ import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0
 let conn;
 let distSvg, distPath, distX, distY, distAvgLine, distAvgText, distSubText, distBrushGroup, brush; 
 let trendSvg, trendPath, trendX, trendY, trendArea, trendDots; 
-let allMovieTitles = []; 
 let currentRatingsData = []; 
 let filterDebounce;
 
@@ -72,16 +71,29 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // THE FIX: Trigger on 'change' (Enter Key / Datalist Tap) with fuzzy auto-correct
-        searchBar.addEventListener('change', async (e) => {
+        // 1. THE NEW AUTOCOMPLETE ENGINE (Fires as you type)
+        let searchDebounce;
+        searchBar.addEventListener('input', (e) => {
             const val = e.target.value.trim();
-            const exactMatch = allMovieTitles.find(t => t.toLowerCase() === val.toLowerCase());
+            clearTimeout(searchDebounce);
             
-            // Auto-correct casing if it's an exact match
-            if (exactMatch) {
-                e.target.value = exactMatch;
+            // Wait until they type 2 letters to save processing power
+            if (val.length < 2) {
+                updateDatalist('movie-suggestions', []);
+                return;
             }
-            
+
+            // Quick query for the dropdown list
+            searchDebounce = setTimeout(async () => {
+                const safeVal = val.replace(/'/g, "''");
+                const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '%${safeVal}%' ORDER BY title_clean LIMIT 15`);
+                const suggestions = res.toArray().map(r => r.toJSON().title_clean);
+                updateDatalist('movie-suggestions', suggestions);
+            }, 300);
+        });
+
+        // 2. THE DASHBOARD UPDATE ENGINE (Fires when you select or hit Enter)
+        searchBar.addEventListener('change', async (e) => {
             await handleUIChange();
         });
 
@@ -131,16 +143,19 @@ async function refreshFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : null;
-        
-        // THE FIX: Check for exact match first
-        const exactMatch = searchVal ? allMovieTitles.find(t => t.toLowerCase() === searchVal.toLowerCase()) : null;
+
+        // Check database for exact match directly
+        let exactMatch = null;
+        if (searchVal) {
+            const matchRes = await conn.query(`SELECT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (matchRes.toArray().length > 0) exactMatch = matchRes.toArray()[0].toJSON().title_clean;
+        }
 
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
 
-        // THE FIX: Use Exact Match OR Fuzzy ILIKE Search
         let srcClause = null;
         if (searchVal) {
             srcClause = exactMatch 
@@ -158,7 +173,6 @@ async function refreshFilters() {
             return valid.length > 0 ? `WHERE ${valid.join(' AND ')}` : "";
         };
 
-        const whereAll = buildWhere([srcClause, gClause, dClause, sClause, aClause]);           
         const whereForGenre = buildWhere([srcClause, dClause, sClause, aClause]);               
         const whereForDir = buildWhere([srcClause, gClause, sClause, aClause]);                 
         const whereForStudio = buildWhere([srcClause, gClause, dClause, aClause]);              
@@ -174,17 +188,14 @@ async function refreshFilters() {
         const actWhereStr = whereForActor ? `${whereForActor} AND m."cast" != 'N/A'` : `WHERE m."cast" != 'N/A'`;
 
         const queries = [
-            conn.query(`SELECT m.title_clean ${baseFrom} ${whereAll} ORDER BY m.title_clean`),
             conn.query(`SELECT DISTINCT trim(unnest(string_split(m.genres, '|'))) as g ${baseFrom} ${whereForGenre} ORDER BY g`),
             conn.query(`SELECT DISTINCT m.director ${baseFrom} ${dirWhereStr} ORDER BY m.director`),
             conn.query(`SELECT DISTINCT m.studio ${baseFrom} ${stdWhereStr} ORDER BY m.studio`),
             conn.query(`SELECT DISTINCT trim(unnest(string_split(m."cast", ','))) as a ${baseFrom} ${actWhereStr} ORDER BY a`)
         ];
 
-        const [tRes, gRes, dRes, sRes, aRes] = await Promise.all(queries);
+        const [gRes, dRes, sRes, aRes] = await Promise.all(queries);
 
-        allMovieTitles = tRes.toArray().map(r => r.toJSON().title_clean);
-        updateDatalist('movie-suggestions', allMovieTitles);
         updateDatalist('genreList', gRes.toArray().map(r => r.toJSON().g));
         updateDatalist('directorList', dRes.toArray().map(r => r.toJSON().director));
         updateDatalist('studioList', sRes.toArray().map(r => r.toJSON().studio));
@@ -211,8 +222,11 @@ async function applyUnifiedFilters() {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : "";
         
-        // THE FIX: Determine if it's an exact match or fuzzy search
-        const exactMatch = searchVal !== "" ? allMovieTitles.find(t => t.toLowerCase() === searchVal.toLowerCase()) : null;
+        let exactMatch = null;
+        if (searchVal !== "") {
+            const matchRes = await conn.query(`SELECT title_clean FROM 'movies.parquet' WHERE title_clean ILIKE '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            if (matchRes.toArray().length > 0) exactMatch = matchRes.toArray()[0].toJSON().title_clean;
+        }
 
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
@@ -234,7 +248,6 @@ async function applyUnifiedFilters() {
 
         let query;
         if (exactMatch) {
-            // EXACT MATH: SINGLE MOVIE
             const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${exactMatch.replace(/'/g, "''")}' LIMIT 1`);
             const movieData = movieRes.toArray().map(row => row.toJSON())[0];
             
@@ -252,7 +265,6 @@ async function applyUnifiedFilters() {
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
             
         } else if (clauses.length > 0) {
-            // EXACT MATH: FILTERED (Now handles fuzzy searches!)
             document.getElementById('ui-title').innerText = "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
@@ -275,7 +287,6 @@ async function applyUnifiedFilters() {
                 USING SAMPLE 2 PERCENT (bernoulli)
             `;
         } else {
-            // EXACT MATH: GLOBAL
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
             document.getElementById('ui-desc').innerText = "Viewing the aggregate distribution of the MovieLens dataset. Use the filters above or drag a selection box over the charts.";
