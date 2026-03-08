@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hero Metric Mockup - Vibrant Edition</title>
+    <title>Hero Metric Mockup - Pure Flat Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
     
@@ -24,14 +24,14 @@
             min-height: 100vh;
             margin: 0;
             overflow: hidden;
-            background-image: radial-gradient(circle at 50% 0%, #1e1e1e 0%, #121212 70%);
+            background-color: #0a0a0a; /* Darker background to make the square pop */
         }
 
-        /* The Solid Square Chart Object */
+        /* The Pure Flat Chart Object */
         .hero-square {
             width: 350px;
             height: 350px;
-            border-radius: 20px;
+            border-radius: 12px; /* Sharper corners for a more analytical look */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -41,30 +41,20 @@
             /* Initial Fallback Color */
             background-color: #FF2A2A; 
             
-            /* A sharp shadow to make it pop off the dark background */
-            box-shadow: 0 25px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.1);
+            /* Deep, dark shadow with zero white glare */
+            box-shadow: 0 30px 60px rgba(0,0,0,0.9);
             transition: background-color 0.1s ease;
-        }
-
-        /* An inner gradient overlay to give it a 3D "App Icon" gloss */
-        .hero-square::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 20px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 100%);
-            pointer-events: none;
         }
 
         /* The Massive Average Score */
         .score-text {
             font-family: 'Oswald', sans-serif;
-            font-size: 11rem; 
+            font-size: 12rem; /* Bumped up even larger */
             line-height: 1;
             margin: 0;
             color: #ffffff;
-            /* Tight, dark drop-shadow for maximum legibility */
-            text-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            /* Crisp, sharp drop shadow to separate text from background */
+            text-shadow: 0 8px 16px rgba(0,0,0,0.5);
             z-index: 2;
         }
 
@@ -72,22 +62,21 @@
         .sub-text {
             font-size: 1.1rem;
             font-weight: 700;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            color: rgba(255,255,255,0.9);
+            color: rgba(255,255,255,0.95);
             z-index: 2;
-            margin-top: -15px;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            margin-top: -10px;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.5);
         }
 
         /* Interactive Controls */
         .mockup-controls {
             margin-top: 60px;
-            background: rgba(30, 30, 30, 0.8);
-            backdrop-filter: blur(10px);
+            background: #151515;
             padding: 25px 40px;
-            border-radius: 12px;
-            border: 1px solid #333;
+            border-radius: 8px;
+            border: 1px solid #222;
             text-align: center;
             width: 350px;
             box-sizing: border-box;
@@ -110,7 +99,7 @@
         .mockup-label {
             margin-top: 15px;
             font-size: 0.9rem;
-            color: #888;
+            color: #666;
             line-height: 1.4;
         }
     </style>
@@ -125,7 +114,7 @@
     <div class="mockup-controls">
         <h3>Simulate Database Score</h3>
         <input type="range" id="scoreSlider" min="0.5" max="5.0" step="0.1" value="4.2">
-        <div class="mockup-label">Using D3.js to mathematically interpolate between your custom Hex codes.</div>
+        <div class="mockup-label">Pure hex codes. Zero glare. Maximum saturation.</div>
     </div>
 
     <script>
@@ -133,28 +122,20 @@
         const scoreDisplay = document.getElementById('scoreDisplay');
         const heroSquare = document.getElementById('heroSquare');
 
-        // 1. DEFINE OUR VIBRANT, MODERN PALETTE
-        // Low: Your signature portfolio Red
-        // Mid: A rich, warm Amber/Gold
-        // High: A modern, punchy Emerald/Mint Green
+        // 1. PURE, UNSHAPED HEX CODES
         const colorScale = d3.scaleLinear()
             .domain([0.5, 2.75, 5.0]) 
-            .range(["#FF2A2A", "#FFB800", "#00D26A"]) 
-            .interpolate(d3.interpolateRgb); // Ensures colors don't get muddy when blending
+            .range(["#FF2A2A", "#FF9F00", "#00E676"]) 
+            .interpolate(d3.interpolateRgb); 
 
         function updateHeroMetric(score) {
-            // Format to 1 decimal place
             scoreDisplay.innerText = parseFloat(score).toFixed(1);
-
-            // Fetch the exact RGB code from D3 and apply it to the square
             const vividColor = colorScale(score);
             heroSquare.style.backgroundColor = vividColor;
         }
 
-        // Initialize
         updateHeroMetric(slider.value);
 
-        // Update on slide
         slider.addEventListener('input', (e) => {
             updateHeroMetric(e.target.value);
         });
