@@ -72,9 +72,17 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        searchBar.addEventListener('input', async (e) => {
+        // THE FIX: Trigger on 'change' (Enter Key / Datalist Tap) with fuzzy auto-correct
+        searchBar.addEventListener('change', async (e) => {
             const val = e.target.value.trim();
-            if (val === "" || allMovieTitles.includes(val)) await handleUIChange();
+            const exactMatch = allMovieTitles.find(t => t.toLowerCase() === val.toLowerCase());
+            
+            // Auto-correct casing if it's an exact match
+            if (exactMatch) {
+                e.target.value = exactMatch;
+            }
+            
+            await handleUIChange();
         });
 
         document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
@@ -123,12 +131,23 @@ async function refreshFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : null;
+        
+        // THE FIX: Check for exact match first
+        const exactMatch = searchVal ? allMovieTitles.find(t => t.toLowerCase() === searchVal.toLowerCase()) : null;
+
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
 
-        const srcClause = searchVal ? `m.title_clean = '${searchVal.replace(/'/g, "''")}'` : null;
+        // THE FIX: Use Exact Match OR Fuzzy ILIKE Search
+        let srcClause = null;
+        if (searchVal) {
+            srcClause = exactMatch 
+                ? `m.title_clean = '${exactMatch.replace(/'/g, "''")}'` 
+                : `m.title_clean ILIKE '%${searchVal.replace(/'/g, "''")}%'`;
+        }
+
         const gClause = genre !== "All" ? `m.genres LIKE '%${genre.replace(/'/g, "''")}%'` : null;
         const dClause = director !== "All" ? `m.director = '${director.replace(/'/g, "''")}'` : null;
         const sClause = studio !== "All" ? `m.studio = '${studio.replace(/'/g, "''")}'` : null;
@@ -175,17 +194,37 @@ async function refreshFilters() {
     }
 }
 
+function updateDatalist(id, list) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = ""; 
+    list.forEach(item => {
+        if (!item || item === "Unknown" || item === "N/A") return;
+        const opt = document.createElement('option');
+        opt.value = item;
+        el.appendChild(opt);
+    });
+}
+
 async function applyUnifiedFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
         const searchVal = searchEl && searchEl.value.trim() !== "" ? searchEl.value.trim() : "";
+        
+        // THE FIX: Determine if it's an exact match or fuzzy search
+        const exactMatch = searchVal !== "" ? allMovieTitles.find(t => t.toLowerCase() === searchVal.toLowerCase()) : null;
+
         const genre = getFilterValue('genreFilter');
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
 
         let clauses = [];
-        if (searchVal !== "" && allMovieTitles.includes(searchVal)) clauses.push(`m.title_clean = '${searchVal.replace(/'/g, "''")}'`);
+        if (searchVal !== "") {
+            if (exactMatch) clauses.push(`m.title_clean = '${exactMatch.replace(/'/g, "''")}'`);
+            else clauses.push(`m.title_clean ILIKE '%${searchVal.replace(/'/g, "''")}%'`);
+        }
+        
         if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
         if (director !== "All") clauses.push(`m.director = '${director.replace(/'/g, "''")}'`);
         if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
@@ -194,9 +233,9 @@ async function applyUnifiedFilters() {
         const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
 
         let query;
-        if (searchVal !== "" && allMovieTitles.includes(searchVal)) {
+        if (exactMatch) {
             // EXACT MATH: SINGLE MOVIE
-            const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
+            const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${exactMatch.replace(/'/g, "''")}' LIMIT 1`);
             const movieData = movieRes.toArray().map(row => row.toJSON())[0];
             
             document.getElementById('ui-title').innerText = movieData.title_clean;
@@ -213,7 +252,7 @@ async function applyUnifiedFilters() {
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
             
         } else if (clauses.length > 0) {
-            // EXACT MATH: FILTERED
+            // EXACT MATH: FILTERED (Now handles fuzzy searches!)
             document.getElementById('ui-title').innerText = "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
@@ -268,7 +307,6 @@ function applyCrossFilters(source) {
             ? currentRatingsData.filter(d => selectedYears.has(d.review_year)).map(d => d.rating) 
             : currentRatingsData.map(d => d.rating);
         
-        // If there's a visual filter applied, we let D3 calculate the subset. If not, use the global exact count.
         updateDistributionChart(
             distScores, 
             isFiltered ? null : currentExactAvg, 
@@ -349,7 +387,6 @@ function updateDistributionChart(scores, exactAvg = null, exactCount = null) {
     distPath.transition().duration(400).attr("opacity", 0.9);
     distAvgLine.transition().duration(400).attr("opacity", 1);
 
-    // D3 visual shape math (using the sample)
     const avg = d3.mean(scores);
     const kde = (kernel, X) => V => X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
     const epanechnikov = k => v => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
@@ -361,7 +398,6 @@ function updateDistributionChart(scores, exactAvg = null, exactCount = null) {
 
     const isRight = avg > 3.5;
     
-    // Display Math (Overriding with exact DB numbers if provided)
     const displayAvg = exactAvg !== null ? exactAvg : avg;
     const displayCount = exactCount !== null ? exactCount : scores.length;
 
