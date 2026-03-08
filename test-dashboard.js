@@ -12,7 +12,7 @@ let currentExactCount = 0;
 // Interactive States
 let selectedYears = new Set(); 
 
-// PURE FLAT COLOR SCALE (Red -> Amber -> Neon Green)
+// PURE FLAT COLOR SCALE 
 const colorScale = d3.scaleLinear()
     .domain([0.5, 2.75, 5.0]) 
     .range(["#FF2A2A", "#FF9F00", "#00E676"]) 
@@ -23,50 +23,10 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
-        // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
-        const style = document.createElement('style');
-        style.textContent = `
-            .search-wrapper { 
-                position: relative; 
-                flex: 1; 
-                min-width: 150px; 
-                display: flex; 
-                align-items: stretch; 
-            }
-            .search-wrapper input {
-                width: 100% !important;
-                margin: 0;
-                box-sizing: border-box;
-            }
-            .autocomplete-overlay {
-                position: absolute; top: 100%; left: 0; right: 0;
-                background: #1e1e1e; border: 1px solid #333; border-top: none;
-                max-height: 250px; overflow-y: auto; z-index: 9999;
-                border-radius: 0 0 6px 6px; box-shadow: 0 15px 35px rgba(0,0,0,0.9);
-                display: none; flex-direction: column; margin-top: 2px;
-            }
-            .autocomplete-item {
-                padding: 12px 15px; border-bottom: 1px solid #2a2a2a;
-                cursor: pointer; color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
-            }
-            .autocomplete-item:last-child { border-bottom: none; }
-            .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
-        `;
-        document.head.appendChild(style);
-
         const searchBar = document.getElementById('searchBar');
-        searchBar.removeAttribute('list'); 
-        
-        const wrapper = document.createElement('div');
-        wrapper.className = 'search-wrapper';
-        searchBar.parentNode.insertBefore(wrapper, searchBar);
-        wrapper.appendChild(searchBar);
+        const autocompleteOverlay = document.getElementById('autocompleteOverlay');
 
-        const autocompleteOverlay = document.createElement('div');
-        autocompleteOverlay.className = 'autocomplete-overlay';
-        wrapper.appendChild(autocompleteOverlay);
-
-        // --- 2. BOOT DUCKDB ---
+        // BOOT DUCKDB
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
@@ -102,7 +62,7 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // --- 3. TOKENIZED FUZZY SEARCH LOGIC ---
+        // TOKENIZED FUZZY SEARCH LOGIC
         let searchDebounce;
         searchBar.addEventListener('input', (e) => {
             const val = e.target.value.trim();
@@ -177,7 +137,6 @@ async function initializeDashboard() {
 
         await applyUnifiedFilters(); 
         
-        // Handle window resize for D3
         window.addEventListener('resize', () => {
             if(currentTrendData.length > 0) updateTrendChart(currentTrendData, currentExactAvg);
         });
@@ -195,7 +154,6 @@ function getFilterValue(id) {
     return (val === "") ? "All" : val;
 }
 
-// --- 4. APPLYING THE TOKENIZED SEARCH TO THE FILTERS ---
 async function refreshFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
@@ -238,7 +196,6 @@ async function refreshFilters() {
         const whereForStudio = buildWhere([srcClause, gClause, dClause, aClause]);              
         const whereForActor = buildWhere([srcClause, gClause, dClause, sClause]);              
 
-        // Note: Removed the sampled distribution join. 
         let joinClause = "";
         if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
@@ -277,7 +234,6 @@ function updateDatalist(id, list) {
     });
 }
 
-// --- 5. THE EXACT-MATH AGGREGATION ENGINE ---
 async function applyUnifiedFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
@@ -311,7 +267,6 @@ async function applyUnifiedFilters() {
         let finalWhereStr = "";
 
         if (exactMovieData && genre === "All" && director === "All" && studio === "All" && actor === "All") {
-            // EXACT SINGLE MOVIE
             document.getElementById('ui-title').innerText = exactMovieData.title_clean;
             document.getElementById('ui-tags').innerText = `${exactMovieData.release_year} • ${exactMovieData.genres.split('|')[0]} • ${exactMovieData.runtime}`;
             document.getElementById('ui-director').innerText = exactMovieData.director;
@@ -321,7 +276,6 @@ async function applyUnifiedFilters() {
             finalWhereStr = `WHERE m.movieId = ${exactMovieData.movieId}`;
         } 
         else if (clauses.length > 0 || exactMovieData) {
-            // FILTERED SELECTION
             document.getElementById('ui-title').innerText = exactMovieData ? exactMovieData.title_clean : "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing exact aggregate data based on your selected text filters.";
@@ -333,7 +287,6 @@ async function applyUnifiedFilters() {
             finalWhereStr = `WHERE ${clauses.join(' AND ')}`;
         } 
         else {
-            // GLOBAL VIEW
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
             document.getElementById('ui-desc').innerText = "Viewing the exact aggregate math for the entire MovieLens dataset.";
@@ -342,7 +295,6 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-cast').innerText = "-";
         }
 
-        // 1. Calculate Exact Overall Stats
         let statsQuery = `
             SELECT COUNT(r.rating) as c, AVG(r.rating) as a 
             FROM 'ratings.parquet' r
@@ -362,7 +314,6 @@ async function applyUnifiedFilters() {
             currentExactCount = 0; currentExactAvg = 0;
         }
 
-        // 2. Calculate Exact Yearly Stats & Variance (STDDEV)
         let yearlyQuery = `
             SELECT 
                 r.review_year as year, 
@@ -391,7 +342,6 @@ async function applyUnifiedFilters() {
         const yearlyRes = await conn.query(yearlyQuery);
         currentTrendData = yearlyRes.toArray().map(row => row.toJSON());
 
-        // Initial Paint
         updateHeroMetric(currentExactAvg, currentExactCount);
         updateTrendChart(currentTrendData, currentExactAvg);
 
@@ -400,7 +350,7 @@ async function applyUnifiedFilters() {
     }
 }
 
-// --- 6. HERO SQUARE RENDERER ---
+// --- 6. THE FIXED HERO SQUARE RENDERER ---
 function updateHeroMetric(avg, count) {
     const displayElement = document.getElementById('scoreDisplay');
     const countElement = document.getElementById('reviewCount');
@@ -413,16 +363,15 @@ function updateHeroMetric(avg, count) {
         return;
     }
 
-    // Determine target numbers
-    const targetAvg = parseFloat(avg).toFixed(1);
-    
-    // Animate Number (Optional, makes it feel alive)
+    // Convert both values to hard numbers to prevent D3 from crashing
     const currentVal = parseFloat(displayElement.innerText) || 0;
+    const targetVal = parseFloat(avg); 
+    
     d3.select(displayElement)
       .transition()
       .duration(750)
       .tween("text", function() {
-          const i = d3.interpolate(currentVal, targetAvg);
+          const i = d3.interpolate(currentVal, targetVal);
           return function(t) {
               this.textContent = i(t).toFixed(1);
           };
@@ -441,7 +390,6 @@ function updateTrendChart(data, globalMean) {
 
     if(!data || data.length === 0) return;
 
-    // Filter out null years
     const clean = data.filter(d => d.year != null && !isNaN(d.year));
     if(clean.length === 0) return;
 
@@ -464,7 +412,6 @@ function updateTrendChart(data, globalMean) {
         .domain([0.5, 5.0]) 
         .range([height - margin.top - margin.bottom, 0]);
 
-    // THE VERTICAL D3 COLOR GRADIENT
     const defs = svg.append("defs");
     const gradientId = "score-gradient-" + Math.random().toString(36).substring(2, 9); 
     
@@ -478,7 +425,6 @@ function updateTrendChart(data, globalMean) {
     gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
     gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
 
-    // AXES
     svg.append("g")
         .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
         .call(d3.axisBottom(x).tickFormat(d3.format("d")).tickSize(-height).ticks(10))
@@ -488,12 +434,11 @@ function updateTrendChart(data, globalMean) {
         .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
         .call(g => g.select(".domain").remove());
 
-    // THE CONFIDENCE INTERVAL BAND (+/- 1 StdDev)
     const area = d3.area()
         .curve(d3.curveMonotoneX)
         .x(d => x(d.year))
-        .y0(d => y(Math.max(0.5, d.avg - d.std))) // Lower bound, min 0.5
-        .y1(d => y(Math.min(5.0, d.avg + d.std))); // Upper bound, max 5.0
+        .y0(d => y(Math.max(0.5, d.avg - d.std))) 
+        .y1(d => y(Math.min(5.0, d.avg + d.std))); 
 
     svg.append("path")
         .datum(clean)
@@ -501,7 +446,6 @@ function updateTrendChart(data, globalMean) {
         .attr("opacity", 0.15) 
         .attr("d", area);
 
-    // THE GLOBAL MEAN DASHED LINE
     svg.append("line")
         .attr("x1", 0)
         .attr("x2", width - margin.left - margin.right)
@@ -511,7 +455,6 @@ function updateTrendChart(data, globalMean) {
         .attr("stroke-width", 2)
         .attr("stroke-dasharray", "5,5");
 
-    // THE ANNUAL AVERAGE LINE 
     const line = d3.line()
         .curve(d3.curveMonotoneX)
         .x(d => x(d.year))
@@ -524,7 +467,6 @@ function updateTrendChart(data, globalMean) {
         .attr("stroke-width", 3)
         .attr("d", line);
 
-    // DATA POINTS 
     svg.selectAll(".dot")
         .data(clean)
         .join("circle")
@@ -543,18 +485,16 @@ function updateTrendChart(data, globalMean) {
         });
 }
 
-// --- 8. CROSS FILTERING (Client Side Data Slicing) ---
+// --- 8. CROSS FILTERING ---
 function applyCrossFilters() {
     const isFiltered = selectedYears.size > 0;
     
-    // Update the Hero Square to show only the selected year(s)
     let displayAvg = currentExactAvg;
     let displayCount = currentExactCount;
 
     if (isFiltered) {
         const subset = currentTrendData.filter(d => selectedYears.has(d.year));
         displayCount = d3.sum(subset, d => d.count);
-        // Calculate the weighted average of the selected years
         if (displayCount > 0) {
             displayAvg = d3.sum(subset, d => d.avg * d.count) / displayCount;
         } else {
@@ -575,7 +515,6 @@ function applyCrossFilters() {
         document.getElementById('ui-studio').innerText = "-";
         document.getElementById('ui-cast').innerText = "-";
     } else {
-        // If cleared, just refresh back to the text filters
         refreshFilters();
     }
 }
