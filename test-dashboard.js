@@ -380,7 +380,7 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
-// --- 7. CONTROL CHART RENDERER (Mobile Optimized) ---
+// --- 7. CONTROL CHART RENDERER (Mobile Overlap Fixed) ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -424,8 +424,11 @@ function updateTrendChart(data, globalMean) {
     gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
     gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
 
-    // MOBILE OVERLAP FIX: Dynamically reduce X-Axis labels based on screen width
-    const xTicksCount = width < 600 ? 5 : 12;
+    // --- MOBILE OVERLAP FIX ---
+    // Aggressively restrict ticks if the screen is too narrow
+    let xTicksCount = 10;
+    if (width < 450) xTicksCount = 3;      // Just Start, Middle, End
+    else if (width < 700) xTicksCount = 5; // A little more breathing room
 
     svg.append("g")
         .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
@@ -469,9 +472,8 @@ function updateTrendChart(data, globalMean) {
         .attr("stroke-width", 3)
         .attr("d", line);
 
-    // MOBILE OVERLAP FIX: Dynamically shrink dot size on small screens
-    const dotRadius = width < 600 ? 2 : 5;
-    const strokeWidth = width < 600 ? 1 : 2.5;
+    // Dynamic dot sizes so they don't look clumsy on mobile
+    const dotRadius = width < 500 ? 3 : 5;
 
     svg.selectAll(".dot")
         .data(clean)
@@ -482,7 +484,7 @@ function updateTrendChart(data, globalMean) {
         .attr("r", dotRadius)
         .attr("fill", d => selectedYears.has(d.year) ? "#fff" : "#0a0a0a") 
         .attr("stroke", d => colorScale(d.avg)) 
-        .attr("stroke-width", strokeWidth)
+        .attr("stroke-width", 2.5)
         .style("cursor", "pointer")
         .on("click", (e, d) => {
             if(selectedYears.has(d.year)) selectedYears.delete(d.year); 
