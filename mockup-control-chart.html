@@ -134,7 +134,7 @@
     <button class="btn-regenerate" onclick="drawChart()">Regenerate Simulated Data</button>
 
     <script>
-        // --- 1. THE EXACT SAME COLOR SCALE ---
+        // --- 1. THE COLOR SCALE ---
         const colorScale = d3.scaleLinear()
             .domain([0.5, 2.75, 5.0]) 
             .range(["#FF2A2A", "#FF9F00", "#00E676"]) 
@@ -143,10 +143,10 @@
         // --- 2. SIMULATE DATABASE DATA ---
         function generateData() {
             let data = [];
-            let currentAvg = 3.5; // Start in the amber/green mix
+            let currentAvg = 3.5; 
             
             for (let year = 1990; year <= 2025; year++) {
-                currentAvg += (Math.random() - 0.5) * 0.8; // Larger swings to show off the colors
+                currentAvg += (Math.random() - 0.5) * 0.8; 
                 if (currentAvg > 5.0) currentAvg = 5.0;
                 if (currentAvg < 0.5) currentAvg = 0.5;
                 
@@ -171,11 +171,14 @@
             d3.select("#d3-canvas").selectAll("*").remove();
 
             const container = document.getElementById("d3-canvas");
-            const width = container.clientWidth;
-            const height = container.clientHeight;
+            
+            // THE FIX: Provide explicit fallback dimensions if mobile browser is lagging
+            const width = container.clientWidth || 800;
+            const height = container.clientHeight || 400;
             const margin = {top: 20, right: 20, bottom: 30, left: 40};
             
             const svg = d3.select("#d3-canvas").append("svg")
+                // THE FIX: Hardcode the viewbox string so it can't collapse
                 .attr("viewBox", `0 0 ${width} ${height}`)
                 .style("width", "100%")
                 .style("height", "100%")
@@ -187,21 +190,22 @@
                 .range([0, width - margin.left - margin.right]);
 
             const y = d3.scaleLinear()
-                .domain([0.5, 5.0]) // Lock domain to 0.5 - 5.0 so gradient aligns perfectly
+                .domain([0.5, 5.0]) 
                 .range([height - margin.top - margin.bottom, 0]);
 
             // --- INJECT VERTICAL GRADIENT ---
-            // This gradient maps the physical pixels of the Y-axis to our colors
             const defs = svg.append("defs");
+            const gradientId = "score-gradient-" + Math.random().toString(36).substring(2, 9); // Safari bug fix
+            
             const gradient = defs.append("linearGradient")
-                .attr("id", "score-gradient")
+                .attr("id", gradientId)
                 .attr("gradientUnits", "userSpaceOnUse")
-                .attr("x1", 0).attr("y1", y(5.0))  // Top of chart
-                .attr("x2", 0).attr("y2", y(0.5)); // Bottom of chart
+                .attr("x1", 0).attr("y1", y(5.0))  
+                .attr("x2", 0).attr("y2", y(0.5)); 
 
-            gradient.append("stop").attr("offset", "0%").attr("stop-color", "#00E676"); // 5.0
-            gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); // 2.75
-            gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); // 0.5
+            gradient.append("stop").attr("offset", "0%").attr("stop-color", "#00E676"); 
+            gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
+            gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
 
             // AXES
             svg.append("g")
@@ -213,7 +217,7 @@
                 .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
                 .call(g => g.select(".domain").remove());
 
-            // THE CONFIDENCE INTERVAL BAND (Uses Gradient!)
+            // THE CONFIDENCE INTERVAL BAND
             const area = d3.area()
                 .curve(d3.curveMonotoneX)
                 .x(d => x(d.year))
@@ -222,8 +226,8 @@
 
             svg.append("path")
                 .datum(data)
-                .attr("fill", "url(#score-gradient)") // Paint with gradient
-                .attr("opacity", 0.15) // Ghost effect
+                .attr("fill", `url(#${gradientId})`) // Using the dynamic ID
+                .attr("opacity", 0.15) 
                 .attr("d", area);
 
             // THE GLOBAL MEAN DASHED LINE
@@ -236,7 +240,7 @@
                 .attr("stroke-width", 2)
                 .attr("stroke-dasharray", "5,5");
 
-            // THE ANNUAL AVERAGE LINE (Uses Gradient!)
+            // THE ANNUAL AVERAGE LINE 
             const line = d3.line()
                 .curve(d3.curveMonotoneX)
                 .x(d => x(d.year))
@@ -245,15 +249,32 @@
             svg.append("path")
                 .datum(data)
                 .attr("fill", "none")
-                .attr("stroke", "url(#score-gradient)") // Paint with gradient
+                .attr("stroke", `url(#${gradientId})`) // Using the dynamic ID
                 .attr("stroke-width", 3)
                 .attr("d", line);
 
-            // DATA POINTS (Calculates exact color per dot!)
+            // DATA POINTS 
             svg.selectAll(".dot")
                 .data(data)
                 .join("circle")
                 .attr("class", "dot")
                 .attr("cx", d => x(d.year))
                 .attr("cy", d => y(d.avg))
-                .attr("r", 4
+                .attr("r", 4)
+                .attr("fill", "#0a0a0a") 
+                .attr("stroke", d => colorScale(d.avg)) 
+                .attr("stroke-width", 2);
+        }
+
+        // THE FIX: Wait until the mobile browser is 100% finished sizing elements
+        window.addEventListener('DOMContentLoaded', () => {
+            // A tiny 100ms delay ensures CSS has been fully applied before D3 measures the box
+            setTimeout(drawChart, 100); 
+        });
+        
+        window.addEventListener('resize', () => {
+            setTimeout(drawChart, 100);
+        });
+    </script>
+</body>
+</html>
