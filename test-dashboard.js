@@ -20,45 +20,42 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
-        // --- INJECT CUSTOM MOBILE-FRIENDLY AUTOCOMPLETE ---
+        // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
         const style = document.createElement('style');
         style.textContent = `
-            .autocomplete-list {
+            .search-wrapper { position: relative; flex: 1; min-width: 200px; }
+            .autocomplete-overlay {
                 position: absolute; top: 100%; left: 0; right: 0;
                 background: #1e1e1e; border: 1px solid #333; border-top: none;
-                max-height: 250px; overflow-y: auto; margin: 0; padding: 0;
-                list-style: none; z-index: 2000; display: none;
-                border-radius: 0 0 4px 4px; box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+                max-height: 250px; overflow-y: auto; z-index: 9999;
+                border-radius: 0 0 6px 6px; box-shadow: 0 15px 35px rgba(0,0,0,0.9);
+                display: none; flex-direction: column;
             }
-            .autocomplete-list li {
-                padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #2a2a2a;
-                color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
+            .autocomplete-item {
+                padding: 12px 15px; border-bottom: 1px solid #2a2a2a;
+                cursor: pointer; color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
             }
-            .autocomplete-list li:hover { background: #ff4b4b; color: #fff; }
+            .autocomplete-item:last-child { border-bottom: none; }
+            .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
         `;
         document.head.appendChild(style);
 
         const searchBar = document.getElementById('searchBar');
-        searchBar.removeAttribute('list'); 
+        searchBar.removeAttribute('list'); // Kill the buggy native datalist
         const oldDatalist = document.getElementById('movie-suggestions');
         if (oldDatalist) oldDatalist.remove();
 
         const wrapper = document.createElement('div');
-        wrapper.style.flex = "1";
-        wrapper.style.position = "relative";
-        wrapper.style.minWidth = "150px";
-        wrapper.style.display = "flex";
-        
+        wrapper.className = 'search-wrapper';
         searchBar.parentNode.insertBefore(wrapper, searchBar);
         wrapper.appendChild(searchBar);
         searchBar.style.width = "100%"; 
 
-        const autocompleteList = document.createElement('ul');
-        autocompleteList.id = 'custom-autocomplete';
-        autocompleteList.className = 'autocomplete-list';
-        wrapper.appendChild(autocompleteList);
-        // ---------------------------------------------------
+        const autocompleteOverlay = document.createElement('div');
+        autocompleteOverlay.className = 'autocomplete-overlay';
+        wrapper.appendChild(autocompleteOverlay);
 
+        // --- 2. BOOT DUCKDB ---
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
@@ -109,61 +106,64 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // --- THE NEW AUTOCOMPLETE ENGINE ---
+        // --- 3. TOKENIZED FUZZY SEARCH LOGIC ---
         let searchDebounce;
         
-        searchBar.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                autocompleteList.style.display = 'none';
-                searchBar.blur(); 
-                handleUIChange();
-            }
-        });
-
         searchBar.addEventListener('input', (e) => {
             const val = e.target.value.trim();
             clearTimeout(searchDebounce);
             
             if (val.length < 2) {
-                autocompleteList.style.display = 'none';
+                autocompleteOverlay.style.display = 'none';
                 return;
             }
 
             searchDebounce = setTimeout(async () => {
-                const terms = val.split(' ').filter(t => t.trim() !== '');
-                const likes = terms.map(t => `title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+                // Split input by spaces to handle inverted titles like "Matrix, The"
+                const tokens = val.split(' ').filter(t => t.trim() !== '');
+                const likeClauses = tokens.map(t => `title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
                 
                 try {
-                    const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE ${likes} ORDER BY title_clean LIMIT 10`);
+                    const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE ${likeClauses} ORDER BY title_clean LIMIT 10`);
                     const suggestions = res.toArray().map(r => r.toJSON().title_clean);
                     
                     if (suggestions.length > 0) {
-                        autocompleteList.innerHTML = suggestions.map(s => `<li>${s}</li>`).join('');
-                        autocompleteList.style.display = 'block';
+                        autocompleteOverlay.innerHTML = suggestions.map(s => `<div class="autocomplete-item">${s}</div>`).join('');
+                        autocompleteOverlay.style.display = 'flex';
                         
-                        autocompleteList.querySelectorAll('li').forEach(li => {
-                            li.addEventListener('click', async () => {
-                                searchBar.value = li.innerText;
-                                autocompleteList.style.display = 'none';
+                        // Add click events to the new custom dropdown items
+                        autocompleteOverlay.querySelectorAll('.autocomplete-item').forEach(div => {
+                            div.addEventListener('click', async () => {
+                                searchBar.value = div.innerText;
+                                autocompleteOverlay.style.display = 'none';
                                 await handleUIChange();
                             });
                         });
                     } else {
-                        autocompleteList.innerHTML = `<li style="color:#777; font-style:italic;">No matches found...</li>`;
-                        autocompleteList.style.display = 'block';
+                        autocompleteOverlay.innerHTML = `<div class="autocomplete-item" style="color:#777; font-style:italic;">No matches found...</div>`;
+                        autocompleteOverlay.style.display = 'flex';
                     }
                 } catch(err) { console.error(err); }
-            }, 250);
+            }, 250); // Fast 250ms debounce
         });
 
+        // Close dropdown if tapping outside
         document.addEventListener('click', (e) => {
-            if (e.target !== searchBar && e.target !== autocompleteList) {
-                autocompleteList.style.display = 'none';
+            if (e.target !== searchBar && !autocompleteOverlay.contains(e.target)) {
+                autocompleteOverlay.style.display = 'none';
             }
         });
 
-        // --- STANDARD LISTENERS ---
+        // Trigger search on 'Enter' key
+        searchBar.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                autocompleteOverlay.style.display = 'none';
+                searchBar.blur(); // Drops the mobile keyboard
+                await handleUIChange();
+            }
+        });
+
         document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
             input.addEventListener('change', handleUIChange);
         });
@@ -206,6 +206,7 @@ function getFilterValue(id) {
     return (val === "") ? "All" : val;
 }
 
+// --- 4. APPLYING THE TOKENIZED SEARCH TO THE FILTERS ---
 async function refreshFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
@@ -216,10 +217,11 @@ async function refreshFilters() {
 
         if (searchVal) {
             const exactRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
-            if (exactRes.toArray().length > 0) exactMovieData = exactRes.toArray()[0].toJSON();
-            else {
-                const terms = searchVal.split(' ').filter(t => t.trim() !== '');
-                searchWhereStr = terms.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+            if (exactRes.toArray().length > 0) {
+                exactMovieData = exactRes.toArray()[0].toJSON();
+            } else {
+                const tokens = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
             }
         }
 
@@ -299,8 +301,8 @@ async function applyUnifiedFilters() {
             if (exactRes.toArray().length > 0) {
                 exactMovieData = exactRes.toArray()[0].toJSON();
             } else {
-                const terms = searchVal.split(' ').filter(t => t.trim() !== '');
-                searchWhereStr = terms.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+                const tokens = searchVal.split(' ').filter(t => t.trim() !== '');
+                searchWhereStr = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
             }
         }
 
@@ -318,7 +320,7 @@ async function applyUnifiedFilters() {
         
         let query;
 
-        // 1. EXACT MATCH (Single Movie)
+        // EXACT MATCH (Single Movie via exact title)
         if (exactMovieData && genre === "All" && director === "All" && studio === "All" && actor === "All") {
             const movieData = exactMovieData;
             
@@ -338,9 +340,9 @@ async function applyUnifiedFilters() {
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
             
         } 
-        // 2. FILTERED MATCH (Fuzzy Search or Metadata)
+        // FILTERED MATCH (Fuzzy Search OR Metadata dropdowns)
         else if (clauses.length > 0 || exactMovieData) {
-            document.getElementById('ui-title').innerText = "Filtered Results";
+            document.getElementById('ui-title').innerText = exactMovieData ? exactMovieData.title_clean : "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
             document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
@@ -350,6 +352,7 @@ async function applyUnifiedFilters() {
             if (exactMovieData) clauses.push(`m.movieId = ${exactMovieData.movieId}`);
             const finalWhereStr = `WHERE ${clauses.join(' AND ')}`;
 
+            // Run Exact Math First
             const exactStats = await conn.query(`
                 WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
                 SELECT COUNT(r.rating) as c, AVG(r.rating) as a FROM 'ratings.parquet' r
@@ -363,6 +366,7 @@ async function applyUnifiedFilters() {
                 currentExactCount = 0; currentExactAvg = 0;
             }
 
+            // Run Sampled Query for D3 Charts
             query = `
                 WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
                 SELECT r.rating, r.review_year FROM 'ratings.parquet' r
@@ -370,7 +374,7 @@ async function applyUnifiedFilters() {
                 USING SAMPLE 2 PERCENT (bernoulli)
             `;
         } 
-        // 3. GLOBAL (No Filters)
+        // GLOBAL VIEW (No Filters)
         else {
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
