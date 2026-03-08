@@ -64,10 +64,17 @@ async function initializeDashboard() {
 
         // TOKENIZED FUZZY SEARCH LOGIC
         let searchDebounce;
-        searchBar.addEventListener('input', (e) => {
+        searchBar.addEventListener('input', async (e) => {
             const val = e.target.value.trim();
             clearTimeout(searchDebounce);
             
+            // THE FIX: If the search bar is cleared out, instantly reset the dataset
+            if (val.length === 0) {
+                autocompleteOverlay.style.display = 'none';
+                await handleUIChange();
+                return;
+            }
+
             if (val.length < 2) {
                 autocompleteOverlay.style.display = 'none';
                 return;
@@ -121,7 +128,7 @@ async function initializeDashboard() {
 
         document.getElementById('resetBtn').addEventListener('click', async () => {
             mainStage.style.opacity = '0.5';
-            document.querySelectorAll('.filter-group input, #searchBar').forEach(input => input.value = "");
+            document.querySelectorAll('.filter-group input').forEach(input => input.value = "");
             selectedYears.clear();
             document.getElementById('clear-trend-btn').style.display = 'none';
 
@@ -380,7 +387,7 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
-// --- 7. CONTROL CHART RENDERER (Mobile Overlap Fixed) ---
+// --- 7. CONTROL CHART RENDERER ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -424,11 +431,9 @@ function updateTrendChart(data, globalMean) {
     gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
     gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
 
-    // --- MOBILE OVERLAP FIX ---
-    // Aggressively restrict ticks if the screen is too narrow
     let xTicksCount = 10;
-    if (width < 450) xTicksCount = 3;      // Just Start, Middle, End
-    else if (width < 700) xTicksCount = 5; // A little more breathing room
+    if (width < 450) xTicksCount = 3;      
+    else if (width < 700) xTicksCount = 5; 
 
     svg.append("g")
         .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
@@ -472,7 +477,6 @@ function updateTrendChart(data, globalMean) {
         .attr("stroke-width", 3)
         .attr("d", line);
 
-    // Dynamic dot sizes so they don't look clumsy on mobile
     const dotRadius = width < 500 ? 3 : 5;
 
     svg.selectAll(".dot")
