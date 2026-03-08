@@ -8,6 +8,10 @@ let allMovieTitles = [];
 let currentRatingsData = []; 
 let filterDebounce;
 
+// Exact Stats State
+let currentExactAvg = null;
+let currentExactCount = null;
+
 // Interactive States
 let selectedYears = new Set(); 
 let scoreRange = null; 
@@ -171,18 +175,6 @@ async function refreshFilters() {
     }
 }
 
-function updateDatalist(id, list) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = ""; 
-    list.forEach(item => {
-        if (!item || item === "Unknown" || item === "N/A") return;
-        const opt = document.createElement('option');
-        opt.value = item;
-        el.appendChild(opt);
-    });
-}
-
 async function applyUnifiedFilters() {
     try {
         const searchEl = document.getElementById('searchBar');
@@ -203,6 +195,7 @@ async function applyUnifiedFilters() {
 
         let query;
         if (searchVal !== "" && allMovieTitles.includes(searchVal)) {
+            // EXACT MATH: SINGLE MOVIE
             const movieRes = await conn.query(`SELECT * FROM 'movies.parquet' WHERE title_clean = '${searchVal.replace(/'/g, "''")}' LIMIT 1`);
             const movieData = movieRes.toArray().map(row => row.toJSON())[0];
             
@@ -213,14 +206,28 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-cast').innerText = movieData.cast;
             document.getElementById('ui-desc').innerText = movieData.description;
 
+            const exactStats = await conn.query(`SELECT COUNT(rating) as c, AVG(rating) as a FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`);
+            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+
             query = `SELECT rating, review_year FROM 'ratings.parquet' WHERE movieId = ${movieData.movieId}`;
+            
         } else if (clauses.length > 0) {
+            // EXACT MATH: FILTERED
             document.getElementById('ui-title').innerText = "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
             document.getElementById('ui-desc').innerText = "Viewing aggregate data based on your selected text filters.";
             document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
             document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
             document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
+
+            const exactStats = await conn.query(`
+                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${whereStr})
+                SELECT COUNT(r.rating) as c, AVG(r.rating) as a FROM 'ratings.parquet' r
+                JOIN filtered_movies m ON r.movieId = m.movieId
+            `);
+            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
 
             query = `
                 WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${whereStr})
@@ -229,6 +236,7 @@ async function applyUnifiedFilters() {
                 USING SAMPLE 2 PERCENT (bernoulli)
             `;
         } else {
+            // EXACT MATH: GLOBAL
             document.getElementById('ui-title').innerText = "All Movies";
             document.getElementById('ui-tags').innerText = "25M+ REVIEWS • GLOBAL DATASET";
             document.getElementById('ui-desc').innerText = "Viewing the aggregate distribution of the MovieLens dataset. Use the filters above or drag a selection box over the charts.";
@@ -236,13 +244,17 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-studio').innerText = "-";
             document.getElementById('ui-cast').innerText = "-";
 
+            const exactStats = await conn.query(`SELECT COUNT(rating) as c, AVG(rating) as a FROM 'ratings.parquet'`);
+            currentExactCount = Number(exactStats.toArray()[0].toJSON().c);
+            currentExactAvg = Number(exactStats.toArray()[0].toJSON().a);
+
             query = `SELECT rating, review_year FROM 'ratings.parquet' USING SAMPLE 0.2 PERCENT (bernoulli)`;
         }
         
         const res = await conn.query(query);
         currentRatingsData = res.toArray().map(row => row.toJSON());
 
-        updateDistributionChart(currentRatingsData.map(d => d.rating));
+        updateDistributionChart(currentRatingsData.map(d => d.rating), currentExactAvg, currentExactCount);
         updateTrendChart(currentRatingsData);
     } catch (error) {
         console.error("Master Filter Failed:", error);
@@ -251,10 +263,17 @@ async function applyUnifiedFilters() {
 
 function applyCrossFilters(source) {
     if (source !== 'dist') {
-        const distScores = selectedYears.size === 0 
-            ? currentRatingsData.map(d => d.rating) 
-            : currentRatingsData.filter(d => selectedYears.has(d.review_year)).map(d => d.rating);
-        updateDistributionChart(distScores);
+        const isFiltered = selectedYears.size > 0;
+        const distScores = isFiltered 
+            ? currentRatingsData.filter(d => selectedYears.has(d.review_year)).map(d => d.rating) 
+            : currentRatingsData.map(d => d.rating);
+        
+        // If there's a visual filter applied, we let D3 calculate the subset. If not, use the global exact count.
+        updateDistributionChart(
+            distScores, 
+            isFiltered ? null : currentExactAvg, 
+            isFiltered ? null : currentExactCount
+        );
     }
     
     if (source !== 'trend') {
@@ -300,7 +319,6 @@ function setupDistributionChart() {
     distPath = distSvg.append("path").attr("fill", "url(#dist-gradient)").attr("opacity", 0.9);
     distAvgLine = distSvg.append("line").attr("stroke", "#fff").attr("stroke-width", 3).style("filter", "drop-shadow(0 0 5px white)");
     
-    // THE NEW TEXT ELEMENTS
     distAvgText = distSvg.append("text").attr("fill", "#fff").attr("font-size", "3.5rem").attr("font-weight", "700");
     distSubText = distSvg.append("text").attr("fill", "#a0a0a0").attr("font-size", "1.2rem").attr("font-family", "Inter, sans-serif");
 
@@ -319,7 +337,7 @@ function setupDistributionChart() {
     distBrushGroup = distSvg.append("g").attr("class", "brush").call(brush);
 }
 
-function updateDistributionChart(scores) {
+function updateDistributionChart(scores, exactAvg = null, exactCount = null) {
     if(!scores || scores.length === 0) {
         distPath.transition().duration(400).attr("opacity", 0);
         distAvgLine.transition().duration(400).attr("opacity", 0);
@@ -331,6 +349,7 @@ function updateDistributionChart(scores) {
     distPath.transition().duration(400).attr("opacity", 0.9);
     distAvgLine.transition().duration(400).attr("opacity", 1);
 
+    // D3 visual shape math (using the sample)
     const avg = d3.mean(scores);
     const kde = (kernel, X) => V => X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
     const epanechnikov = k => v => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
@@ -342,18 +361,20 @@ function updateDistributionChart(scores) {
 
     const isRight = avg > 3.5;
     
-    // UPDATE MAIN NUMBER
+    // Display Math (Overriding with exact DB numbers if provided)
+    const displayAvg = exactAvg !== null ? exactAvg : avg;
+    const displayCount = exactCount !== null ? exactCount : scores.length;
+
     distAvgText.transition().duration(750)
         .attr("x", distX(avg) + (isRight ? -30 : 30)).attr("text-anchor", isRight ? "end" : "start").attr("y", 130)
         .textTween(function() {
-            const i = d3.interpolate(parseFloat(this.textContent) || 0, avg);
+            const i = d3.interpolate(parseFloat(this.textContent) || 0, displayAvg);
             return t => i(t).toFixed(1);
         });
 
-    // UPDATE SUB-TEXT
     distSubText.transition().duration(750)
         .attr("x", distX(avg) + (isRight ? -30 : 30)).attr("text-anchor", isRight ? "end" : "start").attr("y", 160)
-        .text(`avg on ${scores.length.toLocaleString()} reviews`);
+        .text(`avg on ${displayCount.toLocaleString()} reviews`);
 
     if(distBrushGroup) distBrushGroup.raise();
 }
