@@ -20,27 +20,30 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
-       // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
+      // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
         const style = document.createElement('style');
         style.textContent = `
+            /* Fixes the flexbox baseline and overlap issues */
+            .filter-group { align-items: center; }
+            .filter-group input { box-sizing: border-box !important; }
+            
             .search-wrapper { 
                 position: relative; 
                 flex: 1; 
-                min-width: 200px; 
-                display: flex; 
-                align-items: stretch; 
+                min-width: 150px; 
             }
             .search-wrapper input {
-                width: 100%;
+                width: 100% !important;
                 margin: 0;
-                box-sizing: border-box;
             }
+            
             .autocomplete-overlay {
                 position: absolute; top: 100%; left: 0; right: 0;
                 background: #1e1e1e; border: 1px solid #333; border-top: none;
                 max-height: 250px; overflow-y: auto; z-index: 9999;
                 border-radius: 0 0 6px 6px; box-shadow: 0 15px 35px rgba(0,0,0,0.9);
                 display: none; flex-direction: column;
+                margin-top: 2px;
             }
             .autocomplete-item {
                 padding: 12px 15px; border-bottom: 1px solid #2a2a2a;
