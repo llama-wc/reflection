@@ -38,7 +38,7 @@
             padding-left: 10px;
         }
 
-                .back-btn {
+        .back-btn {
             color: var(--text-muted);
             text-decoration: none;
             font-family: 'Inter', sans-serif;
@@ -58,6 +58,7 @@
             padding: 20px 40px;
             background: #181818;
             border-bottom: 1px solid #333;
+            flex-wrap: wrap; /* Allows filters to wrap on medium screens */
         }
         .filter-group input {
             background: var(--bg-color);
@@ -67,7 +68,8 @@
             border-radius: 4px;
             font-family: 'Inter', sans-serif;
             flex: 1;
-            color-scheme: dark; /* Helps style the datalist dropdown in modern browsers */
+            min-width: 150px; /* Ensures inputs don't get too squished */
+            color-scheme: dark; 
         }
         .filter-group input:focus {
             outline: none;
@@ -150,11 +152,50 @@
             font-size: 24px; color: var(--accent-color);
             z-index: 1000;
         }
+
+        /* ========================================= */
+        /* MOBILE RESPONSIVE LAYOUT                  */
+        /* ========================================= */
+        
+        /* For Tablets and Smaller Desktop Screens */
+        @media (max-width: 1200px) {
+            #main-stage {
+                grid-template-columns: 1fr; /* Stacks the main columns vertically */
+            }
+            .panel[style*="grid-column: 1 / -1"] {
+                grid-column: 1 !important; /* Fixes the architecture panel span */
+            }
+        }
+
+        /* For Mobile Phones */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+                padding: 20px;
+            }
+            .filter-group {
+                flex-direction: column; /* Stacks the search bars vertically */
+                padding: 20px;
+            }
+            .filter-group input, #resetBtn {
+                width: 100%;
+                box-sizing: border-box; /* Ensures padding doesn't push them off-screen */
+            }
+            #main-stage {
+                padding: 20px;
+                gap: 20px;
+            }
+            #ui-title {
+                font-size: 32px; /* Scales down the massive title for phones */
+            }
+        }
     </style>
 </head>
 <body>
 
-  <div class="header">
+    <div class="header">
         <h1>SCORE DISTRIBUTION</h1>
         <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
     </div>
@@ -203,11 +244,7 @@
             <div id="dist-container" class="chart-container"></div>
         </div>
 
-    </div>
-
-    <script type="module" src="dashboard.js"></script>
-</body>
-<div class="panel" style="grid-column: 1 / -1;">
+        <div class="panel" style="grid-column: 1 / -1;">
             <h3 class="chart-title">Project Architecture & Methodology</h3>
             <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-top: 0;">
                 This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata—including Directors, Studios, and Casts—directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
@@ -216,4 +253,9 @@
                 The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. The application utilizes omni-directional cross-filtering: brushing over chart ranges or typing into the cascading text filters instantly triggers Common Table Expressions (CTEs) that re-query and synchronize the entire application state without relying on a remote server.
             </p>
         </div>
+
+    </div>
+
+    <script type="module" src="dashboard.js"></script>
+</body>
 </html>
