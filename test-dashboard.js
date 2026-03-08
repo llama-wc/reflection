@@ -2,7 +2,7 @@ import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0
 
 // Global State
 let conn;
-let distSvg, distPath, distX, distY, distAvgLine, distAvgText, distBrushGroup, brush; 
+let distSvg, distPath, distX, distY, distAvgLine, distAvgText, distSubText, distBrushGroup, brush; 
 let trendSvg, trendPath, trendX, trendY, trendArea, trendDots; 
 let allMovieTitles = []; 
 let currentRatingsData = []; 
@@ -91,7 +91,6 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1';
         });
 
-        // NEW: Clear Chart Selection Buttons
         document.getElementById('clear-dist-btn').addEventListener('click', () => {
             if(distBrushGroup) distBrushGroup.call(brush.move, null);
         });
@@ -265,7 +264,6 @@ function applyCrossFilters(source) {
         updateTrendChart(trendData);
     }
 
-    // Toggle the explicit clear buttons based on selection state
     document.getElementById('clear-dist-btn').style.display = scoreRange ? 'inline' : 'none';
     document.getElementById('clear-trend-btn').style.display = selectedYears.size > 0 ? 'inline' : 'none';
 
@@ -301,7 +299,10 @@ function setupDistributionChart() {
     
     distPath = distSvg.append("path").attr("fill", "url(#dist-gradient)").attr("opacity", 0.9);
     distAvgLine = distSvg.append("line").attr("stroke", "#fff").attr("stroke-width", 3).style("filter", "drop-shadow(0 0 5px white)");
-    distAvgText = distSvg.append("text").attr("fill", "#fff").attr("font-size", "4rem").attr("font-weight", "700");
+    
+    // THE NEW TEXT ELEMENTS
+    distAvgText = distSvg.append("text").attr("fill", "#fff").attr("font-size", "3.5rem").attr("font-weight", "700");
+    distSubText = distSvg.append("text").attr("fill", "#a0a0a0").attr("font-size", "1.2rem").attr("font-family", "Inter, sans-serif");
 
     brush = d3.brushX()
         .extent([[30, 0], [width - 30, height]])
@@ -323,6 +324,7 @@ function updateDistributionChart(scores) {
         distPath.transition().duration(400).attr("opacity", 0);
         distAvgLine.transition().duration(400).attr("opacity", 0);
         distAvgText.text("");
+        distSubText.text("");
         return;
     }
     
@@ -339,12 +341,19 @@ function updateDistributionChart(scores) {
     distAvgLine.transition().duration(750).attr("x1", distX(avg)).attr("x2", distX(avg)).attr("y1", 280).attr("y2", 0);
 
     const isRight = avg > 3.5;
+    
+    // UPDATE MAIN NUMBER
     distAvgText.transition().duration(750)
-        .attr("x", distX(avg) + (isRight ? -35 : 35)).attr("text-anchor", isRight ? "end" : "start").attr("y", 150)
+        .attr("x", distX(avg) + (isRight ? -30 : 30)).attr("text-anchor", isRight ? "end" : "start").attr("y", 130)
         .textTween(function() {
             const i = d3.interpolate(parseFloat(this.textContent) || 0, avg);
             return t => i(t).toFixed(1);
         });
+
+    // UPDATE SUB-TEXT
+    distSubText.transition().duration(750)
+        .attr("x", distX(avg) + (isRight ? -30 : 30)).attr("text-anchor", isRight ? "end" : "start").attr("y", 160)
+        .text(`avg on ${scores.length.toLocaleString()} reviews`);
 
     if(distBrushGroup) distBrushGroup.raise();
 }
