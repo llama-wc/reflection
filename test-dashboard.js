@@ -20,10 +20,21 @@ async function initializeDashboard() {
     const mainStage = document.getElementById('main-stage');
 
     try {
-        // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
+       // --- 1. INJECT NATIVE MOBILE AUTOCOMPLETE UI ---
         const style = document.createElement('style');
         style.textContent = `
-            .search-wrapper { position: relative; flex: 1; min-width: 200px; }
+            .search-wrapper { 
+                position: relative; 
+                flex: 1; 
+                min-width: 200px; 
+                display: flex; 
+                align-items: stretch; 
+            }
+            .search-wrapper input {
+                width: 100%;
+                margin: 0;
+                box-sizing: border-box;
+            }
             .autocomplete-overlay {
                 position: absolute; top: 100%; left: 0; right: 0;
                 background: #1e1e1e; border: 1px solid #333; border-top: none;
