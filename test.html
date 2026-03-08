@@ -81,9 +81,10 @@
         .autocomplete-item:last-child { border-bottom: none; }
         .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
 
-        /* --- DASHBOARD LAYOUT --- */
+        /* --- 3-COLUMN DASHBOARD LAYOUT --- */
         #main-stage {
-            display: grid; grid-template-columns: 350px 1fr; 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
             gap: 30px; padding: 40px; opacity: 0; transition: opacity 0.5s ease;
         }
         .panel {
@@ -110,7 +111,7 @@
 
         /* --- THE HERO SQUARE CSS --- */
         .hero-square {
-            width: 100%; max-width: 300px; aspect-ratio: 1 / 1;
+            width: 100%; max-width: 320px; aspect-ratio: 1 / 1;
             border-radius: 12px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; position: relative;
             background-color: #121212; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
@@ -123,6 +124,7 @@
         .sub-text {
             font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
             color: rgba(255,255,255,0.95); z-index: 2; margin-top: -5px; text-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            text-align: center; padding: 0 10px;
         }
 
         /* --- CONTROL CHART CSS --- */
@@ -143,8 +145,16 @@
             border: 1px solid #333; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
 
-        @media (max-width: 1200px) {
+        /* Responsive Breakpoints */
+        @media (max-width: 1400px) {
+            #main-stage { grid-template-columns: 1fr 1fr; }
+            .panel:nth-child(3) { grid-column: 1 / -1; } /* Pushes methodology to bottom row if screen shrinks */
+        }
+        @media (max-width: 900px) {
             #main-stage { grid-template-columns: 1fr; }
+            .panel { grid-column: 1 !important; }
+            .score-text { font-size: 6rem; }
+            .hero-square { max-width: 280px; }
         }
     </style>
 </head>
@@ -186,14 +196,24 @@
             <div id="ui-desc">Initializing dataset...</div>
         </div>
 
-        <div class="panel" style="display: flex; flex-direction: column;">
-            <h3 class="chart-title">Global Average Rating</h3>
-            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+        <div class="panel" style="display: flex; flex-direction: column; align-items: center;">
+            <h3 class="chart-title" style="align-self: flex-start;">Global Average Rating</h3>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
                 <div class="hero-square" id="heroSquare">
                     <h1 class="score-text" id="scoreDisplay">-</h1>
                     <div class="sub-text" id="reviewCount">0 REVIEWS</div>
                 </div>
             </div>
+        </div>
+
+        <div class="panel">
+            <h3 class="chart-title">Project Architecture</h3>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-top: 0;">
+                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+            </p>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
+            </p>
         </div>
 
         <div class="panel" style="grid-column: 1 / -1;">
@@ -215,6 +235,6 @@
 
     </div>
 
-    <script type="module" src="test-dashboard.js?v=12"></script>
+    <script type="module" src="test-dashboard.js?v=13"></script>
 </body>
 </html>
