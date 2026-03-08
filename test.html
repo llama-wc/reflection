@@ -81,15 +81,16 @@
         .autocomplete-item:last-child { border-bottom: none; }
         .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
 
-        /* --- 3-COLUMN DASHBOARD LAYOUT --- */
+        /* --- HORIZONTAL DASHBOARD LAYOUT --- */
         #main-stage {
             display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
+            grid-template-columns: 320px 340px 1fr; /* Metadata | Hero Square | Trend Chart */
             gap: 30px; padding: 40px; opacity: 0; transition: opacity 0.5s ease;
         }
         .panel {
             background: var(--panel-bg); border-radius: 12px; padding: 25px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid #222;
+            display: flex; flex-direction: column; 
         }
         
         #ui-title {
@@ -111,11 +112,12 @@
 
         /* --- THE HERO SQUARE CSS --- */
         .hero-square {
-            width: 100%; max-width: 320px; aspect-ratio: 1 / 1;
+            width: 100%; max-width: 300px; aspect-ratio: 1 / 1;
             border-radius: 12px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; position: relative;
             background-color: #121212; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             transition: background-color 0.4s ease;
+            margin: auto; /* Centers it if panel gets taller */
         }
         .score-text {
             font-family: 'Oswald', sans-serif; font-size: 8rem; line-height: 1;
@@ -124,11 +126,10 @@
         .sub-text {
             font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
             color: rgba(255,255,255,0.95); z-index: 2; margin-top: -5px; text-shadow: 0 4px 8px rgba(0,0,0,0.5);
-            text-align: center; padding: 0 10px;
         }
 
         /* --- CONTROL CHART CSS --- */
-        .chart-container { width: 100%; height: 350px; position: relative; }
+        .chart-container { width: 100%; flex: 1; min-height: 250px; position: relative; }
         .domain { display: none; } 
         .tick line { stroke: #333; stroke-dasharray: 4, 4; } 
         .tick text { fill: #777; font-family: 'Inter', sans-serif; font-size: 12px; }
@@ -137,6 +138,8 @@
         .legend-item { display: flex; align-items: center; gap: 8px; }
         .legend-gradient { width: 40px; height: 12px; border-radius: 2px; background: linear-gradient(to right, #FF2A2A, #FF9F00, #00E676); }
         .legend-dashed { width: 20px; height: 0px; border-top: 2px dashed #666; }
+
+        .methodology-panel { grid-column: 1 / -1; }
 
         #loading-overlay {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -147,14 +150,13 @@
 
         /* Responsive Breakpoints */
         @media (max-width: 1400px) {
-            #main-stage { grid-template-columns: 1fr 1fr; }
-            .panel:nth-child(3) { grid-column: 1 / -1; } /* Pushes methodology to bottom row if screen shrinks */
+            #main-stage { grid-template-columns: 320px 1fr; }
+            .trend-panel { grid-column: 1 / -1; } /* Drops trend chart to next row */
         }
         @media (max-width: 900px) {
-            #main-stage { grid-template-columns: 1fr; }
-            .panel { grid-column: 1 !important; }
-            .score-text { font-size: 6rem; }
-            .hero-square { max-width: 280px; }
+            #main-stage { grid-template-columns: 1fr; padding: 20px; gap: 20px; }
+            .panel { grid-column: 1 / -1 !important; }
+            .score-text { font-size: 7rem; }
         }
     </style>
 </head>
@@ -196,27 +198,15 @@
             <div id="ui-desc">Initializing dataset...</div>
         </div>
 
-        <div class="panel" style="display: flex; flex-direction: column; align-items: center;">
+        <div class="panel" style="align-items: center;">
             <h3 class="chart-title" style="align-self: flex-start;">Global Average Rating</h3>
-            <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
-                <div class="hero-square" id="heroSquare">
-                    <h1 class="score-text" id="scoreDisplay">-</h1>
-                    <div class="sub-text" id="reviewCount">0 REVIEWS</div>
-                </div>
+            <div class="hero-square" id="heroSquare">
+                <h1 class="score-text" id="scoreDisplay">-</h1>
+                <div class="sub-text" id="reviewCount">0 REVIEWS</div>
             </div>
         </div>
 
-        <div class="panel">
-            <h3 class="chart-title">Project Architecture</h3>
-            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-top: 0;">
-                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
-            </p>
-            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-bottom: 0;">
-                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
-            </p>
-        </div>
-
-        <div class="panel" style="grid-column: 1 / -1;">
+        <div class="panel trend-panel">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
                 <div>
                     <h3 class="chart-title" style="margin-bottom: 5px;">
@@ -233,8 +223,18 @@
             <div id="trend-container" class="chart-container"></div>
         </div>
 
+        <div class="panel methodology-panel">
+            <h3 class="chart-title">Project Architecture & Methodology</h3>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-top: 0;">
+                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+            </p>
+            <p style="color: #d0d0d0; line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
+            </p>
+        </div>
+
     </div>
 
-    <script type="module" src="test-dashboard.js?v=13"></script>
+    <script type="module" src="test-dashboard.js?v=14"></script>
 </body>
 </html>
