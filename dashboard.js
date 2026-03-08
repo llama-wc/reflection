@@ -36,8 +36,6 @@ async function initializeDashboard() {
         URL.revokeObjectURL(worker_url);
 
         loadingText.innerText = "Mounting Parquet Files...";
-        
-        // PRODUCTION UPDATE: Removed ?v=Date.now() to allow browser caching
         const [mRes, rRes] = await Promise.all([
             fetch('movies.parquet'),
             fetch('ratings.parquet')
@@ -64,50 +62,84 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // TOKENIZED FUZZY SEARCH LOGIC
+        // --- NEW: CONTEXT-AWARE AUTOCOMPLETE ENGINE ---
+        async function populateSearchDropdown(fuzzyText = "") {
+            // 1. Grab whatever the user currently has selected in the other dropdowns
+            const genre = getFilterValue('genreFilter');
+            const director = getFilterValue('directorFilter');
+            const studio = getFilterValue('studioFilter');
+            const actor = getFilterValue('actorFilter');
+
+            let clauses = [];
+            if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
+            if (director !== "All") clauses.push(`m.director = '${director.replace(/'/g, "''")}'`);
+            if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
+            if (actor !== "All") clauses.push(`m."cast" LIKE '%${actor.replace(/'/g, "''")}%'`);
+
+            // 2. Add the text they are currently typing (if any)
+            if (fuzzyText !== "") {
+                const tokens = fuzzyText.split(' ').filter(t => t.trim() !== '');
+                const likeClauses = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
+                if (likeClauses) clauses.push(`(${likeClauses})`);
+            }
+
+            // 3. Add visual timeline filters (if any)
+            let joinClause = "";
+            if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
+
+            const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
+            
+            // Limit to 100 so we don't crash mobile browsers if NO filters are applied
+            const query = `SELECT DISTINCT m.title_clean FROM 'movies.parquet' m ${joinClause} ${whereStr} ORDER BY m.title_clean LIMIT 100`;
+
+            try {
+                const res = await conn.query(query);
+                const suggestions = res.toArray().map(r => r.toJSON().title_clean);
+                
+                if (suggestions.length > 0) {
+                    autocompleteOverlay.innerHTML = suggestions.map(s => `<div class="autocomplete-item">${s}</div>`).join('');
+                    autocompleteOverlay.style.display = 'flex';
+                    
+                    autocompleteOverlay.querySelectorAll('.autocomplete-item').forEach(div => {
+                        div.addEventListener('click', async () => {
+                            searchBar.value = div.innerText;
+                            autocompleteOverlay.style.display = 'none';
+                            await handleUIChange();
+                        });
+                    });
+                } else {
+                    autocompleteOverlay.innerHTML = `<div class="autocomplete-item" style="color:#777; font-style:italic;">No movies found matching these filters...</div>`;
+                    autocompleteOverlay.style.display = 'flex';
+                }
+            } catch(err) { console.error(err); }
+        }
+
+        // TRIGGER 1: When user clicks into the box (even if empty)
+        searchBar.addEventListener('focus', () => {
+            const val = searchBar.value.trim();
+            populateSearchDropdown(val);
+        });
+
+        // TRIGGER 2: When user types
         let searchDebounce;
         searchBar.addEventListener('input', async (e) => {
             const val = e.target.value.trim();
             clearTimeout(searchDebounce);
             
             if (val.length === 0) {
+                // If they backspace the whole title away, reset the dashboard!
                 autocompleteOverlay.style.display = 'none';
                 await handleUIChange();
+                populateSearchDropdown(""); // Re-open the dropdown with remaining filters
                 return;
             }
 
-            if (val.length < 2) {
-                autocompleteOverlay.style.display = 'none';
-                return;
-            }
-
-            searchDebounce = setTimeout(async () => {
-                const tokens = val.split(' ').filter(t => t.trim() !== '');
-                const likeClauses = tokens.map(t => `title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
-                
-                try {
-                    const res = await conn.query(`SELECT DISTINCT title_clean FROM 'movies.parquet' WHERE ${likeClauses} ORDER BY title_clean LIMIT 10`);
-                    const suggestions = res.toArray().map(r => r.toJSON().title_clean);
-                    
-                    if (suggestions.length > 0) {
-                        autocompleteOverlay.innerHTML = suggestions.map(s => `<div class="autocomplete-item">${s}</div>`).join('');
-                        autocompleteOverlay.style.display = 'flex';
-                        
-                        autocompleteOverlay.querySelectorAll('.autocomplete-item').forEach(div => {
-                            div.addEventListener('click', async () => {
-                                searchBar.value = div.innerText;
-                                autocompleteOverlay.style.display = 'none';
-                                await handleUIChange();
-                            });
-                        });
-                    } else {
-                        autocompleteOverlay.innerHTML = `<div class="autocomplete-item" style="color:#777; font-style:italic;">No matches found...</div>`;
-                        autocompleteOverlay.style.display = 'flex';
-                    }
-                } catch(err) { console.error(err); }
+            searchDebounce = setTimeout(() => {
+                populateSearchDropdown(val);
             }, 250); 
         });
 
+        // HIDE logic
         document.addEventListener('click', (e) => {
             if (e.target !== searchBar && !autocompleteOverlay.contains(e.target)) {
                 autocompleteOverlay.style.display = 'none';
@@ -129,7 +161,7 @@ async function initializeDashboard() {
 
         document.getElementById('resetBtn').addEventListener('click', async () => {
             mainStage.style.opacity = '0.5';
-            document.querySelectorAll('.filter-group input, #searchBar').forEach(input => input.value = "");
+            document.querySelectorAll('.filter-group input').forEach(input => input.value = "");
             selectedYears.clear();
             document.getElementById('clear-trend-btn').style.display = 'none';
 
@@ -358,7 +390,6 @@ async function applyUnifiedFilters() {
     }
 }
 
-// --- 6. HERO SQUARE RENDERER ---
 function updateHeroMetric(avg, count) {
     const displayElement = document.getElementById('scoreDisplay');
     const countElement = document.getElementById('reviewCount');
@@ -388,7 +419,6 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
-// --- 7. CONTROL CHART RENDERER ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -498,7 +528,6 @@ function updateTrendChart(data, globalMean) {
         });
 }
 
-// --- 8. CROSS FILTERING ---
 function applyCrossFilters() {
     const isFiltered = selectedYears.size > 0;
     
