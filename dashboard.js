@@ -26,6 +26,31 @@ async function initializeDashboard() {
         const searchBar = document.getElementById('searchBar');
         const autocompleteOverlay = document.getElementById('autocompleteOverlay');
 
+        // --- NEW: DYNAMICALLY INJECT SCORE FILTER ---
+        const filterGroup = document.querySelector('.filter-group');
+        const resetBtn = document.getElementById('resetBtn');
+        if (filterGroup && resetBtn && !document.getElementById('scoreFilter')) {
+            const scoreSelect = document.createElement('select');
+            scoreSelect.id = 'scoreFilter';
+            scoreSelect.disabled = true; 
+            scoreSelect.innerHTML = `
+                <option value="All">All Scores</option>
+                <option value="4">4.0+ (Great)</option>
+                <option value="3">3.0 - 3.9 (Good)</option>
+                <option value="2">2.0 - 2.9 (Mixed)</option>
+                <option value="1">Under 2.0 (Poor)</option>
+            `;
+            // Match the exact styling of your inputs
+            scoreSelect.style.cssText = `
+                background: var(--bg-color); color: var(--text-main);
+                border: 1px solid #333; padding: 12px 15px; border-radius: 4px;
+                font-family: 'Inter', sans-serif; box-sizing: border-box; 
+                margin: 0; color-scheme: dark; font-size: 14px;
+                flex: 1; min-width: 150px;
+            `;
+            filterGroup.insertBefore(scoreSelect, resetBtn);
+        }
+
         // BOOT DUCKDB
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
@@ -36,6 +61,8 @@ async function initializeDashboard() {
         URL.revokeObjectURL(worker_url);
 
         loadingText.innerText = "Mounting Parquet Files...";
+        
+        // Live Fetch (Browser Caching Enabled)
         const [mRes, rRes] = await Promise.all([
             fetch('movies.parquet'),
             fetch('ratings.parquet')
@@ -44,14 +71,25 @@ async function initializeDashboard() {
         await db.registerFileBuffer('ratings.parquet', new Uint8Array(await rRes.arrayBuffer()));
         conn = await db.connect();
         
+        loadingText.innerText = "Calculating Averages...";
+        await conn.query(`
+            CREATE TABLE movie_averages AS 
+            SELECT movieId, AVG(rating) as avg_rating 
+            FROM 'ratings.parquet' 
+            GROUP BY movieId
+        `);
+
         loadingText.innerText = "Indexing Metadata...";
         await refreshFilters(); 
 
         loadingText.style.display = 'none';
         mainStage.style.opacity = '1';
         
+        // Enable all inputs
         searchBar.disabled = false;
         document.querySelectorAll('.filter-group input').forEach(input => input.disabled = false);
+        const scoreFilterEl = document.getElementById('scoreFilter');
+        if (scoreFilterEl) scoreFilterEl.disabled = false;
 
         async function handleUIChange() {
             mainStage.style.opacity = '0.5'; 
@@ -62,13 +100,13 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // --- NEW: CONTEXT-AWARE AUTOCOMPLETE ENGINE ---
+        // --- CONTEXT-AWARE AUTOCOMPLETE ENGINE ---
         async function populateSearchDropdown(fuzzyText = "") {
-            // 1. Grab whatever the user currently has selected in the other dropdowns
             const genre = getFilterValue('genreFilter');
             const director = getFilterValue('directorFilter');
             const studio = getFilterValue('studioFilter');
             const actor = getFilterValue('actorFilter');
+            const scoreFilterVal = getFilterValue('scoreFilter');
 
             let clauses = [];
             if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
@@ -76,20 +114,25 @@ async function initializeDashboard() {
             if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
             if (actor !== "All") clauses.push(`m."cast" LIKE '%${actor.replace(/'/g, "''")}%'`);
 
-            // 2. Add the text they are currently typing (if any)
+            let scoreJoin = "";
+            if (scoreFilterVal !== "All") {
+                scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
+                if (scoreFilterVal === "4") clauses.push("ma.avg_rating >= 4.0");
+                else if (scoreFilterVal === "3") clauses.push("ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0");
+                else if (scoreFilterVal === "2") clauses.push("ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0");
+                else if (scoreFilterVal === "1") clauses.push("ma.avg_rating < 2.0");
+            }
+
             if (fuzzyText !== "") {
                 const tokens = fuzzyText.split(' ').filter(t => t.trim() !== '');
                 const likeClauses = tokens.map(t => `m.title_clean ILIKE '%${t.replace(/'/g, "''")}%'`).join(' AND ');
                 if (likeClauses) clauses.push(`(${likeClauses})`);
             }
 
-            // 3. Add visual timeline filters (if any)
-            let joinClause = "";
+            let joinClause = scoreJoin;
             if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
             const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
-            
-            // Limit to 100 so we don't crash mobile browsers if NO filters are applied
             const query = `SELECT DISTINCT m.title_clean FROM 'movies.parquet' m ${joinClause} ${whereStr} ORDER BY m.title_clean LIMIT 100`;
 
             try {
@@ -114,23 +157,25 @@ async function initializeDashboard() {
             } catch(err) { console.error(err); }
         }
 
-        // TRIGGER 1: When user clicks into the box (even if empty)
         searchBar.addEventListener('focus', () => {
             const val = searchBar.value.trim();
             populateSearchDropdown(val);
         });
 
-        // TRIGGER 2: When user types
         let searchDebounce;
         searchBar.addEventListener('input', async (e) => {
             const val = e.target.value.trim();
             clearTimeout(searchDebounce);
             
             if (val.length === 0) {
-                // If they backspace the whole title away, reset the dashboard!
                 autocompleteOverlay.style.display = 'none';
                 await handleUIChange();
-                populateSearchDropdown(""); // Re-open the dropdown with remaining filters
+                populateSearchDropdown(""); 
+                return;
+            }
+
+            if (val.length < 2) {
+                autocompleteOverlay.style.display = 'none';
                 return;
             }
 
@@ -139,7 +184,6 @@ async function initializeDashboard() {
             }, 250); 
         });
 
-        // HIDE logic
         document.addEventListener('click', (e) => {
             if (e.target !== searchBar && !autocompleteOverlay.contains(e.target)) {
                 autocompleteOverlay.style.display = 'none';
@@ -158,10 +202,16 @@ async function initializeDashboard() {
         document.querySelectorAll('.filter-group input[list]:not(#searchBar)').forEach(input => {
             input.addEventListener('change', handleUIChange);
         });
+        
+        if (scoreFilterEl) {
+            scoreFilterEl.addEventListener('change', handleUIChange);
+        }
 
         document.getElementById('resetBtn').addEventListener('click', async () => {
             mainStage.style.opacity = '0.5';
             document.querySelectorAll('.filter-group input').forEach(input => input.value = "");
+            if (scoreFilterEl) scoreFilterEl.value = "All";
+            
             selectedYears.clear();
             document.getElementById('clear-trend-btn').style.display = 'none';
 
@@ -216,6 +266,17 @@ async function refreshFilters() {
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
+        const scoreFilterVal = getFilterValue('scoreFilter');
+
+        let scoreJoin = "";
+        let scoreWhere = null;
+        if (scoreFilterVal !== "All") {
+            scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
+            if (scoreFilterVal === "4") scoreWhere = "ma.avg_rating >= 4.0";
+            else if (scoreFilterVal === "3") scoreWhere = "ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0";
+            else if (scoreFilterVal === "2") scoreWhere = "ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0";
+            else if (scoreFilterVal === "1") scoreWhere = "ma.avg_rating < 2.0";
+        }
 
         let srcClause = null;
         if (exactMovieData) srcClause = `m.movieId = ${exactMovieData.movieId}`;
@@ -231,12 +292,12 @@ async function refreshFilters() {
             return valid.length > 0 ? `WHERE ${valid.join(' AND ')}` : "";
         };
 
-        const whereForGenre = buildWhere([srcClause, dClause, sClause, aClause]);               
-        const whereForDir = buildWhere([srcClause, gClause, sClause, aClause]);                 
-        const whereForStudio = buildWhere([srcClause, gClause, dClause, aClause]);              
-        const whereForActor = buildWhere([srcClause, gClause, dClause, sClause]);              
+        const whereForGenre = buildWhere([srcClause, dClause, sClause, aClause, scoreWhere]);               
+        const whereForDir = buildWhere([srcClause, gClause, sClause, aClause, scoreWhere]);                 
+        const whereForStudio = buildWhere([srcClause, gClause, dClause, aClause, scoreWhere]);              
+        const whereForActor = buildWhere([srcClause, gClause, dClause, sClause, scoreWhere]);              
 
-        let joinClause = "";
+        let joinClause = scoreJoin;
         if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
         const baseFrom = `FROM 'movies.parquet' m ${joinClause}`;
@@ -296,35 +357,48 @@ async function applyUnifiedFilters() {
         const director = getFilterValue('directorFilter');
         const studio = getFilterValue('studioFilter');
         const actor = getFilterValue('actorFilter');
+        const scoreFilterVal = getFilterValue('scoreFilter');
 
         let clauses = [];
+        let scoreJoin = "";
+
+        if (scoreFilterVal !== "All") {
+            scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
+            if (scoreFilterVal === "4") clauses.push("ma.avg_rating >= 4.0");
+            else if (scoreFilterVal === "3") clauses.push("ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0");
+            else if (scoreFilterVal === "2") clauses.push("ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0");
+            else if (scoreFilterVal === "1") clauses.push("ma.avg_rating < 2.0");
+        }
+
         if (searchWhereStr) clauses.push(`(${searchWhereStr})`);
+        if (exactMovieData) clauses.push(`m.movieId = ${exactMovieData.movieId}`);
         if (genre !== "All") clauses.push(`m.genres LIKE '%${genre.replace(/'/g, "''")}%'`);
         if (director !== "All") clauses.push(`m.director = '${director.replace(/'/g, "''")}'`);
         if (studio !== "All") clauses.push(`m.studio = '${studio.replace(/'/g, "''")}'`);
         if (actor !== "All") clauses.push(`m."cast" LIKE '%${actor.replace(/'/g, "''")}%'`);
         
-        let finalWhereStr = "";
+        let finalWhereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
 
-        if (exactMovieData && genre === "All" && director === "All" && studio === "All" && actor === "All") {
-            document.getElementById('ui-title').innerText = exactMovieData.title_clean;
-            document.getElementById('ui-tags').innerText = `${exactMovieData.release_year} • ${exactMovieData.genres.split('|')[0]} • ${exactMovieData.runtime}`;
-            document.getElementById('ui-director').innerText = exactMovieData.director;
-            document.getElementById('ui-studio').innerText = exactMovieData.studio;
-            document.getElementById('ui-cast').innerText = exactMovieData.cast;
-            document.getElementById('ui-desc').innerText = exactMovieData.description;
-            finalWhereStr = `WHERE m.movieId = ${exactMovieData.movieId}`;
+        // EXACT MOVIE CHECK
+        const movieCheckRes = await conn.query(`SELECT m.* FROM 'movies.parquet' m ${scoreJoin} ${finalWhereStr} LIMIT 2`);
+        const matchedMovies = movieCheckRes.toArray().map(row => row.toJSON());
+
+        if (matchedMovies.length === 1) {
+            const movieData = matchedMovies[0];
+            document.getElementById('ui-title').innerText = movieData.title_clean;
+            document.getElementById('ui-tags').innerText = `${movieData.release_year} • ${movieData.genres.split('|')[0]} • ${movieData.runtime}`;
+            document.getElementById('ui-director').innerText = movieData.director;
+            document.getElementById('ui-studio').innerText = movieData.studio;
+            document.getElementById('ui-cast').innerText = movieData.cast;
+            document.getElementById('ui-desc').innerText = movieData.description;
         } 
-        else if (clauses.length > 0 || exactMovieData) {
-            document.getElementById('ui-title').innerText = exactMovieData ? exactMovieData.title_clean : "Filtered Results";
+        else if (clauses.length > 0) {
+            document.getElementById('ui-title').innerText = searchVal && !exactMovieData ? `"${searchVal}"` : "Filtered Results";
             document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
-            document.getElementById('ui-desc').innerText = "Viewing exact aggregate data based on your selected text filters.";
+            document.getElementById('ui-desc').innerText = matchedMovies.length === 0 ? "No movies match these exact constraints." : "Viewing exact aggregate data based on your selected filters.";
             document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
             document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
             document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
-            
-            if (exactMovieData) clauses.push(`m.movieId = ${exactMovieData.movieId}`);
-            finalWhereStr = `WHERE ${clauses.join(' AND ')}`;
         } 
         else {
             document.getElementById('ui-title').innerText = "All Movies";
@@ -335,15 +409,20 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-cast').innerText = "-";
         }
 
+        // AGGREGATE SCORES
         let statsQuery = `
             SELECT COUNT(r.rating) as c, AVG(r.rating) as a 
             FROM 'ratings.parquet' r
         `;
-        if (finalWhereStr !== "") {
+        if (finalWhereStr !== "" || scoreJoin !== "") {
             statsQuery = `
-                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
+                WITH filtered_movies AS (
+                    SELECT m.movieId FROM 'movies.parquet' m 
+                    ${scoreJoin} 
+                    ${finalWhereStr}
+                )
                 SELECT COUNT(r.rating) as c, AVG(r.rating) as a FROM 'ratings.parquet' r
-                JOIN filtered_movies m ON r.movieId = m.movieId
+                JOIN filtered_movies fm ON r.movieId = fm.movieId
             `;
         }
         const exactStats = await conn.query(statsQuery);
@@ -354,6 +433,7 @@ async function applyUnifiedFilters() {
             currentExactCount = 0; currentExactAvg = 0;
         }
 
+        // TREND DATA
         let yearlyQuery = `
             SELECT 
                 r.review_year as year, 
@@ -364,16 +444,20 @@ async function applyUnifiedFilters() {
             GROUP BY r.review_year
             ORDER BY r.review_year
         `;
-        if (finalWhereStr !== "") {
+        if (finalWhereStr !== "" || scoreJoin !== "") {
             yearlyQuery = `
-                WITH filtered_movies AS (SELECT movieId FROM 'movies.parquet' m ${finalWhereStr})
+                WITH filtered_movies AS (
+                    SELECT m.movieId FROM 'movies.parquet' m 
+                    ${scoreJoin} 
+                    ${finalWhereStr}
+                )
                 SELECT 
                     r.review_year as year, 
                     AVG(r.rating) as avg, 
                     COALESCE(STDDEV_POP(r.rating), 0) as std, 
                     COUNT(r.rating) as count 
                 FROM 'ratings.parquet' r
-                JOIN filtered_movies m ON r.movieId = m.movieId
+                JOIN filtered_movies fm ON r.movieId = fm.movieId
                 GROUP BY r.review_year
                 ORDER BY r.review_year
             `;
