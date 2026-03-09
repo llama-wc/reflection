@@ -456,7 +456,17 @@ async function applyUnifiedFilters() {
         }
         
         const yearlyRes = await conn.query(yearlyQuery);
-        currentTrendData = yearlyRes.toArray().map(row => row.toJSON());
+        
+        // THE FIX: Explicitly cast DuckDB BigInts into standard Javascript Numbers 
+        // to prevent D3 from silently crashing during calculations!
+        currentTrendData = yearlyRes.toArray().map(row => {
+            const r = row.toJSON();
+            return {
+                year: Number(r.year),
+                avg: Number(r.avg),
+                count: Number(r.count) 
+            };
+        });
 
         updateHeroMetric(currentExactAvg, currentExactCount);
         updateTrendChart(currentTrendData, currentExactAvg);
@@ -495,7 +505,7 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
-// --- NEW: BLENDED VIOLIN PLOT RENDERER ---
+// --- BLENDED VIOLIN PLOT RENDERER ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -507,7 +517,6 @@ function updateTrendChart(data, globalMean) {
     const clean = data.filter(d => d.year != null && !isNaN(d.year));
     if(clean.length === 0) return;
 
-    // Dynamically update the HTML description to match the new visual
     const trendDesc = document.querySelector('.trend-panel p');
     if (trendDesc) trendDesc.innerText = 'Average rating overlayed with review volume density (Continuous Violin)';
 
@@ -556,7 +565,6 @@ function updateTrendChart(data, globalMean) {
         .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
         .call(g => g.select(".domain").remove());
 
-    // VIOLIN LOGIC: Map the count (volume) to the width of the band
     const maxCount = d3.max(clean, d => d.count) || 1;
 
     const area = d3.area()
@@ -564,7 +572,6 @@ function updateTrendChart(data, globalMean) {
         .x(d => x(d.year))
         .y0(d => {
             const density = d.count / maxCount;
-            // Base thickness 0.15, expands up to 1.35 based on volume
             const spread = 0.15 + (density * 1.20); 
             return y(Math.max(0.5, d.avg - spread));
         })
