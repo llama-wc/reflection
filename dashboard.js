@@ -26,7 +26,7 @@ async function initializeDashboard() {
         const searchBar = document.getElementById('searchBar');
         const autocompleteOverlay = document.getElementById('autocompleteOverlay');
 
-        // --- NEW: DYNAMICALLY INJECT SCORE FILTER ---
+        // DYNAMICALLY INJECT SCORE FILTER
         const filterGroup = document.querySelector('.filter-group');
         const resetBtn = document.getElementById('resetBtn');
         if (filterGroup && resetBtn && !document.getElementById('scoreFilter')) {
@@ -40,7 +40,6 @@ async function initializeDashboard() {
                 <option value="2">2.0 - 2.9 (Mixed)</option>
                 <option value="1">Under 2.0 (Poor)</option>
             `;
-            // Match the exact styling of your inputs
             scoreSelect.style.cssText = `
                 background: var(--bg-color); color: var(--text-main);
                 border: 1px solid #333; padding: 12px 15px; border-radius: 4px;
@@ -62,7 +61,6 @@ async function initializeDashboard() {
 
         loadingText.innerText = "Mounting Parquet Files...";
         
-        // Live Fetch (Browser Caching Enabled)
         const [mRes, rRes] = await Promise.all([
             fetch('movies.parquet'),
             fetch('ratings.parquet')
@@ -85,7 +83,6 @@ async function initializeDashboard() {
         loadingText.style.display = 'none';
         mainStage.style.opacity = '1';
         
-        // Enable all inputs
         searchBar.disabled = false;
         document.querySelectorAll('.filter-group input').forEach(input => input.disabled = false);
         const scoreFilterEl = document.getElementById('scoreFilter');
@@ -100,7 +97,7 @@ async function initializeDashboard() {
             mainStage.style.opacity = '1'; 
         }
 
-        // --- CONTEXT-AWARE AUTOCOMPLETE ENGINE ---
+        // CONTEXT-AWARE AUTOCOMPLETE ENGINE
         async function populateSearchDropdown(fuzzyText = "") {
             const genre = getFilterValue('genreFilter');
             const director = getFilterValue('directorFilter');
@@ -379,7 +376,6 @@ async function applyUnifiedFilters() {
         
         let finalWhereStr = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : "";
 
-        // EXACT MOVIE CHECK
         const movieCheckRes = await conn.query(`SELECT m.* FROM 'movies.parquet' m ${scoreJoin} ${finalWhereStr} LIMIT 2`);
         const matchedMovies = movieCheckRes.toArray().map(row => row.toJSON());
 
@@ -409,7 +405,6 @@ async function applyUnifiedFilters() {
             document.getElementById('ui-cast').innerText = "-";
         }
 
-        // AGGREGATE SCORES
         let statsQuery = `
             SELECT COUNT(r.rating) as c, AVG(r.rating) as a 
             FROM 'ratings.parquet' r
@@ -433,12 +428,10 @@ async function applyUnifiedFilters() {
             currentExactCount = 0; currentExactAvg = 0;
         }
 
-        // TREND DATA
         let yearlyQuery = `
             SELECT 
                 r.review_year as year, 
                 AVG(r.rating) as avg, 
-                COALESCE(STDDEV_POP(r.rating), 0) as std, 
                 COUNT(r.rating) as count 
             FROM 'ratings.parquet' r
             GROUP BY r.review_year
@@ -454,7 +447,6 @@ async function applyUnifiedFilters() {
                 SELECT 
                     r.review_year as year, 
                     AVG(r.rating) as avg, 
-                    COALESCE(STDDEV_POP(r.rating), 0) as std, 
                     COUNT(r.rating) as count 
                 FROM 'ratings.parquet' r
                 JOIN filtered_movies fm ON r.movieId = fm.movieId
@@ -503,6 +495,7 @@ function updateHeroMetric(avg, count) {
     heroSquare.style.backgroundColor = colorScale(avg);
 }
 
+// --- NEW: BLENDED VIOLIN PLOT RENDERER ---
 function updateTrendChart(data, globalMean) {
     const container = document.getElementById("trend-container");
     if(!container) return;
@@ -513,6 +506,10 @@ function updateTrendChart(data, globalMean) {
 
     const clean = data.filter(d => d.year != null && !isNaN(d.year));
     if(clean.length === 0) return;
+
+    // Dynamically update the HTML description to match the new visual
+    const trendDesc = document.querySelector('.trend-panel p');
+    if (trendDesc) trendDesc.innerText = 'Average rating overlayed with review volume density (Continuous Violin)';
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 350;
@@ -559,11 +556,23 @@ function updateTrendChart(data, globalMean) {
         .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right).ticks(5))
         .call(g => g.select(".domain").remove());
 
+    // VIOLIN LOGIC: Map the count (volume) to the width of the band
+    const maxCount = d3.max(clean, d => d.count) || 1;
+
     const area = d3.area()
         .curve(d3.curveMonotoneX)
         .x(d => x(d.year))
-        .y0(d => y(Math.max(0.5, d.avg - d.std))) 
-        .y1(d => y(Math.min(5.0, d.avg + d.std))); 
+        .y0(d => {
+            const density = d.count / maxCount;
+            // Base thickness 0.15, expands up to 1.35 based on volume
+            const spread = 0.15 + (density * 1.20); 
+            return y(Math.max(0.5, d.avg - spread));
+        })
+        .y1(d => {
+            const density = d.count / maxCount;
+            const spread = 0.15 + (density * 1.20);
+            return y(Math.min(5.0, d.avg + spread));
+        }); 
 
     svg.append("path")
         .datum(clean)
