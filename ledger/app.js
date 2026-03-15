@@ -1,5 +1,9 @@
 // --- CLOUDFLARE CONFIGURATION ---
-const WORKER_URL = "virtue-api.mac-j-wall.workers.dev"; // <--- PUT YOUR LINK HERE
+let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
+// Foolproof parser: Forces HTTPS to prevent the browser from treating it as a local relative path, and strips trailing slashes.
+if (!RAW_URL.startsWith('http')) RAW_URL = 'https://' + RAW_URL;
+if (RAW_URL.endsWith('/')) RAW_URL = RAW_URL.slice(0, -1);
+const WORKER_URL = RAW_URL;
 
 // --- STATE & INITIALIZATION ---
 const defaultVirtues = ["Temperance", "Silence", "Order", "Resolution", "Frugality", "Industry", "Sincerity", "Justice", "Moderation", "Cleanliness", "Tranquility", "Chastity", "Humility"];
@@ -87,7 +91,6 @@ async function saveDataToCloud() {
         const compressedData = [];
         for (const [key, drops] of Object.entries(gridData)) {
             if (!drops || drops.length === 0) continue;
-            
             const parts = key.split('_');
             if (parts.length !== 2) continue;
             
@@ -96,11 +99,9 @@ async function saveDataToCloud() {
             if (vIdx === -1) continue; 
             
             const flatDrops = drops.map(d => {
-                // HEALING ENGINE: Safely handle legacy data missing shapes/splatters
                 const shapeStr = d.shape || "50% 50% 50% 50% / 50% 50% 50% 50%";
                 const shapes = shapeStr.match(/\d+/g).map(Number);
                 const sp = (d.splatters || []).map(s => [Math.round(s.size), Math.round(s.x), Math.round(s.y)]);
-                
                 return [d.type || 1, Math.round((d.scale || 1) * 100), d.rotate || 0, Math.round(d.x || 50), Math.round(d.y || 25), ...shapes, sp];
             });
             compressedData.push([vIdx, date, flatDrops]);
@@ -108,9 +109,11 @@ async function saveDataToCloud() {
         
         const payload = JSON.stringify({ v: virtues, d: compressedData });
         
+        console.log(`Sending secure POST request to: ${WORKER_URL}?id=${currentUserId}`);
+        
         const res = await fetch(`${WORKER_URL}?id=${currentUserId}`, { 
             method: 'POST', 
-            headers: { 'Content-Type': 'text/plain' }, // Bypasses strict CORS blockers
+            headers: { 'Content-Type': 'text/plain' }, 
             body: payload 
         });
         
@@ -314,5 +317,4 @@ themeBtn.addEventListener('click', () => {
     else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.remove('force-light'); appWrapper.classList.add('force-dark'); localStorage.setItem('theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
 });
 
-// Start the app
 initializeSession();
