@@ -5,12 +5,10 @@ const virtues = [
 ];
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// State definitions: 0=Empty, 1=Success, 2=Failure, 3=Both
 let gridData = {}; 
-
 const container = document.getElementById('grid-container');
 
-// Load existing data from localStorage
+// --- INITIALIZATION ---
 function loadData() {
     const saved = localStorage.getItem('reflection_ledger');
     if (saved) {
@@ -18,17 +16,13 @@ function loadData() {
     }
 }
 
-// Generate the visual grid
+// --- VISUAL GRID GENERATION ---
 function renderGrid() {
     container.innerHTML = '';
     
-    // Top-left empty corner
     container.appendChild(createCell('', 'grid-header'));
-    
-    // Day headers
     days.forEach(day => container.appendChild(createCell(day, 'grid-header')));
 
-    // Rows for each virtue
     virtues.forEach(virtue => {
         container.appendChild(createCell(virtue, 'grid-header virtue-label'));
         
@@ -37,12 +31,10 @@ function renderGrid() {
             const cell = createCell('', 'grid-cell');
             cell.dataset.id = cellId;
             
-            // Initialize data if it doesn't exist
             if (gridData[cellId] === undefined) gridData[cellId] = 0;
             
             updateCellVisuals(cell, gridData[cellId]);
             
-            // Click listener to cycle states
             cell.addEventListener('click', () => {
                 gridData[cellId] = (gridData[cellId] + 1) % 4;
                 updateCellVisuals(cell, gridData[cellId]);
@@ -53,7 +45,6 @@ function renderGrid() {
     });
 }
 
-// Helper to create divs
 function createCell(text, className) {
     const div = document.createElement('div');
     div.className = className;
@@ -61,11 +52,9 @@ function createCell(text, className) {
     return div;
 }
 
-// Renders the organic ink blots based on state
 function updateCellVisuals(cell, state) {
-    cell.innerHTML = ''; // Clear existing ink
+    cell.innerHTML = ''; 
     
-    // Helper to add a blot with slight random rotation and offset
     const addBlot = (type) => {
         const blot = document.createElement('div');
         blot.className = `ink-blot ${type}`;
@@ -80,40 +69,17 @@ function updateCellVisuals(cell, state) {
     if (state === 2 || state === 3) addBlot('ink-failure');
 }
 
-// Save button logic
+// --- BUTTON LOGIC ---
+
+// 1. Save Data
 document.getElementById('save-btn').addEventListener('click', () => {
     localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
     const status = document.getElementById('save-status');
-    status.textContent = "Dried and recorded.";
+    status.textContent = "Ledger updated.";
     setTimeout(() => status.textContent = "", 2000);
 });
 
-// --- NEW FEATURES ---
-
-// Theme Toggle Logic
-const themeBtn = document.getElementById('theme-toggle');
-const currentTheme = localStorage.getItem('theme') || 'light';
-
-// Apply saved theme on load
-if (currentTheme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    themeBtn.textContent = "☀️ Light Mode";
-}
-
-themeBtn.addEventListener('click', () => {
-    let theme = document.documentElement.getAttribute('data-theme');
-    if (theme === 'dark') {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-        themeBtn.textContent = "🌙 Dark Mode";
-    } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-        themeBtn.textContent = "☀️ Light Mode";
-    }
-});
-
-// Export Data (Downloads a JSON file)
+// 2. Export Data
 document.getElementById('export-btn').addEventListener('click', () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gridData));
     const downloadAnchorNode = document.createElement('a');
@@ -124,7 +90,7 @@ document.getElementById('export-btn').addEventListener('click', () => {
     downloadAnchorNode.remove();
 });
 
-// Import Data (Uploads a JSON file)
+// 3. Import Data
 document.getElementById('import-btn').addEventListener('click', () => {
     document.getElementById('import-file').click();
 });
@@ -138,9 +104,9 @@ document.getElementById('import-file').addEventListener('change', (event) => {
         try {
             gridData = JSON.parse(e.target.result);
             localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
-            renderGrid(); // Redraw the grid with the imported data
+            renderGrid();
             const status = document.getElementById('save-status');
-            status.textContent = "Data imported successfully!";
+            status.textContent = "Data imported!";
             setTimeout(() => status.textContent = "", 3000);
         } catch (err) {
             alert("Error: Invalid JSON file.");
@@ -149,6 +115,28 @@ document.getElementById('import-file').addEventListener('change', (event) => {
     reader.readAsText(file);
 });
 
-// Boot up
+// 4. Theme Toggle
+const themeBtn = document.getElementById('theme-toggle');
+const currentTheme = localStorage.getItem('theme') || 'light';
+
+if (currentTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    themeBtn.textContent = "☀️ Ivory Paper";
+}
+
+themeBtn.addEventListener('click', () => {
+    let theme = document.documentElement.getAttribute('data-theme');
+    if (theme === 'dark') {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+        themeBtn.textContent = "🌙 Dark Slate";
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+        themeBtn.textContent = "☀️ Ivory Paper";
+    }
+});
+
+// --- BOOT UP ---
 loadData();
 renderGrid();
