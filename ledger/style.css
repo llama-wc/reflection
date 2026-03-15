@@ -1,0 +1,107 @@
+:root {
+    --paper-bg: #f4f1ea;
+    --grid-lines: #dcd7cb;
+    --text-color: #333;
+    /* Translucent, rich ink colors */
+    --ink-success: rgba(25, 45, 75, 0.75); 
+    --ink-failure: rgba(130, 25, 25, 0.75);
+}
+
+body {
+    background-color: var(--paper-bg);
+    color: var(--text-color);
+    font-family: serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    max-width: 800px;
+    width: 100%;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+/* The Grid */
+.grid-container {
+    display: grid;
+    grid-template-columns: 120px repeat(7, 1fr);
+    gap: 1px;
+    background-color: var(--grid-lines);
+    border: 1px solid var(--grid-lines);
+}
+
+.grid-cell, .grid-header {
+    background-color: var(--paper-bg);
+    padding: 15px 5px;
+    text-align: center;
+    min-height: 50px;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+.grid-header {
+    font-weight: bold;
+    cursor: default;
+}
+
+.virtue-label {
+    text-align: left;
+    padding-left: 10px;
+    font-style: italic;
+}
+
+/* The Ink Blots */
+.ink-blot {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    /* Creates an organic, imperfect blob shape instead of a perfect circle */
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    mix-blend-mode: multiply; /* The magic property for realistic overlapping */
+    pointer-events: none; /* Lets clicks pass through to the cell */
+    transition: all 0.2s ease;
+}
+
+.ink-success {
+    background-color: var(--ink-success);
+}
+
+.ink-failure {
+    background-color: var(--ink-failure);
+}
+
+/* Controls */
+.controls {
+    margin-top: 30px;
+    text-align: center;
+}
+
+button {
+    background: transparent;
+    border: 2px solid var(--text-color);
+    padding: 10px 20px;
+    font-family: serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+#save-status {
+    margin-left: 15px;
+    font-style: italic;
+    color: #555;
+}
