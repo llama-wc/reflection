@@ -2,10 +2,45 @@
     --paper-bg: #f4f1ea;
     --grid-lines: #dcd7cb;
     --text-color: #333;
-    /* Translucent, rich ink colors */
     --ink-success: rgba(25, 45, 75, 0.75); 
     --ink-failure: rgba(130, 25, 25, 0.75);
+    --blend: multiply;
 }
+
+/* Dark Mode Variables */
+[data-theme="dark"] {
+    --paper-bg: #1a1a1a;
+    --grid-lines: #333;
+    --text-color: #e0e0e0;
+    --ink-success: rgba(70, 180, 255, 0.8); /* Glowing Cyan */
+    --ink-failure: rgba(255, 90, 90, 0.8);  /* Glowing Coral */
+    --blend: screen; /* Inverts the blending logic for dark backgrounds */
+}
+
+body {
+    background-color: var(--paper-bg);
+    color: var(--text-color);
+    font-family: serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* ... keep your existing container, header, grid-container, grid-cell code here ... */
+
+.ink-blot {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    mix-blend-mode: var(--blend); /* Updated to use the variable */
+    pointer-events: none;
+    transition: all 0.2s ease;
+}
+
+/* ... keep the rest of your existing CSS below this ... */
 
 body {
     background-color: var(--paper-bg);
