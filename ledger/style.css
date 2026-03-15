@@ -152,3 +152,75 @@
 #virtue-ledger-app .back-link:hover {
     opacity: 1;
 }
+
+/* --- MOBILE RESPONSIVENESS PATCH --- */
+@media (max-width: 768px) {
+    /* 1. Reclaim screen real estate by reducing modal padding */
+    #virtue-ledger-app .modal-content {
+        padding: 20px 15px;
+        width: 100%;
+        height: 100vh; /* Take up the full screen on mobile */
+        border-radius: 0;
+        border: none;
+    }
+    
+    /* 2. Smooth iOS/Android swipe-scrolling for the table and grid */
+    #virtue-ledger-app .table-container,
+    #virtue-ledger-app .grid-container {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 3. Force inputs to retain their shape so the table scrolls instead of crushing */
+    #virtue-ledger-app .cell-input {
+        min-width: 45px; 
+        padding: 8px 0;
+    }
+
+    /* 4. Make modal tabs swipeable horizontally instead of stacking abruptly */
+    #virtue-ledger-app .modal-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 5px;
+    }
+    #virtue-ledger-app .tab-btn {
+        white-space: nowrap;
+        font-size: 14px;
+        padding: 8px 12px;
+    }
+
+    /* 5. Adjust main layout and shrink buttons for small screens */
+    #virtue-ledger-app .header {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+        text-align: center;
+    }
+    #virtue-ledger-app .vl-container {
+        padding: 15px;
+    }
+    #virtue-ledger-app .top-controls {
+        gap: 8px;
+    }
+    #virtue-ledger-app .vl-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    #virtue-ledger-app .calendar-nav h2 {
+        font-size: 16px;
+    }
+
+    /* 6. Fix Virtue Editor alignment so the inputs don't get squeezed */
+    #virtue-ledger-app .virtue-pill {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    #virtue-ledger-app .virtue-edit-input {
+        width: 100%;
+        margin-right: 0;
+    }
+    #virtue-ledger-app .virtue-controls {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
