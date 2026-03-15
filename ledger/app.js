@@ -88,6 +88,67 @@ document.getElementById('save-btn').addEventListener('click', () => {
     setTimeout(() => status.textContent = "", 2000);
 });
 
+// --- NEW FEATURES ---
+
+// Theme Toggle Logic
+const themeBtn = document.getElementById('theme-toggle');
+const currentTheme = localStorage.getItem('theme') || 'light';
+
+// Apply saved theme on load
+if (currentTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    themeBtn.textContent = "☀️ Light Mode";
+}
+
+themeBtn.addEventListener('click', () => {
+    let theme = document.documentElement.getAttribute('data-theme');
+    if (theme === 'dark') {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+        themeBtn.textContent = "🌙 Dark Mode";
+    } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+        themeBtn.textContent = "☀️ Light Mode";
+    }
+});
+
+// Export Data (Downloads a JSON file)
+document.getElementById('export-btn').addEventListener('click', () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gridData));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "festina_lente_ledger.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+});
+
+// Import Data (Uploads a JSON file)
+document.getElementById('import-btn').addEventListener('click', () => {
+    document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            gridData = JSON.parse(e.target.result);
+            localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
+            renderGrid(); // Redraw the grid with the imported data
+            const status = document.getElementById('save-status');
+            status.textContent = "Data imported successfully!";
+            setTimeout(() => status.textContent = "", 3000);
+        } catch (err) {
+            alert("Error: Invalid JSON file.");
+        }
+    };
+    reader.readAsText(file);
+});
+
 // Boot up
 loadData();
 renderGrid();
