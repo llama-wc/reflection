@@ -1,95 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Festina Lente | 13 Virtues</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtue Ledger | Mac Wall</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <svg style="width:0; height:0; position:absolute;">
-        <defs>
-            <filter id="true-ink" x="-30%" y="-30%" width="160%" height="160%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" result="paperFibers" />
-                <feDisplacementMap in="SourceGraphic" in2="paperFibers" scale="12" xChannelSelector="R" yChannelSelector="G" result="rawBleed" />
-                <feGaussianBlur in="rawBleed" stdDeviation="1.5" result="soakedBleed" />
-                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="macroWobble" />
-                <feDisplacementMap in="SourceGraphic" in2="macroWobble" scale="4" xChannelSelector="R" yChannelSelector="G" result="liquidBody" />
-                <feMerge result="inkOnPaper">
-                    <feMergeNode in="soakedBleed" />
-                    <feMergeNode in="liquidBody" />
-                </feMerge>
-                <feDropShadow in="inkOnPaper" dx="0.5" dy="1.5" stdDeviation="0.5" flood-color="#000" flood-opacity="0.35" />
-            </filter>
-        </defs>
-    </svg>
 
-    <div class="container">
-        <header>
-            <h1>Festina Lente</h1>
-            <p>The 13 Virtues Ledger</p>
-        </header>
+<div class="header">
+<h1>VIRTUE LEDGER</h1>
+        <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
+        <a href="https://mac-wall.com/portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
+</div>
 
-        <div class="tool-palette">
-            <span class="palette-label">Tool:</span>
-            <button id="tool-success" class="tool-btn active">Success</button>
-            <button id="tool-failure" class="tool-btn">Failure</button>
-            <button id="tool-eraser" class="tool-btn">Eraser</button>
-        </div>
-        
-        <div class="calendar-nav">
-            <button id="prev-week">Prev Week</button>
-            <h2 id="week-display">Current Week</h2>
-            <button id="next-week">Next Week</button>
-        </div>
-        
-        <div id="grid-container" class="grid-container">
-            </div>
+<div id="virtue-ledger-app">
+<svg style="width:0; height:0; position:absolute;">
+<defs>
+<filter id="true-ink" x="-30%" y="-30%" width="160%" height="160%">
+<feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" result="paperFibers" />
+<feDisplacementMap in="SourceGraphic" in2="paperFibers" scale="12" xChannelSelector="R" yChannelSelector="G" result="rawBleed" />
+<feGaussianBlur in="rawBleed" stdDeviation="1.5" result="soakedBleed" />
+<feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="macroWobble" />
+<feDisplacementMap in="SourceGraphic" in2="macroWobble" scale="4" xChannelSelector="R" yChannelSelector="G" result="liquidBody" />
+<feMerge result="inkOnPaper">
+<feMergeNode in="soakedBleed" />
+<feMergeNode in="liquidBody" />
+</feMerge>
+<feDropShadow in="inkOnPaper" dx="0.5" dy="1.5" stdDeviation="0.5" flood-color="#000" flood-opacity="0.35" />
+</filter>
+</defs>
+</svg>
 
-        <div class="controls">
-            <button id="modal-open-btn">Guide</button>
-            <button id="undo-btn">Undo</button>
-            <button id="redo-btn">Redo</button>
-            <button id="theme-toggle">Dark Slate</button>
-            <button id="save-btn">Save to Browser</button>
-            <button id="sync-link-btn">Copy Sync Link</button>
-        </div>
-        
-        <div class="status-bar">
-            <span id="save-status"></span>
-        </div>
-    </div>
+<div class="vl-container">
+<div class="vl-controls top-controls">
+<button id="view-toggle" class="vl-btn">VIEW: ALL-TIME STACK</button>
+<button id="open-log-btn" class="vl-btn">DATA & SETTINGS</button>
+<button id="theme-toggle" class="vl-btn">LIGHT MODE</button>
+<button id="undo-btn" class="vl-btn" title="Undo Last Click">UNDO</button>
+<button id="import-btn" class="vl-btn">IMPORT BACKUP</button>
+<button id="download-btn" class="vl-btn">DOWNLOAD BACKUP</button>
+<input type="file" id="import-file" accept=".json" style="display: none;">
+</div>
 
-    <div id="info-modal" class="modal-overlay">
-        <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close">X</button>
-            
-            <div class="tabs-header">
-                <button class="tab-btn active" data-target="tab-about">ABOUT & GUIDE</button>
-                <button class="tab-btn" data-target="tab-virtues">VIRTUES</button>
-                <button class="tab-btn" data-target="tab-data">TABULAR DATA</button>
-            </div>
+<div class="calendar-nav" id="calendar-nav">
+<button id="prev-week" class="vl-btn">← PAST</button>
+<h2 id="week-display">CURRENT WEEK</h2>
+<button id="next-week" class="vl-btn">FUTURE →</button>
+</div>
 
-            <div class="tabs-body">
-                <div id="tab-about" class="tab-panel active">
-                    <h3>How to use Festina Lente</h3>
-                    <p>Select your ink from the palette and tap the corresponding day to leave your mark. The system automatically saves locally, but use the Copy Sync Link to backup across devices.</p>
-                </div>
-                <div id="tab-virtues" class="tab-panel">
-                    <h3>The 13 Virtues</h3>
-                    <ul>
-                        <li><strong>Temperance:</strong> Eat not to dullness; drink not to elevation.</li>
-                        <li><strong>Silence:</strong> Speak not but what may benefit others or yourself.</li>
-                    </ul>
-                </div>
-                <div id="tab-data" class="tab-panel">
-                    <h3>Tabular Data</h3>
-                    <p>Your raw data exports will appear here.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="tool-palette" id="tool-palette">
+<span class="palette-label">PEN:</span>
+<button id="tool-success" class="tool-btn active">PRACTICED</button>
+<button id="tool-failure" class="tool-btn">SLIPPED</button>
+<button id="tool-eraser" class="tool-btn">ERASER</button>
+</div>
 
-    <script src="app.js"></script>
+<div id="grid-container" class="grid-container"></div>
+<div class="status-bar"><span id="save-status"></span></div>
+</div>
+
+<div id="data-modal" class="vl-modal hidden">
+<div class="modal-content">
+<div class="modal-header">
+<h2>DATA & SETTINGS</h2>
+<button id="close-modal-btn" class="close-btn">×</button>
+</div>
+
+<div class="modal-sync-panel">
+<label for="sync-url-display" class="palette-label" style="display:block; margin-bottom: 8px;"><b>YOUR SECURE SYNC LINK:</b> Bookmark this URL. It acts as the key to your personal database.</label>
+<div class="url-container">
+<input type="text" id="sync-url-display" class="vl-input" readonly>
+<button id="modal-sync-btn" class="vl-btn primary-btn">SAVE TO CLOUD & COPY LINK</button>
+</div>
+</div>
+
+<div class="modal-tabs">
+<button id="tab-about" class="tab-btn active">ABOUT & GUIDE</button>
+<button id="tab-virtues" class="tab-btn">VIRTUES</button>
+<button id="tab-data" class="tab-btn">TABULAR DATA</button>
+</div>
+
+<div id="panel-about" class="modal-panel active">
+<h3>PROJECT ARCHITECTURE & INSPIRATION</h3>
+<p class="modal-desc">At age 20, Benjamin Franklin conceived a system to track his personal growth. He identified 13 core virtues and carried a physical notebook, dedicating a page to each. At the end of every day, he would place a dark mark next to any virtue he struggled with.</p>
+<p class="modal-desc"><i>Virtue Ledger</i> brings this practice to the digital age, utilizing procedural fluid dynamics via custom SVG filters to simulate real fountain pen ink bleeding into paper fibers. The data architecture is completely serverless, utilizing a custom Cloudflare Worker to securely store compressed coordinate matrices on the edge network.</p>
+
+<h3 style="margin-top: 20px;">METHODOLOGY</h3>
+<ul class="modal-desc">
+<li><b>Logging:</b> Select <b>Practiced</b> (Blue) or <b>Slipped</b> (Red) and click a cell. Clicking multiple times will physically pool the pigment.</li>
+<li><b>Correcting:</b> Use the Eraser tool, or simply paint over a "Slipped" mark with a "Practiced" drop to physically cover your mistake.</li>
+<li><b>All-Time Stack:</b> Click the toggle at the top of the screen to compress your entire history into a single grid. As days stack up, the ink creates a dense physical heatmap of your habits.</li>
+<li><b>Data Ownership:</b> Your data is bound strictly to the randomly generated URL assigned to you. Keep it safe to maintain your state across devices.</li>
+</ul>
+</div>
+
+<div id="panel-virtues" class="modal-panel hidden">
+<p class="modal-desc">Click a virtue's name to edit it. Use the arrows to reorder.</p>
+<div id="virtues-list" class="virtues-list"></div>
+<div class="add-virtue-container">
+<input type="text" id="new-virtue-input" class="vl-input" placeholder="Enter a new virtue..." autocomplete="off">
+<button id="add-virtue-btn" class="vl-btn primary-btn">ADD VIRTUE</button>
+</div>
+</div>
+
+<div id="panel-data" class="modal-panel hidden">
+<p class="modal-desc">Type <b>P</b> for Practiced or <b>S</b> for Slipped. (e.g., "P, S, P").</p>
+<div class="add-date-container">
+<input type="date" id="new-date-input" class="vl-input">
+<button id="add-date-btn" class="vl-btn">ADD EMPTY ROW</button>
+</div>
+<div class="table-container">
+<table id="data-table"></table>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
