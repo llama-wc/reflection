@@ -1,267 +1,326 @@
-const virtues = [
-    "Temperance", "Silence", "Order", "Resolution", "Frugality", 
-    "Industry", "Sincerity", "Justice", "Moderation", "Cleanliness", 
-    "Tranquility", "Chastity", "Humility"
-];
+// --- CLOUDFLARE CONFIGURATION ---
+const WORKER_URL = "virtue-api.mac-j-wall.workers.dev"; // <--- PUT YOUR LINK HERE
+let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
+// Foolproof parser: Forces HTTPS to prevent the browser from treating it as a local relative path, and strips trailing slashes.
+if (!RAW_URL.startsWith('http')) RAW_URL = 'https://' + RAW_URL;
+if (RAW_URL.endsWith('/')) RAW_URL = RAW_URL.slice(0, -1);
+const WORKER_URL = RAW_URL;
 
+// --- STATE & INITIALIZATION ---
+const defaultVirtues = ["Temperance", "Silence", "Order", "Resolution", "Frugality", "Industry", "Sincerity", "Justice", "Moderation", "Cleanliness", "Tranquility", "Chastity", "Humility"];
+const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+let virtues = [];
 let gridData = {}; 
+let forcedDates = new Set(); 
 let undoStack = [];
-let redoStack = [];
 let currentTool = 1; 
-
-function getMonday(d) {
-    d = new Date(d);
-    let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1); 
-    return new Date(d.setDate(diff));
-}
 let currentMonday = getMonday(new Date());
+let viewMode = 'weekly'; 
+let currentUserId = null;
 
 const container = document.getElementById('grid-container');
-const weekDisplay = document.getElementById('week-display');
 const statusText = document.getElementById('save-status');
 
 function setStatus(msg, duration = 3000) {
-    statusText.textContent = msg;
-    setTimeout(() => statusText.textContent = "", duration);
+statusText.textContent = msg;
+setTimeout(() => statusText.textContent = "", duration);
 }
 
-function loadData() {
-    const saved = localStorage.getItem('reflection_ledger');
-    if (saved) gridData = JSON.parse(saved);
+function generateSecureId() {
+const array = new Uint8Array(16); crypto.getRandomValues(array);
+return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').substring(0, 16);
 }
 
-function randomBlobShape() {
-    const r = () => 40 + Math.floor(Math.random() * 20); 
-    return `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
+function getMonday(d) {
+d = new Date(d);
+let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1); 
+return new Date(d.setDate(diff));
 }
 
+function formatDate(date) { return date.toISOString().split('T')[0]; }
+function getDayOfWeek(dateString) { return (new Date(dateString.split('-')[0], dateString.split('-')[1] - 1, dateString.split('-')[2]).getDay() + 6) % 7; }
+
+// --- CLOUD SYNC LOGIC ---
+function initializeSession() {
+const urlParams = new URLSearchParams(window.location.search);
+const id = urlParams.get('id');
+
+if (id && id.length >= 12) {
+currentUserId = id; document.getElementById('sync-url-display').value = window.location.href; fetchDataFromCloud();
+} else {
+currentUserId = generateSecureId();
+const newUrl = `${window.location.origin}${window.location.pathname}?id=${currentUserId}`;
+window.history.replaceState({}, document.title, newUrl);
+document.getElementById('sync-url-display').value = newUrl;
+virtues = [...defaultVirtues]; renderGrid();
+}
+}
+
+async function fetchDataFromCloud() {
+setStatus("Syncing from cloud...");
+try {
+const res = await fetch(`${WORKER_URL}?id=${currentUserId}`);
+if (res.ok) {
+const payload = await res.json();
+if (payload.v) virtues = payload.v;
+if (payload.d) {
+gridData = {};
+payload.d.forEach(record => {
+const vName = virtues[record[0]]; const date = record[1];
+if (!vName) return; 
+gridData[`${vName}_${date}`] = record[2].map(c => ({
+type: c[0], scale: c[1] / 100, rotate: c[2], x: c[3], y: c[4],
+shape: `${c[5]}% ${c[6]}% ${c[7]}% ${c[8]}% / ${c[9]}% ${c[10]}% ${c[11]}% ${c[12]}%`,
+splatters: c[13] ? c[13].map(s => ({ size: s[0], x: s[1], y: s[2] })) : []
+}));
+});
+}
+setStatus("Ledger synced successfully.");
+} else { setStatus("No cloud data found. Starting fresh."); virtues = [...defaultVirtues]; }
+} catch (err) { 
+console.error("Cloud Fetch Error:", err);
+setStatus("Cloud disconnected. Using local memory."); loadLocalFallback(); 
+}
+renderVirtuesList(); renderGrid();
+}
+
+async function saveDataToCloud() {
+setStatus("Saving to cloud..."); saveLocalFallback(); 
+
+try {
+const compressedData = [];
+for (const [key, drops] of Object.entries(gridData)) {
+if (!drops || drops.length === 0) continue;
+            
+const parts = key.split('_');
+if (parts.length !== 2) continue;
+
+const vName = parts[0]; const date = parts[1]; 
+const vIdx = virtues.indexOf(vName);
+if (vIdx === -1) continue; 
+
+const flatDrops = drops.map(d => {
+                // HEALING ENGINE: Safely handle legacy data missing shapes/splatters
+const shapeStr = d.shape || "50% 50% 50% 50% / 50% 50% 50% 50%";
+const shapes = shapeStr.match(/\d+/g).map(Number);
+const sp = (d.splatters || []).map(s => [Math.round(s.size), Math.round(s.x), Math.round(s.y)]);
+                
+return [d.type || 1, Math.round((d.scale || 1) * 100), d.rotate || 0, Math.round(d.x || 50), Math.round(d.y || 25), ...shapes, sp];
+});
+compressedData.push([vIdx, date, flatDrops]);
+}
+
+const payload = JSON.stringify({ v: virtues, d: compressedData });
+
+        console.log(`Sending secure POST request to: ${WORKER_URL}?id=${currentUserId}`);
+        
+const res = await fetch(`${WORKER_URL}?id=${currentUserId}`, { 
+method: 'POST', 
+            headers: { 'Content-Type': 'text/plain' }, // Bypasses strict CORS blockers
+            headers: { 'Content-Type': 'text/plain' }, 
+body: payload 
+});
+
+if (!res.ok) throw new Error(`Cloudflare rejected save. Status: ${res.status}`);
+
+setStatus("🔗 Safely synced to Cloud!");
+} catch (err) { 
+console.error("Cloud Save Error:", err);
+setStatus("Error: Cloud connection failed. Saved locally."); 
+}
+}
+
+// Local Fallbacks
+function loadLocalFallback() {
+const savedVirtues = localStorage.getItem('custom_virtues'); virtues = savedVirtues ? JSON.parse(savedVirtues) : [...defaultVirtues];
+const savedData = localStorage.getItem('reflection_ledger'); if (savedData) gridData = JSON.parse(savedData);
+}
+function saveLocalFallback() {
+localStorage.setItem('custom_virtues', JSON.stringify(virtues)); localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
+}
+
+// --- HARD BACKUPS ---
+document.getElementById('download-btn').addEventListener('click', () => {
+const backup = { v: virtues, d: gridData }; const dl = document.createElement('a');
+dl.setAttribute("href", "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup)));
+dl.setAttribute("download", "virtue_ledger_backup.json"); document.body.appendChild(dl); dl.click(); dl.remove(); setStatus("Backup downloaded safely.");
+});
+
+document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
+
+document.getElementById('import-file').addEventListener('change', (e) => {
+const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+reader.onload = function(event) {
+try {
+const backup = JSON.parse(event.target.result);
+if (backup.v) virtues = backup.v; if (backup.d) gridData = backup.d;
+saveLocalFallback(); saveDataToCloud(); renderVirtuesList(); renderGrid();
+} catch(err) { setStatus("Error reading backup file.", 5000); }
+}; reader.readAsText(file);
+});
+
+function getAggregateData() {
+const agg = {};
+Object.keys(gridData).sort().forEach(key => {
+const parts = key.split('_');
+if (parts.length === 2) {
+const aggKey = `${parts[0]}_${getDayOfWeek(parts[1])}`;
+if (!agg[aggKey]) agg[aggKey] = []; agg[aggKey].push(...gridData[key]);
+}
+}); return agg;
+}
+
+// --- PHYSICS ENGINE ---
+function randomBlobShape() { const r = () => 40 + Math.floor(Math.random() * 20); return `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`; }
 function generateRandomDrop(type, clickX = null, clickY = null) {
-    const drop = {
-        type: type,
-        scale: 0.7 + (Math.random() * 0.4), 
-        rotate: Math.floor(Math.random() * 360),
-        x: clickX !== null ? clickX : (Math.floor(Math.random() * 20) - 10),
-        y: clickY !== null ? clickY : (Math.floor(Math.random() * 20) - 10),
-        shape: randomBlobShape(),
-        splatters: []
-    };
-    const splatterCount = Math.floor(Math.random() * 3) + 1;
-    for(let i=0; i<splatterCount; i++) {
-        drop.splatters.push({ size: 1 + Math.random() * 2, x: (Math.random() * 26) - 13, y: (Math.random() * 26) - 13 });
-    }
-    return drop;
+const drop = { type: type, scale: 0.7 + (Math.random() * 0.4), rotate: Math.floor(Math.random() * 360), x: clickX !== null ? clickX : 30 + (Math.random() * 40), y: clickY !== null ? clickY : 15 + (Math.random() * 20), shape: randomBlobShape(), splatters: [] };
+for(let i=0; i<Math.floor(Math.random() * 3) + 1; i++) drop.splatters.push({ size: 1 + Math.random() * 2, x: (Math.random() * 26) - 13, y: (Math.random() * 26) - 13 }); return drop;
 }
 
-const btnSuccess = document.getElementById('tool-success');
-const btnFailure = document.getElementById('tool-failure');
-const btnEraser = document.getElementById('tool-eraser');
+// --- TOOL PALETTE ---
+function setActiveTool(btn, toolId) { currentTool = toolId; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+document.getElementById('tool-success').addEventListener('click', (e) => setActiveTool(e.target, 1));
+document.getElementById('tool-failure').addEventListener('click', (e) => setActiveTool(e.target, 2));
+document.getElementById('tool-eraser').addEventListener('click', (e) => setActiveTool(e.target, 0));
 
-function setActiveTool(btn, toolId) {
-    currentTool = toolId;
-    [btnSuccess, btnFailure, btnEraser].forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-}
-btnSuccess.addEventListener('click', () => setActiveTool(btnSuccess, 1));
-btnFailure.addEventListener('click', () => setActiveTool(btnFailure, 2));
-btnEraser.addEventListener('click', () => setActiveTool(btnEraser, 0));
-
-function saveState() {
-    undoStack.push(JSON.parse(JSON.stringify(gridData)));
-    redoStack = []; 
-    document.getElementById('undo-btn').disabled = undoStack.length === 0;
-    document.getElementById('redo-btn').disabled = redoStack.length === 0;
-}
+// --- HISTORY ---
+function saveState() { undoStack.push(JSON.stringify(gridData)); document.getElementById('undo-btn').disabled = false; }
 document.getElementById('undo-btn').addEventListener('click', () => {
-    if (undoStack.length > 0) {
-        redoStack.push(JSON.parse(JSON.stringify(gridData)));
-        gridData = undoStack.pop();
-        syncVisualsToData(); 
-        document.getElementById('undo-btn').disabled = undoStack.length === 0;
-        document.getElementById('redo-btn').disabled = redoStack.length === 0;
-    }
-});
-document.getElementById('redo-btn').addEventListener('click', () => {
-    if (redoStack.length > 0) {
-        undoStack.push(JSON.parse(JSON.stringify(gridData)));
-        gridData = redoStack.pop();
-        syncVisualsToData();
-        document.getElementById('undo-btn').disabled = undoStack.length === 0;
-        document.getElementById('redo-btn').disabled = redoStack.length === 0;
-    }
+if (undoStack.length > 0) { gridData = JSON.parse(undoStack.pop()); syncVisualsToData(); saveDataToCloud(); if(undoStack.length === 0) document.getElementById('undo-btn').disabled = true; }
 });
 
-function formatDate(date) {
-    const d = new Date(date);
-    let month = '' + (d.getMonth() + 1), day = '' + d.getDate(), year = d.getFullYear();
-    if (month.length < 2) month = '0' + month;
-    if (day.length < 2) day = '0' + day;
-    return [year, month, day].join('-');
-}
-
+// --- RENDER MAIN GRID ---
 function renderGrid() {
-    container.innerHTML = '';
-    container.appendChild(createCell('', 'grid-header'));
-    
-    for (let i = 0; i < 7; i++) {
-        let d = new Date(currentMonday);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
-        container.appendChild(createCell(dateStr, 'grid-header'));
-    }
+container.innerHTML = ''; container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`; container.appendChild(createCell('', 'grid-header'));
 
-    weekDisplay.textContent = `Week of ${currentMonday.toLocaleDateString()}`;
-
-    virtues.forEach(virtue => {
-        container.appendChild(createCell(virtue, 'grid-header virtue-label'));
-        for (let i = 0; i < 7; i++) {
-            let d = new Date(currentMonday);
-            d.setDate(d.getDate() + i);
-            const cellId = `${virtue}_${formatDate(d)}`; 
-            
-            const cell = createCell('', 'grid-cell');
-            cell.dataset.id = cellId;
-            if (!Array.isArray(gridData[cellId])) gridData[cellId] = [];
-            
-            cell.addEventListener('click', (e) => {
-                saveState();
-                if (currentTool === 0) {
-                    gridData[cellId] = []; 
-                } else {
-                    const rect = cell.getBoundingClientRect();
-                    gridData[cellId].push(generateRandomDrop(currentTool, e.clientX - rect.left, e.clientY - rect.top));
-                }
-                syncVisualsToData();
-            });
-            container.appendChild(cell);
-        }
-    });
-    syncVisualsToData(); 
+if (viewMode === 'weekly') {
+document.getElementById('calendar-nav').style.display = 'flex'; document.getElementById('tool-palette').style.display = 'flex';
+for (let i = 0; i < 7; i++) {
+let d = new Date(currentMonday); d.setDate(d.getDate() + i); container.appendChild(createCell(d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }), 'grid-header'));
+}
+document.getElementById('week-display').textContent = `Week of ${currentMonday.toLocaleDateString()}`;
+} else {
+document.getElementById('calendar-nav').style.display = 'none'; document.getElementById('tool-palette').style.display = 'none';
+for (let i = 0; i < 7; i++) container.appendChild(createCell(days[i], 'grid-header'));
 }
 
-function createCell(text, className) {
-    const div = document.createElement('div');
-    div.className = className;
-    div.textContent = text;
-    return div;
+virtues.forEach(virtue => {
+container.appendChild(createCell(virtue, 'grid-header virtue-label'));
+for (let i = 0; i < 7; i++) {
+let cellId = viewMode === 'weekly' ? `${virtue}_${formatDate(new Date(new Date(currentMonday).setDate(currentMonday.getDate() + i)))}` : `${virtue}_${i}`;
+const cell = createCell('', 'grid-cell'); cell.dataset.id = cellId;
+if (viewMode === 'weekly') {
+if (!Array.isArray(gridData[cellId])) gridData[cellId] = [];
+cell.addEventListener('click', (e) => {
+saveState();
+if (currentTool === 0) gridData[cellId] = []; 
+else { const rect = cell.getBoundingClientRect(); gridData[cellId].push(generateRandomDrop(currentTool, e.clientX - rect.left, e.clientY - rect.top)); }
+syncVisualsToData(); saveDataToCloud();
+});
+} else cell.style.cursor = 'default';
+container.appendChild(cell);
 }
+}); syncVisualsToData(); 
+}
+
+function createCell(text, className) { const div = document.createElement('div'); div.className = className; div.textContent = text; return div; }
 
 function syncVisualsToData() {
-    const cells = document.querySelectorAll('.grid-cell');
-    cells.forEach(cell => {
-        const cellId = cell.dataset.id;
-        const drops = gridData[cellId] || [];
-        cell.innerHTML = ''; 
-        if (drops.length === 0) return;
-        
-        const canvas = document.createElement('div');
-        canvas.className = 'cell-ink-canvas';
-        
-        drops.forEach(drop => {
-            const dropEl = document.createElement('div');
-            dropEl.className = `ink-drop ${drop.type === 1 ? 'ink-success' : 'ink-failure'}`;
-            dropEl.style.left = `${drop.x !== undefined ? drop.x : 20}px`;
-            dropEl.style.top = `${drop.y !== undefined ? drop.y : 20}px`;
-            dropEl.style.transform = `translate(-50%, -50%) rotate(${drop.rotate}deg) scale(${drop.scale})`;
-            
-            const core = document.createElement('div'); 
-            core.className = 'ink-core';
-            core.style.borderRadius = drop.shape; 
-            dropEl.appendChild(core);
-            
-            drop.splatters.forEach(s => {
-                const splatter = document.createElement('div');
-                splatter.className = 'ink-splatter';
-                splatter.style.width = `${s.size}px`; splatter.style.height = `${s.size}px`;
-                splatter.style.left = `calc(50% + ${s.x}px)`; splatter.style.top = `calc(50% + ${s.y}px)`;
-                dropEl.appendChild(splatter);
-            });
-            canvas.appendChild(dropEl);
-        });
-        cell.appendChild(canvas);
-    });
+const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
+document.querySelectorAll('.grid-cell').forEach(cell => {
+const drops = dataSource[cell.dataset.id] || []; cell.innerHTML = ''; if (drops.length === 0) return;
+const canvas = document.createElement('div'); canvas.className = 'cell-ink-canvas';
+drops.forEach(drop => {
+const dropEl = document.createElement('div'); dropEl.className = `ink-drop ${drop.type === 1 ? 'ink-success' : 'ink-failure'}`;
+dropEl.style.left = `${drop.x !== undefined ? drop.x : 50}px`; dropEl.style.top = `${drop.y !== undefined ? drop.y : 25}px`; dropEl.style.transform = `translate(-50%, -50%) rotate(${drop.rotate}deg) scale(${drop.scale})`;
+const core = document.createElement('div'); core.className = 'ink-core'; core.style.borderRadius = drop.shape; dropEl.appendChild(core);
+drop.splatters.forEach(s => {
+const sp = document.createElement('div'); sp.className = 'ink-splatter'; sp.style.width = `${s.size}px`; sp.style.height = `${s.size}px`; sp.style.left = `calc(50% + ${s.x}px)`; sp.style.top = `calc(50% + ${s.y}px)`; dropEl.appendChild(sp);
+}); canvas.appendChild(dropEl);
+}); cell.appendChild(canvas);
+});
 }
 
-document.getElementById('prev-week').addEventListener('click', () => {
-    currentMonday.setDate(currentMonday.getDate() - 7);
-    renderGrid();
-});
-document.getElementById('next-week').addEventListener('click', () => {
-    currentMonday.setDate(currentMonday.getDate() + 7);
-    renderGrid();
-});
+document.getElementById('prev-week').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() - 7); renderGrid(); });
+document.getElementById('next-week').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() + 7); renderGrid(); });
+document.getElementById('view-toggle').addEventListener('click', (e) => { viewMode = viewMode === 'weekly' ? 'aggregate' : 'weekly'; e.target.textContent = viewMode === 'weekly' ? 'VIEW: ALL-TIME STACK' : 'VIEW: RETURN TO WEEKLY'; renderGrid(); });
 
-document.getElementById('save-btn').addEventListener('click', () => {
-    localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
-    setStatus("Ledger safely dried and saved.");
-});
+const modal = document.getElementById('data-modal');
+function switchTab(activeId, panelId) {
+document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active')); document.querySelectorAll('.modal-panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
+document.getElementById(activeId).classList.add('active'); document.getElementById(panelId).classList.add('active'); document.getElementById(panelId).classList.remove('hidden');
+}
+document.getElementById('tab-about').addEventListener('click', () => switchTab('tab-about', 'panel-about'));
+document.getElementById('tab-virtues').addEventListener('click', () => switchTab('tab-virtues', 'panel-virtues'));
+document.getElementById('tab-data').addEventListener('click', () => { switchTab('tab-data', 'panel-data'); renderDataTable(); });
+document.getElementById('open-log-btn').addEventListener('click', () => { renderVirtuesList(); renderDataTable(); modal.classList.remove('hidden'); });
+document.getElementById('close-modal-btn').addEventListener('click', () => modal.classList.add('hidden'));
 
-document.getElementById('sync-link-btn').addEventListener('click', () => {
-    try {
-        const encodedData = btoa(JSON.stringify(gridData));
-        const syncUrl = `${window.location.origin}${window.location.pathname}?sync=${encodedData}`;
-        navigator.clipboard.writeText(syncUrl).then(() => setStatus("Sync Link copied to clipboard!"))
-        .catch(err => setStatus("Failed to copy link."));
-    } catch (e) {
-        setStatus("Error generating link.");
-    }
+function renderVirtuesList() {
+const list = document.getElementById('virtues-list'); list.innerHTML = '';
+virtues.forEach((v, index) => {
+const pill = document.createElement('div'); pill.className = 'virtue-pill';
+const nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.value = v; nameInput.className = 'virtue-edit-input';
+nameInput.onblur = (e) => renameVirtue(index, e.target.value); nameInput.onkeydown = (e) => { if (e.key === 'Enter') nameInput.blur(); };
+const controls = document.createElement('div'); controls.className = 'virtue-controls';
+if (index > 0) { const upBtn = document.createElement('button'); upBtn.className = 'move-virtue'; upBtn.innerHTML = '↑'; upBtn.onclick = () => moveVirtue(index, -1); controls.appendChild(upBtn); }
+if (index < virtues.length - 1) { const downBtn = document.createElement('button'); downBtn.className = 'move-virtue'; downBtn.innerHTML = '↓'; downBtn.onclick = () => moveVirtue(index, 1); controls.appendChild(downBtn); }
+const rmBtn = document.createElement('button'); rmBtn.className = 'remove-virtue'; rmBtn.innerHTML = '×'; rmBtn.onclick = () => removeVirtue(index); controls.appendChild(rmBtn);
+pill.appendChild(nameInput); pill.appendChild(controls); list.appendChild(pill);
 });
-
-function checkForSyncLink() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const syncData = urlParams.get('sync');
-    if (syncData) {
-        try {
-            saveState(); 
-            gridData = JSON.parse(atob(syncData));
-            localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
-            window.history.replaceState({}, document.title, window.location.pathname);
-            renderGrid(); 
-            setStatus("Ledger successfully synced from link!");
-        } catch (e) {
-            setStatus("Invalid or broken sync link.");
-        }
-    }
 }
 
-const modal = document.getElementById('info-modal');
-document.getElementById('modal-open-btn').addEventListener('click', () => modal.classList.add('active'));
-document.getElementById('modal-close-btn').addEventListener('click', () => modal.classList.remove('active'));
+function renameVirtue(index, newName) {
+const trimmed = newName.trim(); if (virtues[index] === trimmed || trimmed === '') return renderVirtuesList(); 
+const oldName = virtues[index]; virtues[index] = trimmed; const newGrid = {};
+for(const key in gridData) { if(key.startsWith(`${oldName}_`)) newGrid[`${trimmed}_${key.substring(oldName.length + 1)}`] = gridData[key]; else newGrid[key] = gridData[key]; }
+gridData = newGrid; saveDataToCloud(); renderGrid(); renderDataTable();
+}
+function moveVirtue(index, dir) { const temp = virtues[index + dir]; virtues[index + dir] = virtues[index]; virtues[index] = temp; saveDataToCloud(); renderVirtuesList(); renderGrid(); renderDataTable(); }
+function removeVirtue(index) { virtues.splice(index, 1); saveDataToCloud(); renderVirtuesList(); renderGrid(); renderDataTable(); }
+document.getElementById('add-virtue-btn').addEventListener('click', () => { const val = document.getElementById('new-virtue-input').value.trim(); if (val && !virtues.includes(val)) { virtues.push(val); document.getElementById('new-virtue-input').value = ''; saveDataToCloud(); renderVirtuesList(); renderGrid(); } });
 
-modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.classList.remove('active');
-});
+document.getElementById('add-date-btn').addEventListener('click', () => { const newDate = document.getElementById('new-date-input').value; if (newDate) { forcedDates.add(newDate); renderDataTable(); } });
+function renderDataTable() {
+const table = document.getElementById('data-table'); table.innerHTML = ''; const allDates = new Set(forcedDates);
+for (const cellId of Object.keys(gridData)) { if(gridData[cellId].length > 0 && cellId.split('_').length === 2) allDates.add(cellId.split('_')[1]); }
+allDates.add(formatDate(new Date())); const sortedDates = Array.from(allDates).sort((a,b) => b.localeCompare(a)); 
+let thead = '<thead><tr><th>Date</th>'; virtues.forEach(v => thead += `<th>${v}</th>`); table.innerHTML += thead + '</tr></thead>'; let tbody = '<tbody>';
+sortedDates.forEach(date => {
+let row = `<tr><td><strong>${date}</strong></td>`;
+virtues.forEach(v => { const drops = gridData[`${v}_${date}`] || []; const val = drops.map(d => d.type === 1 ? 'P' : 'S').join(', '); row += `<td><input type="text" class="cell-input" data-cell="${v}_${date}" value="${val}" placeholder="-"></td>`; });
+tbody += row + `</tr>`;
+}); table.innerHTML += tbody + '</tbody>';
+}
 
-const tabBtns = document.querySelectorAll('.tab-btn');
-const tabPanels = document.querySelectorAll('.tab-panel');
+function reconcileTableEdits() {
+saveState(); document.querySelectorAll('.cell-input').forEach(input => {
+const cellId = input.getAttribute('data-cell'); const parsedTypes = [];
+input.value.split(/[, ]+/).forEach(w => { const clean = w.trim().toLowerCase(); if (clean === 'p' || clean === 'practiced') parsedTypes.push(1); if (clean === 's' || clean === 'slipped') parsedTypes.push(2); });
+const existingDrops = gridData[cellId] ? [...gridData[cellId]] : []; const reconciledDrops = [];
+parsedTypes.forEach(targetType => {
+let matchIndex = existingDrops.findIndex(drop => drop.type === targetType);
+if (matchIndex !== -1) reconciledDrops.push(existingDrops.splice(matchIndex, 1)[0]);
+else if (existingDrops.length > 0) { let repurposedDrop = existingDrops.splice(0, 1)[0]; repurposedDrop.type = targetType; reconciledDrops.push(repurposedDrop); } 
+else reconciledDrops.push(generateRandomDrop(targetType, null, null));
+}); gridData[cellId] = reconciledDrops;
+}); syncVisualsToData();
+}
 
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        tabBtns.forEach(b => b.classList.remove('active'));
-        tabPanels.forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.target).classList.add('active');
-    });
+document.getElementById('modal-sync-btn').addEventListener('click', async () => {
+reconcileTableEdits(); await saveDataToCloud();
+navigator.clipboard.writeText(document.getElementById('sync-url-display').value).then(() => { modal.classList.add('hidden'); setStatus("🔗 Cloud Saved & Link Copied!"); });
 });
 
 const themeBtn = document.getElementById('theme-toggle');
-if (localStorage.getItem('theme') === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    themeBtn.textContent = "Ivory Paper";
-}
+const appWrapper = document.getElementById('virtue-ledger-app');
+const storedTheme = localStorage.getItem('theme') || 'dark';
+if (storedTheme === 'light') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.add('force-light'); themeBtn.textContent = "DARK MODE"; } else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.add('force-dark'); themeBtn.textContent = "LIGHT MODE"; }
 themeBtn.addEventListener('click', () => {
-    if (document.documentElement.getAttribute('data-theme') === 'dark') {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-        themeBtn.textContent = "Dark Slate";
-    } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-        themeBtn.textContent = "Ivory Paper";
-    }
+if (document.documentElement.getAttribute('data-theme') === 'dark') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.remove('force-dark'); appWrapper.classList.add('force-light'); localStorage.setItem('theme', 'light'); themeBtn.textContent = "DARK MODE"; } 
+else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.remove('force-light'); appWrapper.classList.add('force-dark'); localStorage.setItem('theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
 });
 
-loadData();
-renderGrid();
-document.getElementById('undo-btn').disabled = true;
-document.getElementById('redo-btn').disabled = true;
-checkForSyncLink();
+// Start the app
+initializeSession();
