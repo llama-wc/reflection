@@ -1,128 +1,154 @@
-:root {
-    /* Light Theme (Ivory Paper) */
-    --paper-bg: #f4f1ea;
-    --grid-lines: #dcd7cb;
-    --text-color: #333333;
-    --ink-success: rgba(25, 45, 75, 0.75); 
-    --ink-failure: rgba(130, 25, 25, 0.75);
-    --blend: multiply;
-    --btn-border: #333333;
-    --btn-hover: rgba(0,0,0,0.05);
-}
-
-[data-theme="dark"] {
-    /* Soft Dark Theme (Deep Slate/Charcoal) */
-    --paper-bg: #292a2d; 
-    --grid-lines: #404246; 
-    --text-color: #e8eaed; 
-    /* Opaque, gel-pen style colors for dark backgrounds */
-    --ink-success: rgba(100, 180, 250, 0.85); 
-    --ink-failure: rgba(240, 110, 110, 0.85); 
-    --blend: screen; /* Overlaps become lighter/white */
-    --btn-border: #e8eaed;
-    --btn-hover: rgba(255,255,255,0.1);
-}
-
-body {
-    background-color: var(--paper-bg);
-    color: var(--text-color);
-    font-family: serif;
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-.container {
-    max-width: 800px;
+/* --- ENCAPSULATED APP STYLES --- */
+#virtue-ledger-app {
+    --vl-bg: var(--bg-color, #f4f1ea);
+    --vl-text: var(--text-color, #333333);
+    --vl-grid: var(--border-color, #dcd7cb);
+    --success-rgb: 25, 60, 110; 
+    --failure-rgb: 160, 30, 30; 
+    --vl-btn-hover: rgba(0,0,0,0.05);
+    --modal-bg: rgba(244, 241, 234, 0.98);
+    
     width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: serif;
+    color: var(--vl-text);
 }
 
-header {
-    text-align: center;
-    margin-bottom: 30px;
+@media (prefers-color-scheme: dark) {
+    #virtue-ledger-app {
+        --vl-bg: #292a2d;
+        --vl-text: #e8eaed;
+        --vl-grid: #404246;
+        --success-rgb: 70, 140, 220; 
+        --failure-rgb: 220, 80, 80; 
+        --vl-btn-hover: rgba(255,255,255,0.1);
+        --modal-bg: rgba(41, 42, 45, 0.98);
+    }
 }
+
+/* Force Dark Mode if toggled via JS */
+#virtue-ledger-app.force-dark {
+    --vl-bg: #292a2d; --vl-text: #e8eaed; --vl-grid: #404246;
+    --success-rgb: 70, 140, 220; --failure-rgb: 220, 80, 80; 
+    --vl-btn-hover: rgba(255,255,255,0.1); --modal-bg: rgba(41, 42, 45, 0.98);
+}
+#virtue-ledger-app.force-light {
+    --vl-bg: #f4f1ea; --vl-text: #333333; --vl-grid: #dcd7cb;
+    --success-rgb: 25, 60, 110; --failure-rgb: 160, 30, 30; 
+    --vl-btn-hover: rgba(0,0,0,0.05); --modal-bg: rgba(244, 241, 234, 0.98);
+}
+
+#virtue-ledger-app .vl-container { background-color: var(--vl-bg); padding: 20px; transition: background-color 0.3s ease; }
+#virtue-ledger-app .vl-header { text-align: center; margin-bottom: 25px; }
+#virtue-ledger-app .vl-header h1 { margin-bottom: 5px; font-family: inherit; }
+
+#virtue-ledger-app .vl-btn {
+    background: transparent; color: var(--vl-text); border: 1px solid var(--vl-grid);
+    border-radius: 4px; padding: 8px 16px; font-family: inherit; font-size: 14px;
+    cursor: pointer; transition: background 0.2s;
+}
+#virtue-ledger-app .vl-btn:hover { background: var(--vl-btn-hover); }
+#virtue-ledger-app .vl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#virtue-ledger-app .vl-input {
+    background: transparent; color: var(--vl-text); border: 1px solid var(--vl-grid);
+    border-radius: 4px; padding: 8px 12px; font-family: inherit;
+}
+
+#virtue-ledger-app .top-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 30px; }
+#virtue-ledger-app .calendar-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+#virtue-ledger-app .calendar-nav h2 { margin: 0; font-size: 18px; font-weight: normal; font-style: italic; }
+
+#virtue-ledger-app .tool-palette { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; }
+#virtue-ledger-app .palette-label { font-style: italic; font-size: 14px; margin-right: 5px; }
+#virtue-ledger-app .tool-btn { border-radius: 20px; border: 1px solid var(--vl-grid); background: transparent; color: var(--vl-text); padding: 8px 16px; cursor: pointer; font-family: inherit;}
+#virtue-ledger-app .tool-btn.active { background-color: var(--vl-text); color: var(--vl-bg); }
+#virtue-ledger-app #tool-success.active { background-color: rgb(var(--success-rgb)); border-color: transparent; color: white;}
+#virtue-ledger-app #tool-failure.active { background-color: rgb(var(--failure-rgb)); border-color: transparent; color: white;}
+#virtue-ledger-app #tool-eraser.active { background-color: #888; border-color: transparent; color: white;}
 
 /* The Grid */
-.grid-container {
-    display: grid;
-    grid-template-columns: 120px repeat(7, 1fr);
-    gap: 1px;
-    background-color: var(--grid-lines);
-    border: 1px solid var(--grid-lines);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+#virtue-ledger-app .grid-container {
+    display: grid; grid-template-columns: 120px repeat(7, 1fr); gap: 1px;
+    background-color: var(--vl-grid); border: 1px solid var(--vl-grid); overflow-x: auto;
 }
-
-.grid-cell, .grid-header {
-    background-color: var(--paper-bg);
-    padding: 15px 5px;
-    text-align: center;
-    min-height: 50px;
-    position: relative;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    user-select: none;
-    transition: background-color 0.3s ease;
+#virtue-ledger-app .grid-cell, #virtue-ledger-app .grid-header {
+    background-color: var(--vl-bg); padding: 15px 5px; text-align: center;
+    min-height: 50px; position: relative; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; user-select: none; overflow: hidden; 
 }
+#virtue-ledger-app .grid-header { font-weight: bold; cursor: default; }
+#virtue-ledger-app .virtue-label { text-align: left; padding-left: 10px; font-style: italic; }
 
-.grid-header {
+/* Ink Engine */
+#virtue-ledger-app .cell-ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; filter: url(#true-ink); pointer-events: none; }
+#virtue-ledger-app .ink-drop { position: absolute; width: 30px; height: 30px; pointer-events: none; }
+#virtue-ledger-app .ink-success { --ink-color: var(--success-rgb); }
+#virtue-ledger-app .ink-failure { --ink-color: var(--failure-rgb); }
+#virtue-ledger-app .ink-core {
+    position: absolute; inset: 0; background: radial-gradient(circle at 40% 40%, rgba(var(--ink-color), 0.7) 0%, rgba(var(--ink-color), 0.95) 70%, rgba(var(--ink-color), 1) 100%);
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.4), inset 1px 1px 2px rgba(255, 255, 255, 0.25); border-radius: 50%;
+}
+#virtue-ledger-app .ink-splatter { position: absolute; background: rgb(var(--ink-color)); border-radius: 50%; box-shadow: inset 0 0 1px rgba(0,0,0,0.5); }
+#virtue-ledger-app .status-bar { text-align: center; margin-top: 15px; height: 20px; font-style: italic; opacity: 0.7; }
+
+/* Modal Architecture */
+#virtue-ledger-app .vl-modal {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 9999;
+    display: flex; justify-content: center; align-items: center; opacity: 1; transition: opacity 0.3s;
+}
+#virtue-ledger-app .vl-modal.hidden { opacity: 0; pointer-events: none; }
+#virtue-ledger-app .modal-content {
+    background: var(--modal-bg); width: 95%; max-width: 1100px; height: 90vh; 
+    border: 1px solid var(--vl-grid); border-radius: 8px; padding: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; 
+}
+#virtue-ledger-app .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+#virtue-ledger-app .modal-header h2 { margin: 0; font-family: inherit; font-style: italic; }
+#virtue-ledger-app .close-btn { border: none; font-size: 32px; padding: 0 10px; line-height: 1; background: transparent; color: var(--vl-text); cursor: pointer;}
+
+#virtue-ledger-app .modal-sync-panel { background: rgba(120,120,120,0.1); border: 1px solid var(--vl-grid); border-radius: 6px; padding: 15px 20px; margin-bottom: 25px; }
+#virtue-ledger-app .url-container { display: flex; gap: 10px; margin-top: 5px; }
+#virtue-ledger-app #sync-url-display { flex-grow: 1; padding: 10px 12px; background: transparent; color: var(--vl-text); border: 1px solid var(--vl-grid); border-radius: 4px; font-family: monospace; font-size: 13px; }
+#virtue-ledger-app .primary-btn { background: var(--vl-text); color: var(--vl-bg); border-color: transparent; font-weight: bold; }
+
+#virtue-ledger-app .modal-tabs { display: flex; gap: 15px; border-bottom: 1px solid var(--vl-grid); padding-bottom: 10px; margin-bottom: 20px; }
+#virtue-ledger-app .tab-btn { border: none; font-size: 16px; padding: 5px 10px; opacity: 0.5; font-style: italic; background: transparent; color: var(--vl-text); cursor: pointer;}
+#virtue-ledger-app .tab-btn.active { opacity: 1; font-weight: bold; border-bottom: 2px solid var(--vl-text); }
+
+#virtue-ledger-app .modal-panel { display: none; flex-grow: 1; overflow-y: auto; padding-right: 10px;}
+#virtue-ledger-app .modal-panel.active { display: flex; flex-direction: column; }
+#virtue-ledger-app .modal-desc { font-size: 15px; opacity: 0.8; margin-bottom: 15px; line-height: 1.6; }
+
+/* Lists & Tables */
+#virtue-ledger-app .virtues-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+#virtue-ledger-app .virtue-pill { background: rgba(120,120,120,0.1); padding: 8px 16px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between;}
+#virtue-ledger-app .virtue-edit-input { background: transparent; color: var(--vl-text); border: none; border-bottom: 1px dashed var(--vl-text); font-family: inherit; font-size: 15px; flex-grow: 1; margin-right: 15px;}
+#virtue-ledger-app .virtue-controls button { background: transparent; border: none; color: var(--vl-text); padding: 0 8px; cursor: pointer; opacity: 0.5; font-size: 18px; }
+#virtue-ledger-app .virtue-controls button:hover { opacity: 1; }
+#virtue-ledger-app .add-virtue-container { display: flex; gap: 10px; margin-top: 10px;}
+
+#virtue-ledger-app .table-container { width: 100%; overflow-x: auto; border: 1px solid var(--vl-grid); border-radius: 4px; flex-grow: 1;}
+#virtue-ledger-app #data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+#virtue-ledger-app #data-table th, #virtue-ledger-app #data-table td { padding: 10px 12px; border-bottom: 1px solid var(--vl-grid); border-right: 1px solid var(--vl-grid); white-space: nowrap; }
+#virtue-ledger-app #data-table th { background: rgba(120,120,120,0.1); font-style: italic; position: sticky; top: 0; z-index: 10;}
+#virtue-ledger-app .cell-input { width: 60px; background: transparent; color: var(--vl-text); border: none; border-bottom: 1px dashed transparent; font-family: monospace; text-align: center; font-size: 15px; }
+#virtue-ledger-app .cell-input:focus { outline: none; border-bottom-color: var(--vl-text); }
+
+/* Custom Header Styling to match Portfolio Dashboard */
+#virtue-ledger-app .back-link {
+    display: inline-block;
+    margin-top: -10px;
+    margin-bottom: 25px;
+    font-family: inherit;
+    font-size: 12px;
     font-weight: bold;
-    cursor: default;
+    letter-spacing: 1px;
+    color: var(--vl-text);
+    text-decoration: none;
+    opacity: 0.6;
+    transition: opacity 0.2s;
 }
-
-.virtue-label {
-    text-align: left;
-    padding-left: 10px;
-    font-style: italic;
-}
-
-/* The Ink Blots */
-.ink-blot {
-    position: absolute;
-    width: 35px;
-    height: 35px;
-    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-    mix-blend-mode: var(--blend);
-    pointer-events: none;
-    transition: all 0.2s ease, background-color 0.3s ease;
-}
-
-.ink-success { background-color: var(--ink-success); }
-.ink-failure { background-color: var(--ink-failure); }
-
-/* Controls */
-.controls {
-    margin-top: 30px;
-    text-align: center;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    align-items: center;
-}
-
-button {
-    background: transparent;
-    color: var(--text-color);
-    border: 1px solid var(--btn-border);
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-family: serif;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
-}
-
-button:hover {
-    background: var(--btn-hover);
-}
-
-#save-status {
-    font-style: italic;
-    color: var(--text-color);
-    opacity: 0.7;
-    margin-left: 10px;
+#virtue-ledger-app .back-link:hover {
+    opacity: 1;
 }
