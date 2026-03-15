@@ -1,20 +1,26 @@
 :root {
+    /* Light Theme (Ivory Paper) */
     --paper-bg: #f4f1ea;
     --grid-lines: #dcd7cb;
-    --text-color: #333;
+    --text-color: #333333;
     --ink-success: rgba(25, 45, 75, 0.75); 
     --ink-failure: rgba(130, 25, 25, 0.75);
     --blend: multiply;
+    --btn-border: #333333;
+    --btn-hover: rgba(0,0,0,0.05);
 }
 
-/* Dark Mode Variables */
 [data-theme="dark"] {
-    --paper-bg: #1a1a1a;
-    --grid-lines: #333;
-    --text-color: #e0e0e0;
-    --ink-success: rgba(70, 180, 255, 0.8); /* Glowing Cyan */
-    --ink-failure: rgba(255, 90, 90, 0.8);  /* Glowing Coral */
-    --blend: screen; /* Inverts the blending logic for dark backgrounds */
+    /* Soft Dark Theme (Deep Slate/Charcoal) */
+    --paper-bg: #292a2d; 
+    --grid-lines: #404246; 
+    --text-color: #e8eaed; 
+    /* Opaque, gel-pen style colors for dark backgrounds */
+    --ink-success: rgba(100, 180, 250, 0.85); 
+    --ink-failure: rgba(240, 110, 110, 0.85); 
+    --blend: screen; /* Overlaps become lighter/white */
+    --btn-border: #e8eaed;
+    --btn-hover: rgba(255,255,255,0.1);
 }
 
 body {
@@ -25,31 +31,7 @@ body {
     padding: 20px;
     display: flex;
     justify-content: center;
-    transition: background-color 0.3s, color 0.3s;
-}
-
-/* ... keep your existing container, header, grid-container, grid-cell code here ... */
-
-.ink-blot {
-    position: absolute;
-    width: 35px;
-    height: 35px;
-    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-    mix-blend-mode: var(--blend); /* Updated to use the variable */
-    pointer-events: none;
-    transition: all 0.2s ease;
-}
-
-/* ... keep the rest of your existing CSS below this ... */
-
-body {
-    background-color: var(--paper-bg);
-    color: var(--text-color);
-    font-family: serif;
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
@@ -69,6 +51,7 @@ header {
     gap: 1px;
     background-color: var(--grid-lines);
     border: 1px solid var(--grid-lines);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .grid-cell, .grid-header {
@@ -82,6 +65,7 @@ header {
     align-items: center;
     justify-content: center;
     user-select: none;
+    transition: background-color 0.3s ease;
 }
 
 .grid-header {
@@ -100,43 +84,45 @@ header {
     position: absolute;
     width: 35px;
     height: 35px;
-    /* Creates an organic, imperfect blob shape instead of a perfect circle */
     border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-    mix-blend-mode: multiply; /* The magic property for realistic overlapping */
-    pointer-events: none; /* Lets clicks pass through to the cell */
-    transition: all 0.2s ease;
+    mix-blend-mode: var(--blend);
+    pointer-events: none;
+    transition: all 0.2s ease, background-color 0.3s ease;
 }
 
-.ink-success {
-    background-color: var(--ink-success);
-}
-
-.ink-failure {
-    background-color: var(--ink-failure);
-}
+.ink-success { background-color: var(--ink-success); }
+.ink-failure { background-color: var(--ink-failure); }
 
 /* Controls */
 .controls {
     margin-top: 30px;
     text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    align-items: center;
 }
 
 button {
     background: transparent;
-    border: 2px solid var(--text-color);
-    padding: 10px 20px;
+    color: var(--text-color);
+    border: 1px solid var(--btn-border);
+    border-radius: 4px;
+    padding: 8px 16px;
     font-family: serif;
-    font-size: 16px;
+    font-size: 14px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 button:hover {
-    background: rgba(0,0,0,0.05);
+    background: var(--btn-hover);
 }
 
 #save-status {
-    margin-left: 15px;
     font-style: italic;
-    color: #555;
+    color: var(--text-color);
+    opacity: 0.7;
+    margin-left: 10px;
 }
