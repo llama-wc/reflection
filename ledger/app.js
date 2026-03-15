@@ -1,6 +1,7 @@
-// Replace with your Cloudflare worker URL
-const WORKER_URL = "virtue-api.mac-j-wall.workers.dev";
+// --- CLOUDFLARE CONFIGURATION ---
+const WORKER_URL = "virtue-api.mac-j-wall.workers.dev"; // <--- PUT YOUR LINK HERE
 
+// --- STATE & INITIALIZATION ---
 const defaultVirtues = ["Temperance", "Silence", "Order", "Resolution", "Frugality", "Industry", "Sincerity", "Justice", "Moderation", "Cleanliness", "Tranquility", "Chastity", "Humility"];
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -35,6 +36,7 @@ function getMonday(d) {
 function formatDate(date) { return date.toISOString().split('T')[0]; }
 function getDayOfWeek(dateString) { return (new Date(dateString.split('-')[0], dateString.split('-')[1] - 1, dateString.split('-')[2]).getDay() + 6) % 7; }
 
+// --- CLOUD SYNC LOGIC ---
 function initializeSession() {
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get('id');
@@ -65,36 +67,63 @@ async function fetchDataFromCloud() {
                     gridData[`${vName}_${date}`] = record[2].map(c => ({
                         type: c[0], scale: c[1] / 100, rotate: c[2], x: c[3], y: c[4],
                         shape: `${c[5]}% ${c[6]}% ${c[7]}% ${c[8]}% / ${c[9]}% ${c[10]}% ${c[11]}% ${c[12]}%`,
-                        splatters: c[13].map(s => ({ size: s[0], x: s[1], y: s[2] }))
+                        splatters: c[13] ? c[13].map(s => ({ size: s[0], x: s[1], y: s[2] })) : []
                     }));
                 });
             }
             setStatus("Ledger synced successfully.");
         } else { setStatus("No cloud data found. Starting fresh."); virtues = [...defaultVirtues]; }
-    } catch (err) { setStatus("Cloud disconnected. Using local memory."); loadLocalFallback(); }
+    } catch (err) { 
+        console.error("Cloud Fetch Error:", err);
+        setStatus("Cloud disconnected. Using local memory."); loadLocalFallback(); 
+    }
     renderVirtuesList(); renderGrid();
 }
 
 async function saveDataToCloud() {
     setStatus("Saving to cloud..."); saveLocalFallback(); 
-    const compressedData = [];
-    for (const [key, drops] of Object.entries(gridData)) {
-        if (drops.length === 0) continue;
-        const [vName, date] = key.split('_'); const vIdx = virtues.indexOf(vName);
-        if (vIdx === -1) continue; 
-        const flatDrops = drops.map(d => {
-            const shapes = d.shape.match(/\d+/g).map(Number);
-            const sp = d.splatters.map(s => [Math.round(s.size), Math.round(s.x), Math.round(s.y)]);
-            return [d.type, Math.round(d.scale * 100), d.rotate, Math.round(d.x), Math.round(d.y), ...shapes, sp];
-        });
-        compressedData.push([vIdx, date, flatDrops]);
-    }
+    
     try {
-        await fetch(`${WORKER_URL}?id=${currentUserId}`, { method: 'POST', body: JSON.stringify({ v: virtues, d: compressedData }) });
+        const compressedData = [];
+        for (const [key, drops] of Object.entries(gridData)) {
+            if (!drops || drops.length === 0) continue;
+            
+            const parts = key.split('_');
+            if (parts.length !== 2) continue;
+            
+            const vName = parts[0]; const date = parts[1]; 
+            const vIdx = virtues.indexOf(vName);
+            if (vIdx === -1) continue; 
+            
+            const flatDrops = drops.map(d => {
+                // HEALING ENGINE: Safely handle legacy data missing shapes/splatters
+                const shapeStr = d.shape || "50% 50% 50% 50% / 50% 50% 50% 50%";
+                const shapes = shapeStr.match(/\d+/g).map(Number);
+                const sp = (d.splatters || []).map(s => [Math.round(s.size), Math.round(s.x), Math.round(s.y)]);
+                
+                return [d.type || 1, Math.round((d.scale || 1) * 100), d.rotate || 0, Math.round(d.x || 50), Math.round(d.y || 25), ...shapes, sp];
+            });
+            compressedData.push([vIdx, date, flatDrops]);
+        }
+        
+        const payload = JSON.stringify({ v: virtues, d: compressedData });
+        
+        const res = await fetch(`${WORKER_URL}?id=${currentUserId}`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'text/plain' }, // Bypasses strict CORS blockers
+            body: payload 
+        });
+        
+        if (!res.ok) throw new Error(`Cloudflare rejected save. Status: ${res.status}`);
+        
         setStatus("🔗 Safely synced to Cloud!");
-    } catch (err) { setStatus("Error connecting to cloud. Saved locally."); }
+    } catch (err) { 
+        console.error("Cloud Save Error:", err);
+        setStatus("Error: Cloud connection failed. Saved locally."); 
+    }
 }
 
+// Local Fallbacks
 function loadLocalFallback() {
     const savedVirtues = localStorage.getItem('custom_virtues'); virtues = savedVirtues ? JSON.parse(savedVirtues) : [...defaultVirtues];
     const savedData = localStorage.getItem('reflection_ledger'); if (savedData) gridData = JSON.parse(savedData);
@@ -103,12 +132,15 @@ function saveLocalFallback() {
     localStorage.setItem('custom_virtues', JSON.stringify(virtues)); localStorage.setItem('reflection_ledger', JSON.stringify(gridData));
 }
 
+// --- HARD BACKUPS ---
 document.getElementById('download-btn').addEventListener('click', () => {
     const backup = { v: virtues, d: gridData }; const dl = document.createElement('a');
     dl.setAttribute("href", "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup)));
     dl.setAttribute("download", "virtue_ledger_backup.json"); document.body.appendChild(dl); dl.click(); dl.remove(); setStatus("Backup downloaded safely.");
 });
+
 document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
+
 document.getElementById('import-file').addEventListener('change', (e) => {
     const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
     reader.onload = function(event) {
@@ -131,27 +163,28 @@ function getAggregateData() {
     }); return agg;
 }
 
+// --- PHYSICS ENGINE ---
 function randomBlobShape() { const r = () => 40 + Math.floor(Math.random() * 20); return `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`; }
 function generateRandomDrop(type, clickX = null, clickY = null) {
     const drop = { type: type, scale: 0.7 + (Math.random() * 0.4), rotate: Math.floor(Math.random() * 360), x: clickX !== null ? clickX : 30 + (Math.random() * 40), y: clickY !== null ? clickY : 15 + (Math.random() * 20), shape: randomBlobShape(), splatters: [] };
     for(let i=0; i<Math.floor(Math.random() * 3) + 1; i++) drop.splatters.push({ size: 1 + Math.random() * 2, x: (Math.random() * 26) - 13, y: (Math.random() * 26) - 13 }); return drop;
 }
 
+// --- TOOL PALETTE ---
 function setActiveTool(btn, toolId) { currentTool = toolId; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
 document.getElementById('tool-success').addEventListener('click', (e) => setActiveTool(e.target, 1));
 document.getElementById('tool-failure').addEventListener('click', (e) => setActiveTool(e.target, 2));
 document.getElementById('tool-eraser').addEventListener('click', (e) => setActiveTool(e.target, 0));
 
+// --- HISTORY ---
 function saveState() { undoStack.push(JSON.stringify(gridData)); document.getElementById('undo-btn').disabled = false; }
 document.getElementById('undo-btn').addEventListener('click', () => {
     if (undoStack.length > 0) { gridData = JSON.parse(undoStack.pop()); syncVisualsToData(); saveDataToCloud(); if(undoStack.length === 0) document.getElementById('undo-btn').disabled = true; }
 });
 
+// --- RENDER MAIN GRID ---
 function renderGrid() {
-    container.innerHTML = ''; 
-    // FIX: Changed 1fr to minmax(60px, 1fr) to force horizontal scrolling on mobile
-    container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`; 
-    container.appendChild(createCell('', 'grid-header'));
+    container.innerHTML = ''; container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`; container.appendChild(createCell('', 'grid-header'));
     
     if (viewMode === 'weekly') {
         document.getElementById('calendar-nav').style.display = 'flex'; document.getElementById('tool-palette').style.display = 'flex';
@@ -273,11 +306,13 @@ document.getElementById('modal-sync-btn').addEventListener('click', async () => 
 });
 
 const themeBtn = document.getElementById('theme-toggle');
+const appWrapper = document.getElementById('virtue-ledger-app');
 const storedTheme = localStorage.getItem('theme') || 'dark';
-if (storedTheme === 'light') { document.documentElement.setAttribute('data-theme', 'light'); themeBtn.textContent = "DARK MODE"; } else { document.documentElement.setAttribute('data-theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
+if (storedTheme === 'light') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.add('force-light'); themeBtn.textContent = "DARK MODE"; } else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.add('force-dark'); themeBtn.textContent = "LIGHT MODE"; }
 themeBtn.addEventListener('click', () => {
-    if (document.documentElement.getAttribute('data-theme') === 'dark') { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('theme', 'light'); themeBtn.textContent = "DARK MODE"; } 
-    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
+    if (document.documentElement.getAttribute('data-theme') === 'dark') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.remove('force-dark'); appWrapper.classList.add('force-light'); localStorage.setItem('theme', 'light'); themeBtn.textContent = "DARK MODE"; } 
+    else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.remove('force-light'); appWrapper.classList.add('force-dark'); localStorage.setItem('theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
 });
 
+// Start the app
 initializeSession();
