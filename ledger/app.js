@@ -1,5 +1,5 @@
 // Replace with your Cloudflare worker URL
-const WORKER_URL = "https://virtue-api.YOUR_USERNAME.workers.dev";
+const WORKER_URL = "virtue-api.mac-j-wall.workers.dev";
 
 const defaultVirtues = ["Temperance", "Silence", "Order", "Resolution", "Frugality", "Industry", "Sincerity", "Justice", "Moderation", "Cleanliness", "Tranquility", "Chastity", "Humility"];
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -148,7 +148,11 @@ document.getElementById('undo-btn').addEventListener('click', () => {
 });
 
 function renderGrid() {
-    container.innerHTML = ''; container.style.gridTemplateColumns = `140px repeat(7, 1fr)`; container.appendChild(createCell('', 'grid-header'));
+    container.innerHTML = ''; 
+    // FIX: Changed 1fr to minmax(60px, 1fr) to force horizontal scrolling on mobile
+    container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`; 
+    container.appendChild(createCell('', 'grid-header'));
+    
     if (viewMode === 'weekly') {
         document.getElementById('calendar-nav').style.display = 'flex'; document.getElementById('tool-palette').style.display = 'flex';
         for (let i = 0; i < 7; i++) {
