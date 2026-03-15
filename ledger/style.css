@@ -170,8 +170,9 @@ body {
     #virtue-ledger-app .table-container, #virtue-ledger-app .grid-container { -webkit-overflow-scrolling: touch; }
     #virtue-ledger-app .cell-input { min-width: 45px; padding: 8px 0; }
     
-    #virtue-ledger-app .modal-tabs {
+   #virtue-ledger-app .modal-tabs {
         overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px;
+        flex-shrink: 0; /* Prevents the container from being crushed vertically */
     }
     #virtue-ledger-app .tab-btn { white-space: nowrap; font-size: 14px; padding: 8px 12px; }
     
