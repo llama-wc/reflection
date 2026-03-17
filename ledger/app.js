@@ -1,6 +1,5 @@
 // --- CLOUDFLARE CONFIGURATION ---
 let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
-// Foolproof parser: Forces HTTPS to prevent the browser from treating it as a local relative path, and strips trailing slashes.
 if (!RAW_URL.startsWith('http')) RAW_URL = 'https://' + RAW_URL;
 if (RAW_URL.endsWith('/')) RAW_URL = RAW_URL.slice(0, -1);
 const WORKER_URL = RAW_URL;
@@ -37,7 +36,6 @@ function getMonday(d) {
     return new Date(d.setDate(diff));
 }
 
-// Fixed timezone shifting bug by enforcing strict local time extraction
 function formatDate(date) { 
     const year = date.getFullYear(); 
     const month = String(date.getMonth() + 1).padStart(2, '0'); 
@@ -115,8 +113,6 @@ async function saveDataToCloud() {
         
         const payload = JSON.stringify({ v: virtues, d: compressedData });
         
-        console.log(`Sending secure POST request to: ${WORKER_URL}?id=${currentUserId}`);
-        
         const res = await fetch(`${WORKER_URL}?id=${currentUserId}`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'text/plain' }, 
@@ -193,17 +189,27 @@ document.getElementById('undo-btn').addEventListener('click', () => {
 
 // --- RENDER MAIN GRID ---
 function renderGrid() {
-    container.innerHTML = ''; container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`; container.appendChild(createCell('', 'grid-header'));
+    container.innerHTML = ''; 
+    container.appendChild(createCell('', 'grid-header top-corner'));
     
     if (viewMode === 'weekly') {
-        document.getElementById('calendar-nav').style.display = 'flex'; document.getElementById('tool-palette').style.display = 'flex';
+        container.classList.remove('stack-view');
+        container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`;
+        document.getElementById('calendar-nav').style.display = 'flex'; 
+        document.getElementById('tool-palette').style.display = 'flex';
+        
         for (let i = 0; i < 7; i++) {
-            let d = new Date(currentMonday); d.setDate(d.getDate() + i); container.appendChild(createCell(d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }), 'grid-header'));
+            let d = new Date(currentMonday); d.setDate(d.getDate() + i); 
+            container.appendChild(createCell(d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }), 'grid-header sticky-top'));
         }
         document.getElementById('week-display').textContent = `Week of ${currentMonday.toLocaleDateString()}`;
     } else {
-        document.getElementById('calendar-nav').style.display = 'none'; document.getElementById('tool-palette').style.display = 'none';
-        for (let i = 0; i < 7; i++) container.appendChild(createCell(days[i], 'grid-header'));
+        container.classList.add('stack-view');
+        container.style.gridTemplateColumns = `minmax(75px, 120px) repeat(7, minmax(25px, 1fr))`;
+        document.getElementById('calendar-nav').style.display = 'none'; 
+        document.getElementById('tool-palette').style.display = 'none';
+        
+        for (let i = 0; i < 7; i++) container.appendChild(createCell(days[i], 'grid-header sticky-top'));
     }
 
     virtues.forEach(virtue => {
