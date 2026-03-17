@@ -37,7 +37,13 @@ function getMonday(d) {
     return new Date(d.setDate(diff));
 }
 
-function formatDate(date) { return date.toISOString().split('T')[0]; }
+// Fixed timezone shifting bug by enforcing strict local time extraction
+function formatDate(date) { 
+    const year = date.getFullYear(); 
+    const month = String(date.getMonth() + 1).padStart(2, '0'); 
+    const day = String(date.getDate()).padStart(2, '0'); 
+    return `${year}-${month}-${day}`; 
+}
 function getDayOfWeek(dateString) { return (new Date(dateString.split('-')[0], dateString.split('-')[1] - 1, dateString.split('-')[2]).getDay() + 6) % 7; }
 
 // --- CLOUD SYNC LOGIC ---
@@ -119,7 +125,7 @@ async function saveDataToCloud() {
         
         if (!res.ok) throw new Error(`Cloudflare rejected save. Status: ${res.status}`);
         
-        setStatus("🔗 Safely synced to Cloud!");
+        setStatus("Safely synced to Cloud!");
     } catch (err) { 
         console.error("Cloud Save Error:", err);
         setStatus("Error: Cloud connection failed. Saved locally."); 
@@ -305,7 +311,7 @@ function reconcileTableEdits() {
 
 document.getElementById('modal-sync-btn').addEventListener('click', async () => {
     reconcileTableEdits(); await saveDataToCloud();
-    navigator.clipboard.writeText(document.getElementById('sync-url-display').value).then(() => { modal.classList.add('hidden'); setStatus("🔗 Cloud Saved & Link Copied!"); });
+    navigator.clipboard.writeText(document.getElementById('sync-url-display').value).then(() => { modal.classList.add('hidden'); setStatus("Cloud Saved & Link Copied!"); });
 });
 
 const themeBtn = document.getElementById('theme-toggle');
