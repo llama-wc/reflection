@@ -89,9 +89,11 @@ body {
 #virtue-ledger-app #tool-failure.active { background-color: rgba(var(--failure-rgb), 0.15); border-color: rgb(var(--failure-rgb)); color: rgb(var(--failure-rgb));}
 #virtue-ledger-app #tool-eraser.active { background-color: rgba(136,136,136,0.15); border-color: #888; color: var(--text-muted);}
 
+/* --- THE GRID: STICKY HEADERS & MAX HEIGHT --- */
 #virtue-ledger-app .grid-container {
-    display: grid; grid-template-columns: 140px repeat(7, 1fr); gap: 1px;
-    background-color: var(--grid-lines); border: 1px solid var(--grid-lines); overflow-x: auto;
+    display: grid; gap: 1px;
+    background-color: var(--grid-lines); border: 1px solid var(--grid-lines); 
+    overflow: auto; max-height: 75vh;
     border-radius: 8px; transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 #virtue-ledger-app .grid-cell, #virtue-ledger-app .grid-header {
@@ -101,7 +103,15 @@ body {
     font-size: 14px; transition: background-color 0.3s ease;
 }
 #virtue-ledger-app .grid-header { font-weight: 700; cursor: default; background-color: var(--header-bg); color: var(--text-muted); font-family: 'Oswald', sans-serif; letter-spacing: 0.5px; text-transform: uppercase;}
-#virtue-ledger-app .virtue-label { text-align: left; padding-left: 15px; font-family: 'Inter', sans-serif; font-weight: 500; color: var(--text-main); text-transform: none; letter-spacing: 0;}
+
+/* Sticky Positioning Classes */
+#virtue-ledger-app .sticky-top { position: sticky; top: 0; z-index: 10; }
+#virtue-ledger-app .virtue-label { 
+    text-align: left; padding-left: 15px; font-family: 'Inter', sans-serif; font-weight: 500; color: var(--text-main); text-transform: none; letter-spacing: 0;
+    position: sticky; left: 0; z-index: 11; background-color: var(--panel-bg);
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+}
+#virtue-ledger-app .top-corner { position: sticky; top: 0; left: 0; z-index: 12; background-color: var(--header-bg); box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
 
 #virtue-ledger-app .cell-ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; filter: url(#true-ink); pointer-events: none; }
 #virtue-ledger-app .ink-drop { position: absolute; width: 30px; height: 30px; pointer-events: none; }
@@ -167,12 +177,11 @@ body {
         padding: 20px 15px !important; width: 100% !important; height: 100vh !important;
         max-height: 100vh !important; border-radius: 0 !important; border: none !important;
     }
-    #virtue-ledger-app .table-container, #virtue-ledger-app .grid-container { -webkit-overflow-scrolling: touch; }
+    #virtue-ledger-app .table-container { -webkit-overflow-scrolling: touch; }
     #virtue-ledger-app .cell-input { min-width: 45px; padding: 8px 0; }
     
-   #virtue-ledger-app .modal-tabs {
-        overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px;
-        flex-shrink: 0; /* Prevents the container from being crushed vertically */
+    #virtue-ledger-app .modal-tabs {
+        overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px; flex-shrink: 0;
     }
     #virtue-ledger-app .tab-btn { white-space: nowrap; font-size: 14px; padding: 8px 12px; }
     
@@ -183,4 +192,10 @@ body {
     #virtue-ledger-app .virtue-pill { flex-wrap: wrap; gap: 10px; }
     #virtue-ledger-app .virtue-edit-input { width: 100%; margin-right: 0; }
     #virtue-ledger-app .virtue-controls { width: 100%; justify-content: flex-end; }
+
+    /* The Stack View Compression Logic */
+    #virtue-ledger-app .grid-container.stack-view { overflow-x: hidden; }
+    #virtue-ledger-app .grid-container.stack-view .virtue-label { padding-left: 5px; font-size: 11px; white-space: normal; }
+    #virtue-ledger-app .grid-container.stack-view .grid-header { font-size: 10px; padding: 5px 2px; }
+    #virtue-ledger-app .grid-container.stack-view .grid-cell { min-height: 45px; }
 }
