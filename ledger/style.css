@@ -193,9 +193,12 @@ body {
     #virtue-ledger-app .virtue-edit-input { width: 100%; margin-right: 0; }
     #virtue-ledger-app .virtue-controls { width: 100%; justify-content: flex-end; }
 
-    /* The Stack View Compression Logic */
-    #virtue-ledger-app .grid-container.stack-view { overflow-x: hidden; }
-    #virtue-ledger-app .grid-container.stack-view .virtue-label { padding-left: 5px; font-size: 11px; white-space: normal; }
-    #virtue-ledger-app .grid-container.stack-view .grid-header { font-size: 10px; padding: 5px 2px; }
-    #virtue-ledger-app .grid-container.stack-view .grid-cell { min-height: 45px; }
+    /* The Stack View Compression Logic (Fully Collapsed) */
+    #virtue-ledger-app .grid-container.stack-view { overflow: hidden; max-height: none; }
+    #virtue-ledger-app .grid-container.stack-view .virtue-label { padding-left: 5px; font-size: 10px; white-space: normal; line-height: 1.1; min-height: 28px; }
+    #virtue-ledger-app .grid-container.stack-view .grid-header { font-size: 9px; padding: 2px; min-height: 28px; }
+    #virtue-ledger-app .grid-container.stack-view .grid-cell { min-height: 28px; padding: 2px; }
+    
+    /* Scale down the physical ink blobs so they don't overflow the tiny cells */
+    #virtue-ledger-app .grid-container.stack-view .ink-drop { width: 20px; height: 20px; }
 }
