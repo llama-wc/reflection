@@ -233,6 +233,7 @@ function renderGrid() {
 
 function createCell(text, className) { const div = document.createElement('div'); div.className = className; div.textContent = text; return div; }
 
+// THE FIX: Coordinate compression applied to syncVisualsToData
 function syncVisualsToData() {
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
     document.querySelectorAll('.grid-cell').forEach(cell => {
@@ -240,7 +241,21 @@ function syncVisualsToData() {
         const canvas = document.createElement('div'); canvas.className = 'cell-ink-canvas';
         drops.forEach(drop => {
             const dropEl = document.createElement('div'); dropEl.className = `ink-drop ${drop.type === 1 ? 'ink-success' : 'ink-failure'}`;
-            dropEl.style.left = `${drop.x !== undefined ? drop.x : 50}px`; dropEl.style.top = `${drop.y !== undefined ? drop.y : 25}px`; dropEl.style.transform = `translate(-50%, -50%) rotate(${drop.rotate}deg) scale(${drop.scale})`;
+            
+            let posX = drop.x !== undefined ? drop.x : 50;
+            let posY = drop.y !== undefined ? drop.y : 25;
+
+            // If we are in the Stack view, we use modulo to mathematically force 
+            // the coordinates into the absolute center safe-zone of the tiny cell.
+            if (viewMode === 'aggregate') {
+                posX = 15 + (posX % 15); 
+                posY = 10 + (posY % 8);
+            }
+
+            dropEl.style.left = `${posX}px`; 
+            dropEl.style.top = `${posY}px`;
+            
+            dropEl.style.transform = `translate(-50%, -50%) rotate(${drop.rotate}deg) scale(${drop.scale})`;
             const core = document.createElement('div'); core.className = 'ink-core'; core.style.borderRadius = drop.shape; dropEl.appendChild(core);
             drop.splatters.forEach(s => {
                 const sp = document.createElement('div'); sp.className = 'ink-splatter'; sp.style.width = `${s.size}px`; sp.style.height = `${s.size}px`; sp.style.left = `calc(50% + ${s.x}px)`; sp.style.top = `calc(50% + ${s.y}px)`; dropEl.appendChild(sp);
