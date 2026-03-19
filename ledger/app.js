@@ -48,7 +48,7 @@ function getDayOfWeek(dateString) { return (new Date(dateString.split('-')[0], d
 function initializeSession() {
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get('id');
-    
+
     if (id && id.length >= 12) {
         currentUserId = id; document.getElementById('sync-url-display').value = window.location.href; fetchDataFromCloud();
     } else {
@@ -90,18 +90,18 @@ async function fetchDataFromCloud() {
 
 async function saveDataToCloud() {
     setStatus("Saving to cloud..."); saveLocalFallback(); 
-    
+
     try {
         const compressedData = [];
         for (const [key, drops] of Object.entries(gridData)) {
             if (!drops || drops.length === 0) continue;
             const parts = key.split('_');
             if (parts.length !== 2) continue;
-            
+
             const vName = parts[0]; const date = parts[1]; 
             const vIdx = virtues.indexOf(vName);
             if (vIdx === -1) continue; 
-            
+
             const flatDrops = drops.map(d => {
                 const shapeStr = d.shape || "50% 50% 50% 50% / 50% 50% 50% 50%";
                 const shapes = shapeStr.match(/\d+/g).map(Number);
@@ -110,17 +110,17 @@ async function saveDataToCloud() {
             });
             compressedData.push([vIdx, date, flatDrops]);
         }
-        
+
         const payload = JSON.stringify({ v: virtues, d: compressedData });
-        
+
         const res = await fetch(`${WORKER_URL}?id=${currentUserId}`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'text/plain' }, 
             body: payload 
         });
-        
+
         if (!res.ok) throw new Error(`Cloudflare rejected save. Status: ${res.status}`);
-        
+
         setStatus("Safely synced to Cloud!");
     } catch (err) { 
         console.error("Cloud Save Error:", err);
@@ -191,13 +191,13 @@ document.getElementById('undo-btn').addEventListener('click', () => {
 function renderGrid() {
     container.innerHTML = ''; 
     container.appendChild(createCell('', 'grid-header top-corner'));
-    
+
     if (viewMode === 'weekly') {
         container.classList.remove('stack-view');
         container.style.gridTemplateColumns = `140px repeat(7, minmax(60px, 1fr))`;
         document.getElementById('calendar-nav').style.display = 'flex'; 
         document.getElementById('tool-palette').style.display = 'flex';
-        
+
         for (let i = 0; i < 7; i++) {
             let d = new Date(currentMonday); d.setDate(d.getDate() + i); 
             container.appendChild(createCell(d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }), 'grid-header sticky-top'));
@@ -208,7 +208,7 @@ function renderGrid() {
         container.style.gridTemplateColumns = `minmax(75px, 120px) repeat(7, minmax(25px, 1fr))`;
         document.getElementById('calendar-nav').style.display = 'none'; 
         document.getElementById('tool-palette').style.display = 'none';
-        
+
         for (let i = 0; i < 7; i++) container.appendChild(createCell(days[i], 'grid-header sticky-top'));
     }
 
@@ -233,7 +233,6 @@ function renderGrid() {
 
 function createCell(text, className) { const div = document.createElement('div'); div.className = className; div.textContent = text; return div; }
 
-// THE FIX: Coordinate compression applied to syncVisualsToData
 function syncVisualsToData() {
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
     document.querySelectorAll('.grid-cell').forEach(cell => {
@@ -241,7 +240,7 @@ function syncVisualsToData() {
         const canvas = document.createElement('div'); canvas.className = 'cell-ink-canvas';
         drops.forEach(drop => {
             const dropEl = document.createElement('div'); dropEl.className = `ink-drop ${drop.type === 1 ? 'ink-success' : 'ink-failure'}`;
-            
+
             let posX = drop.x !== undefined ? drop.x : 50;
             let posY = drop.y !== undefined ? drop.y : 25;
 
@@ -254,7 +253,7 @@ function syncVisualsToData() {
 
             dropEl.style.left = `${posX}px`; 
             dropEl.style.top = `${posY}px`;
-            
+
             dropEl.style.transform = `translate(-50%, -50%) rotate(${drop.rotate}deg) scale(${drop.scale})`;
             const core = document.createElement('div'); core.className = 'ink-core'; core.style.borderRadius = drop.shape; dropEl.appendChild(core);
             drop.splatters.forEach(s => {
