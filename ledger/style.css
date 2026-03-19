@@ -114,7 +114,14 @@ body {
 #virtue-ledger-app .top-corner { position: sticky; top: 0; left: 0; z-index: 12; background-color: var(--header-bg); box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
 
 #virtue-ledger-app .cell-ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; filter: url(#true-ink); pointer-events: none; }
-#virtue-ledger-app .ink-drop { position: absolute; width: 30px; height: 30px; pointer-events: none; }
+
+/* Fixed Ink Drop Styling */
+#virtue-ledger-app .ink-drop { 
+    position: absolute; 
+    width: 30px; 
+    height: 30px; 
+    pointer-events: none; 
+}
 #virtue-ledger-app .ink-success { --ink-color: var(--success-rgb); }
 #virtue-ledger-app .ink-failure { --ink-color: var(--failure-rgb); }
 #virtue-ledger-app .ink-core {
@@ -166,39 +173,37 @@ body {
 #virtue-ledger-app .cell-input { width: 60px; background: transparent; color: var(--text-main); border: none; border-bottom: 1px dashed var(--border-color); font-family: monospace; text-align: center; font-size: 16px; font-weight: 700; transition: border-color 0.2s;}
 #virtue-ledger-app .cell-input:focus { outline: none; border-bottom-color: var(--accent-color); }
 
+/* --- THE STACK VIEW COMPRESSION LOGIC (Now Global) --- */
+#virtue-ledger-app .grid-container.stack-view { overflow: hidden; max-height: none; }
+#virtue-ledger-app .grid-container.stack-view .virtue-label { padding-left: 5px; font-size: 10px; white-space: normal; line-height: 1.1; min-height: 28px; }
+#virtue-ledger-app .grid-container.stack-view .grid-header { font-size: 9px; padding: 2px; min-height: 28px; }
+#virtue-ledger-app .grid-container.stack-view .grid-cell { min-height: 28px; padding: 2px; }
+#virtue-ledger-app .grid-container.stack-view .ink-drop { width: 20px; height: 20px; }
+
 /* --- MOBILE RESPONSIVENESS PATCH --- */
 @media (max-width: 768px) {
     .header { padding: 15px 20px; flex-direction: column; gap: 10px; }
-    
+
     #virtue-ledger-app { padding: 0 10px; margin: 20px auto; }
     #virtue-ledger-app .vl-container { padding: 15px !important; }
-    
+
     #virtue-ledger-app .modal-content {
         padding: 20px 15px !important; width: 100% !important; height: 100vh !important;
         max-height: 100vh !important; border-radius: 0 !important; border: none !important;
     }
     #virtue-ledger-app .table-container { -webkit-overflow-scrolling: touch; }
     #virtue-ledger-app .cell-input { min-width: 45px; padding: 8px 0; }
-    
+
     #virtue-ledger-app .modal-tabs {
         overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px; flex-shrink: 0;
     }
     #virtue-ledger-app .tab-btn { white-space: nowrap; font-size: 14px; padding: 8px 12px; }
-    
+
     #virtue-ledger-app .top-controls { gap: 8px; }
     #virtue-ledger-app .vl-btn { padding: 8px 12px; font-size: 12px; }
     #virtue-ledger-app .calendar-nav h2 { font-size: 16px; }
-    
+
     #virtue-ledger-app .virtue-pill { flex-wrap: wrap; gap: 10px; }
     #virtue-ledger-app .virtue-edit-input { width: 100%; margin-right: 0; }
     #virtue-ledger-app .virtue-controls { width: 100%; justify-content: flex-end; }
-
-    /* The Stack View Compression Logic (Fully Collapsed) */
-    #virtue-ledger-app .grid-container.stack-view { overflow: hidden; max-height: none; }
-    #virtue-ledger-app .grid-container.stack-view .virtue-label { padding-left: 5px; font-size: 10px; white-space: normal; line-height: 1.1; min-height: 28px; }
-    #virtue-ledger-app .grid-container.stack-view .grid-header { font-size: 9px; padding: 2px; min-height: 28px; }
-    #virtue-ledger-app .grid-container.stack-view .grid-cell { min-height: 28px; padding: 2px; }
-    
-    /* Scale down the physical ink blobs so they don't overflow the tiny cells */
-    #virtue-ledger-app .grid-container.stack-view .ink-drop { width: 20px; height: 20px; }
 }
