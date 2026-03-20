@@ -346,6 +346,7 @@ themeBtn.addEventListener('click', () => {
 initializeSession();
 
 
+
 // ==========================================
 // --- FLUID BLEED VISUALIZATION ENGINE ---
 // ==========================================
@@ -366,7 +367,7 @@ bleedCanvas.style.left = '0';
 bleedCanvas.style.width = '100%';
 bleedCanvas.style.height = '100%';
 bleedCanvas.style.pointerEvents = 'none'; 
-bleedCanvas.style.zIndex = '10'; // Keeps it strictly over the grid, under UI
+bleedCanvas.style.zIndex = '10'; // Over grid, under UI
 gridWrapper.appendChild(bleedCanvas);
 
 const bCtx = bleedCanvas.getContext('2d');
@@ -391,52 +392,47 @@ bleedBtn.style.cursor = 'pointer';
 bleedBtn.style.letterSpacing = '1px';
 bleedBtn.style.textTransform = 'uppercase';
 bleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+bleedBtn.style.width = '200px';
 
-// Add a simple hover effect inline
 bleedBtn.onmouseover = () => bleedBtn.style.backgroundColor = '#d1ccbe';
 bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
 
 bleedBtnContainer.appendChild(bleedBtn);
 gridWrapper.parentNode.insertBefore(bleedBtnContainer, gridWrapper.nextSibling);
 
-// 4. Physics Engine Variables
+// 4. Physics Engine Variables & State
 let bleedParticles = [];
-let bleedAnimationId;
-let bleedFrameCount = 0;
-const BLEED_MAX_FRAMES = 900; 
+let bleedAnimationId = null;
+let isBleeding = false;
+let hasStartedBleeding = false;
 
-const COLOR_SUCCESS_INK = 'rgba(80, 130, 240, 0.015)'; 
-const COLOR_FAILURE_INK = 'rgba(230, 80, 100, 0.015)'; 
+// Hyper-realistic deep ink colors
+const COLOR_SUCCESS_INK = 'rgba(15, 35, 110, 0.02)'; // Deep Navy
+const COLOR_FAILURE_INK = 'rgba(140, 15, 25, 0.02)';  // Deep Crimson
 
 class BleedParticle {
-    constructor(startX, startY, color, weightMultiplier, boundW, boundH) {
-        this.originX = startX;
-        this.originY = startY;
+    constructor(startX, startY, color, boundW, boundH) {
         this.x = startX;
         this.y = startY;
         this.color = color;
         this.bounds = { w: boundW, h: boundH };
         
-        this.size = Math.random() * 2.5 + 1.0; 
+        // Slightly larger, softer particles for pooling
+        this.size = Math.random() * 3.0 + 1.5; 
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 0.8 + 0.3;
-        this.outwardBias = (Math.random() * 0.15) * weightMultiplier;
+        
+        // Very slow movement to simulate thick fluid soaking into paper
+        this.speed = Math.random() * 0.4 + 0.1;
     }
 
     update() {
-        this.angle += (Math.random() - 0.5) * 0.25;
+        // Organic wandering (Capillary action) rather than straight outward lines
+        this.angle += (Math.random() - 0.5) * 0.8; 
+        
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed;
 
-        const dx = this.x - this.originX;
-        const dy = this.y - this.originY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist > 1) {
-            this.x += (dx / dist) * this.outwardBias;
-            this.y += (dy / dist) * this.outwardBias;
-        }
-
+        // Keep ink within the grid wrapper bounds
         if (this.x < 0) this.x = 0;
         if (this.x > this.bounds.w) this.x = this.bounds.w;
         if (this.y < 0) this.y = 0;
@@ -451,17 +447,13 @@ class BleedParticle {
     }
 }
 
-function triggerLiveBleed() {
-    if (bleedAnimationId) cancelAnimationFrame(bleedAnimationId);
-    bleedParticles = [];
-    bleedFrameCount = 0;
-    
-    // Match the exact pixel dimensions of the wrapper to prevent coordinate skewing
+function initBleed() {
     bleedCanvas.width = gridWrapper.offsetWidth;
     bleedCanvas.height = gridWrapper.offsetHeight;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     bCtx.globalCompositeOperation = 'multiply';
+    bleedParticles = [];
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
 
@@ -469,56 +461,76 @@ function triggerLiveBleed() {
         const drops = dataSource[cell.dataset.id] || [];
         if (drops.length === 0) return;
 
-        // Calculate exact coordinates relative to the new wrapper
         const rect = cell.getBoundingClientRect();
         const wrapperRect = gridWrapper.getBoundingClientRect();
-        const centerX = (rect.left - wrapperRect.left) + (rect.width / 2);
-        const centerY = (rect.top - wrapperRect.top) + (rect.height / 2);
 
-        let successVol = 0;
-        let failureVol = 0;
-
+        // Spawn particles from the EXACT coordinates of each individual dot
         drops.forEach(d => {
-            if (d.type === 1) successVol++;
-            else if (d.type === 2) failureVol++;
+            let posX = d.x !== undefined ? d.x : 50;
+            let posY = d.y !== undefined ? d.y : 25;
+
+            if (viewMode === 'aggregate') {
+                posX = 15 + (posX % 15); 
+                posY = 10 + (posY % 8);
+            }
+
+            // Map the dot's local cell coordinates to the canvas overlay
+            const originX = (rect.left - wrapperRect.left) + posX;
+            const originY = (rect.top - wrapperRect.top) + posY;
+
+            const particleMultiplier = viewMode === 'aggregate' ? 10 : 80;
+            const inkColor = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
+
+            for (let i = 0; i < particleMultiplier; i++) {
+                bleedParticles.push(new BleedParticle(originX, originY, inkColor, bleedCanvas.width, bleedCanvas.height));
+            }
         });
-
-        const particleMultiplier = viewMode === 'aggregate' ? 40 : 150;
-
-        if (successVol > 0) {
-            const sWeight = successVol > failureVol ? 1.4 : 0.8;
-            for (let i = 0; i < (successVol * particleMultiplier); i++) {
-                bleedParticles.push(new BleedParticle(centerX, centerY, COLOR_SUCCESS_INK, sWeight, bleedCanvas.width, bleedCanvas.height));
-            }
-        }
-
-        if (failureVol > 0) {
-            const fWeight = failureVol > successVol ? 1.4 : 0.8;
-            for (let i = 0; i < (failureVol * particleMultiplier); i++) {
-                bleedParticles.push(new BleedParticle(centerX, centerY, COLOR_FAILURE_INK, fWeight, bleedCanvas.width, bleedCanvas.height));
-            }
-        }
     });
-
-    animateBleed();
 }
 
 function animateBleed() {
+    if (!isBleeding) return;
+    
     for (let i = 0; i < bleedParticles.length; i++) {
         bleedParticles[i].update();
         bleedParticles[i].draw();
     }
+    bleedAnimationId = requestAnimationFrame(animateBleed);
+}
 
-    bleedFrameCount++;
-    if (bleedFrameCount < BLEED_MAX_FRAMES) {
-        bleedAnimationId = requestAnimationFrame(animateBleed);
+function toggleBleed() {
+    if (!hasStartedBleeding) {
+        // First click: Initialize and Play
+        initBleed();
+        isBleeding = true;
+        hasStartedBleeding = true;
+        bleedBtn.textContent = 'PAUSE BLEEDING';
+        animateBleed();
+    } else if (isBleeding) {
+        // Currently playing: Pause
+        isBleeding = false;
+        cancelAnimationFrame(bleedAnimationId);
+        bleedBtn.textContent = 'RESUME BLEEDING';
+    } else {
+        // Currently paused: Resume
+        isBleeding = true;
+        bleedBtn.textContent = 'PAUSE BLEEDING';
+        animateBleed();
     }
 }
 
-// Clear the canvas automatically if the user changes weeks or views
-const clearCanvas = () => bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-document.getElementById('prev-week').addEventListener('click', clearCanvas);
-document.getElementById('next-week').addEventListener('click', clearCanvas);
-document.getElementById('view-toggle').addEventListener('click', clearCanvas);
+// Reset the canvas and button state completely if the user changes weeks, views, or edits the grid
+const resetBleedState = () => {
+    isBleeding = false;
+    hasStartedBleeding = false;
+    cancelAnimationFrame(bleedAnimationId);
+    bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+    bleedBtn.textContent = 'LET IT BLEED';
+};
 
-bleedBtn.addEventListener('click', triggerLiveBleed);
+document.getElementById('prev-week').addEventListener('click', resetBleedState);
+document.getElementById('next-week').addEventListener('click', resetBleedState);
+document.getElementById('view-toggle').addEventListener('click', resetBleedState);
+container.addEventListener('click', resetBleedState); // Resets if a new drop is added
+
+bleedBtn.addEventListener('click', toggleBleed);
