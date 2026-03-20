@@ -347,69 +347,74 @@ initializeSession();
 
 
 
+
 // ==========================================
 // --- FLUID BLEED VISUALIZATION ENGINE ---
 // ==========================================
 
-const gridWrapper = document.createElement('div');
-gridWrapper.style.position = 'relative';
-gridWrapper.style.width = '100%';
-container.parentNode.insertBefore(gridWrapper, container);
-gridWrapper.appendChild(container);
+// 1. Embed Canvas INSIDE the scrollable grid container
+container.style.position = 'relative'; // Anchor for the absolute canvas
 
 const bleedCanvas = document.createElement('canvas');
 bleedCanvas.id = 'ink-canvas';
 bleedCanvas.style.position = 'absolute';
 bleedCanvas.style.top = '0';
 bleedCanvas.style.left = '0';
-bleedCanvas.style.width = '100%';
+bleedCanvas.style.width = '100%'; 
 bleedCanvas.style.height = '100%';
 bleedCanvas.style.pointerEvents = 'none'; 
-bleedCanvas.style.zIndex = '10'; 
-gridWrapper.appendChild(bleedCanvas);
+bleedCanvas.style.zIndex = '10'; // Over the grid background, under the dots
+container.appendChild(bleedCanvas);
 
-const bCtx = bleedCanvas.getContext('2d');
+const bCtx = bleedCanvas.getContext('2d', { alpha: true });
 
-const bleedBtnContainer = document.createElement('div');
-bleedBtnContainer.style.display = 'flex';
-bleedBtnContainer.style.justifyContent = 'center';
-bleedBtnContainer.style.marginTop = '30px';
-bleedBtnContainer.style.marginBottom = '30px';
+// 2. Setup the Trigger Button (Centered beneath the chart)
+let bleedBtnContainer = document.getElementById('bleed-btn-container');
+if (!bleedBtnContainer) {
+    bleedBtnContainer = document.createElement('div');
+    bleedBtnContainer.id = 'bleed-btn-container';
+    bleedBtnContainer.style.display = 'flex';
+    bleedBtnContainer.style.justifyContent = 'center';
+    bleedBtnContainer.style.marginTop = '20px';
+    bleedBtnContainer.style.marginBottom = '40px';
 
-const bleedBtn = document.createElement('button');
-bleedBtn.id = 'bleed-btn';
-bleedBtn.textContent = 'LET IT BLEED';
-bleedBtn.style.padding = '12px 24px';
-bleedBtn.style.backgroundColor = '#e6e2d8';
-bleedBtn.style.color = '#333';
-bleedBtn.style.border = 'none';
-bleedBtn.style.borderRadius = '5px';
-bleedBtn.style.fontWeight = 'bold';
-bleedBtn.style.cursor = 'pointer';
-bleedBtn.style.letterSpacing = '1px';
-bleedBtn.style.textTransform = 'uppercase';
-bleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-bleedBtn.style.width = '200px';
+    const bleedBtn = document.createElement('button');
+    bleedBtn.id = 'bleed-btn';
+    bleedBtn.textContent = 'LET IT BLEED';
+    bleedBtn.style.padding = '12px 24px';
+    bleedBtn.style.backgroundColor = '#e6e2d8';
+    bleedBtn.style.color = '#333';
+    bleedBtn.style.border = 'none';
+    bleedBtn.style.borderRadius = '5px';
+    bleedBtn.style.fontWeight = 'bold';
+    bleedBtn.style.cursor = 'pointer';
+    bleedBtn.style.letterSpacing = '1px';
+    bleedBtn.style.textTransform = 'uppercase';
+    bleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    bleedBtn.style.width = '220px';
 
-bleedBtn.onmouseover = () => bleedBtn.style.backgroundColor = '#d1ccbe';
-bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
+    bleedBtn.onmouseover = () => bleedBtn.style.backgroundColor = '#d1ccbe';
+    bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
 
-bleedBtnContainer.appendChild(bleedBtn);
-gridWrapper.parentNode.insertBefore(bleedBtnContainer, gridWrapper.nextSibling);
+    bleedBtnContainer.appendChild(bleedBtn);
+    container.parentNode.insertBefore(bleedBtnContainer, container.nextSibling);
+}
 
-// --- State & Physics ---
+const bleedBtn = document.getElementById('bleed-btn');
+
+// 3. State & Physics
 let bleedParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Brighter base colors. When these multiply repeatedly, they will pool 
-// into rich navy and deep crimson, but take much longer to hit black.
-const COLOR_SUCCESS_INK = 'rgba(80, 140, 240, 0.015)'; 
-const COLOR_FAILURE_INK = 'rgba(240, 80, 100, 0.015)';  
+// Hyper-realistic heavy ink colors (Deep Navy & Rich Crimson)
+// Using higher opacity for a wetter, thicker look
+const COLOR_SUCCESS_INK = 'rgba(15, 45, 120, 0.06)'; 
+const COLOR_FAILURE_INK = 'rgba(150, 15, 30, 0.06)';
 
 class BleedParticle {
-    constructor(startX, startY, color, boundW, boundH) {
+    constructor(startX, startY, color, boundW, boundH, isDominant) {
         this.originX = startX;
         this.originY = startY;
         this.x = startX;
@@ -417,36 +422,40 @@ class BleedParticle {
         this.color = color;
         this.bounds = { w: boundW, h: boundH };
         
-        // Microscopic sizes for soft, cloud-like diffusion (no thick lines)
-        this.size = Math.random() * 1.5 + 0.5; 
+        // Dominant ink gets slightly thicker particles
+        this.size = (Math.random() * 3.5 + 1.5) + (isDominant ? 1.0 : 0); 
         
-        // Particles "dry up" and stop drawing after a certain amount of time
-        // This prevents the origin points from being pounded into solid black
-        this.life = Math.floor(Math.random() * 800) + 400; 
+        // Very slow movement so the ink pools heavily before spreading
+        this.speed = Math.random() * 0.5 + 0.1; 
         
-        // Pure capillary action speed
-        this.speed = Math.random() * 1.5 + 0.5; 
+        this.angle = Math.random() * Math.PI * 2;
+        
+        // Shorter life prevents turning to absolute black
+        this.life = Math.floor(Math.random() * 250) + 100; 
+        
+        this.isDominant = isDominant;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // 1. Pure Brownian Motion (Jitter). This creates the fuzzy, soaking edge.
-        this.x += (Math.random() - 0.5) * this.speed;
-        this.y += (Math.random() - 0.5) * this.speed;
+        this.angle += (Math.random() - 0.5) * 1.2; 
+        
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
 
-        // 2. Very gentle outward pressure from the center
+        // Push outward gently from the exact point of the dot
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         if (dist > 0) {
-            // Push outwards, but weakly, so it looks like it's wicking through paper
-            this.x += (dx / dist) * 0.15;
-            this.y += (dy / dist) * 0.15;
+            // Dominant ink has a slightly stronger push to overtake borders
+            const pushStr = this.isDominant ? 0.25 : 0.15;
+            this.x += (dx / dist) * pushStr;
+            this.y += (dy / dist) * pushStr;
         }
 
-        // Keep within bounds
         if (this.x < 0) this.x = 0;
         if (this.x > this.bounds.w) this.x = this.bounds.w;
         if (this.y < 0) this.y = 0;
@@ -458,27 +467,38 @@ class BleedParticle {
     draw() {
         if (this.life <= 0) return;
         bCtx.fillStyle = this.color;
-        // fillRect is much better than arc for rendering tiny "pores" of ink
-        bCtx.fillRect(this.x, this.y, this.size, this.size);
+        bCtx.beginPath();
+        // Drawing arcs creates a much smoother liquid look than rectangles
+        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        bCtx.fill();
     }
 }
 
 function initBleed() {
-    bleedCanvas.width = gridWrapper.offsetWidth;
-    bleedCanvas.height = gridWrapper.offsetHeight;
+    // Lock the canvas strictly to the inner scrollable area
+    bleedCanvas.width = container.scrollWidth;
+    bleedCanvas.height = container.scrollHeight;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-    bCtx.globalCompositeOperation = 'multiply';
+    
+    // 'darken' composite creates deep, rich pools without washing out colors
+    bCtx.globalCompositeOperation = 'darken';
     bleedParticles = [];
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
+    const containerRect = container.getBoundingClientRect();
 
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const drops = dataSource[cell.dataset.id] || [];
         if (drops.length === 0) return;
 
         const rect = cell.getBoundingClientRect();
-        const wrapperRect = gridWrapper.getBoundingClientRect();
+
+        // Calculate volume to determine dominance
+        let successVol = 0;
+        let failureVol = 0;
+        drops.forEach(d => { if (d.type === 1) successVol++; else if (d.type === 2) failureVol++; });
+        const isSuccessDominant = successVol >= failureVol;
 
         drops.forEach(d => {
             let posX = d.x !== undefined ? d.x : 50;
@@ -489,18 +509,25 @@ function initBleed() {
                 posY = 10 + (posY % 8);
             }
 
-            const originX = (rect.left - wrapperRect.left) + posX;
-            const originY = (rect.top - wrapperRect.top) + posY;
+            // Factor in current scroll position so coordinates map perfectly inside the cell
+            const originX = (rect.left - containerRect.left) + container.scrollLeft + posX;
+            const originY = (rect.top - containerRect.top) + container.scrollTop + posY;
 
-            // Increased particle count since they are smaller and die off
-            const particleMultiplier = viewMode === 'aggregate' ? 40 : 250;
             const inkColor = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
+            const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
+            
+            // Dominant color gets 50% more volume to physically overpower the space
+            const baseMultiplier = viewMode === 'aggregate' ? 15 : 100;
+            const finalCount = isDominant ? baseMultiplier * 1.5 : baseMultiplier * 0.7;
 
-            for (let i = 0; i < particleMultiplier; i++) {
-                bleedParticles.push(new BleedParticle(originX, originY, inkColor, bleedCanvas.width, bleedCanvas.height));
+            for (let i = 0; i < finalCount; i++) {
+                bleedParticles.push(new BleedParticle(originX, originY, inkColor, bleedCanvas.width, bleedCanvas.height, isDominant));
             }
         });
     });
+
+    // CRITICAL FIX: Sort the array so dominant particles render LAST, sitting on top
+    bleedParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
 function animateBleed() {
@@ -513,7 +540,6 @@ function animateBleed() {
         if (bleedParticles[i].life > 0) activeParticles++;
     }
     
-    // Automatically stop asking the browser to animate once all ink has "dried"
     if (activeParticles > 0) {
         bleedAnimationId = requestAnimationFrame(animateBleed);
     } else {
@@ -535,7 +561,7 @@ function toggleBleed() {
         bleedBtn.textContent = 'RESUME BLEEDING';
     } else if (bleedBtn.textContent === 'INK DRIED (RESET)') {
         resetBleedState();
-        toggleBleed(); // Automatically restart
+        toggleBleed();
     } else {
         isBleeding = true;
         bleedBtn.textContent = 'PAUSE BLEEDING';
