@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Virtue Ledger - Historical Multi-Week Bleed</title>
+    <title>Virtue Ledger - Historical Human Jitter</title>
     <style>
         body {
             background-color: #0b0f19;
@@ -15,7 +15,7 @@
 
         .ledger-container {
             position: relative;
-            /* Adjusted width/height to make a nice 7x10 grid ratio */
+            /* Ratio for 7 Days x 10 Virtues */
             width: 420px; 
             height: 600px;
             background-color: #f4f1ea;
@@ -80,12 +80,12 @@
     </div>
 
     <div class="button-group">
-        <button id="randomize-btn">Randomize Historical Stack</button>
+        <button id="randomize-btn">Randomize Historical Jitter</button>
         <button id="bleed-btn" class="primary">Let it bleed</button>
     </div>
 
     <script>
-        // Populate the 70 grid cells for the background
+        // Populate the 70 grid cells
         const gridBg = document.getElementById('grid-bg');
         for(let i=0; i<70; i++) {
             const cell = document.createElement('div');
@@ -99,17 +99,18 @@
         let particles = [];
         let animationId;
         let frameCount = 0;
-        const MAX_FRAMES = 1500; // Let it bloom significantly
+        const MAX_FRAMES = 1500; // Bloom for ~25 seconds
 
-        // extremely high transparency (0.01) to allow heavy blending
+        // extremamente high transparency for bleed particles
         const COLOR_RED_INK = 'rgba(190, 40, 60, 0.01)';
         const COLOR_BLUE_INK = 'rgba(40, 80, 200, 0.01)';
 
-        // Deep habit colors for initialization
-        const COLOR_RED_HABIT = 'rgba(190, 40, 60, 0.9)';
-        const COLOR_BLUE_HABIT = 'rgba(40, 80, 200, 0.9)';
+        // Deep overlapping colors for the solid dot stack
+        const COLOR_RED_DOT = 'rgba(190, 40, 60, 0.5)'; // Translucent to allow multiply blend
+        const COLOR_BLUE_DOT = 'rgba(40, 80, 200, 0.5)';
 
-        let gridDataMap = []; // Summarized historical matrix
+        let rawLedgerEvents = []; // Store raw individual events with coordinates
+        let gridDataMap = []; // Summarized historical matrix for bleed volumes
         const COLS = 7;
         const ROWS = 10;
         const CELL_W = canvas.width / COLS;
@@ -117,29 +118,24 @@
 
         class InkParticle {
             constructor(startX, startY, color, weightMultiplier) {
-                // Start exactly at the origin point (pore)
+                // Particles spawn exactly from the historical "pore" (the dot's specific coordinate)
                 this.originX = startX;
                 this.originY = startY;
                 this.x = startX;
                 this.y = startY;
                 this.color = color;
-                
-                // microscopic pores
                 this.size = Math.random() * 1.5 + 0.5;
-                
-                // Slow soak
-                this.wanderSpeed = Math.random() * 1.2 + 0.2;
-                
-                // High recency/volume points push out harder
-                this.outwardBias = (Math.random() * 0.4) * weightMultiplier;
+                this.wanderSpeed = Math.random() * 1.0 + 0.1;
+                // Volume dictates outward soaking pressure
+                this.outwardBias = (Math.random() * 0.35) * weightMultiplier;
             }
 
             update() {
-                // 1. Pure Brownian Motion (Random Jitter)
+                // 1. Pure Brownian Motion (capillary action jitter)
                 this.x += (Math.random() - 0.5) * this.wanderSpeed;
                 this.y += (Math.random() - 0.5) * this.wanderSpeed;
 
-                // 2. Continuous outwards bias from original pore
+                // 2. Radial soak outward from specific dot coordinate
                 const dx = this.x - this.originX;
                 const dy = this.y - this.originY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -158,71 +154,80 @@
 
             draw() {
                 ctx.fillStyle = this.color;
-                // fillRect is much faster than arc for 100,000+ tiny pores
-                ctx.fillRect(this.x, this.y, this.size, this.size); 
+                ctx.fillRect(this.x, this.y, this.size, this.size); // fillRect for performance
             }
         }
 
         function generateHistoricalStackData() {
             if (animationId) cancelAnimationFrame(animationId);
             
-            // Clear and re-initialize the grid matrix (7x10)
-            gridDataMap = Array(COLS).fill().map(() => Array(ROWS).fill().map(() => ({redCount: 0, blueCount: 0})));
+            rawLedgerEvents = [];
+            // Summarization matrix (7x10) to store total volume per "pore" (for bleed later)
+            gridDataMap = Array(COLS).fill().map(() => Array(ROWS).fill().map(() => ({redVolume: 0, blueVolume: 0})));
             
-            // Simulate 8 weeks * ~3 daily inputs = ~170 inputs
-            const totalHistoricalEvents = Math.floor(Math.random() * 50) + 170; 
+            // Simulate significant historical depth (over several weeks, ~250 events)
+            const totalHistoricalEvents = Math.floor(Math.random() * 80) + 200; 
             
             for(let i=0; i<totalHistoricalEvents; i++) {
-                // Pick a random Day (0-6) and Virtue (0-9)
+                // Target cell
                 const col = Math.floor(Math.random() * COLS);
                 const row = Math.floor(Math.random() * ROWS);
                 
-                // Realistic ~35% Red failure rate
-                if(Math.random() > 0.65) {
-                    gridDataMap[col][row].redCount++;
+                // Calculate precise center of target cell
+                const centerX = (col * CELL_W) + (CELL_W / 2);
+                const centerY = (row * CELL_H) + (CELL_H / 2);
+
+                // HUMAN JITTER: Random offset up to 25% of cell width away from center
+                const maxJitterW = CELL_W * 0.25;
+                const maxJitterH = CELL_H * 0.25;
+                const finalX = centerX + (Math.random() - 0.5) * maxJitterW;
+                const finalY = centerY + (Math.random() - 0.5) * maxJitterH;
+                
+                // Base particle spawn volume per historical mark
+                const baseVolume = 300; 
+                
+                let eventType = Math.random() > 0.60 ? 'red' : 'blue'; // 40% failure rate
+                
+                // Identify the most recent event to make it massive (dominant Blue habit)
+                let actualVolume = baseVolume;
+                if(i === totalHistoricalEvents - 1) {
+                    eventType = 'blue';
+                    actualVolume = 25000; // Massive dominance
+                }
+
+                // Store individual raw event with jitter coordinates
+                rawLedgerEvents.push({
+                    type: eventType,
+                    x: finalX,
+                    y: finalY,
+                    col: col,
+                    row: row
+                });
+
+                // Summary: Track total ink volume historically at this grid cell intersection
+                if(eventType === 'red') {
+                    gridDataMap[col][row].redVolume += actualVolume;
                 } else {
-                    gridDataMap[col][row].blueCount++;
+                    gridDataMap[col][row].blueVolume += actualVolume;
                 }
             }
             
-            // Randomly force one cell to have massive historical weight (the dominant recent habit)
-            const dominantCol = Math.floor(Math.random() * COLS);
-            const dominantRow = Math.floor(Math.random() * ROWS);
-            gridDataMap[dominantCol][dominantRow].blueCount += 12000; // Massive push
-
             drawInitialState();
         }
 
         function drawInitialState() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.globalCompositeOperation = 'source-over';
+            // multiply blend mode for deep, authentic overlapping colors
+            ctx.globalCompositeOperation = 'multiply'; 
             
-            // Iterate over every cell to draw the historical habit density
-            for(let col=0; col<COLS; col++) {
-                for(let row=0; row<ROWS; row++) {
-                    const cellData = gridDataMap[col][row];
-                    const totalVolume = cellData.redCount + cellData.blueCount;
-                    
-                    if(totalVolume > 0) {
-                        const centerX = (col * CELL_W) + (CELL_W / 2);
-                        const centerY = (row * CELL_H) + (CELL_H / 2);
-                        
-                        // Habit color logic: Who is winning in this cell historically?
-                        // If Red exists at all, make it Red to highlight failures, weighted towards Blue dominance
-                        if(cellData.redCount > 0 && cellData.blueCount < 5) {
-                            ctx.fillStyle = COLOR_RED_HABIT;
-                        } else {
-                            ctx.fillStyle = COLOR_BLUE_HABIT;
-                        }
-                        
-                        ctx.beginPath();
-                        // Radius scales with total habit volume (3px to 12px)
-                        const radius = Math.min((totalVolume / 30) + 3, 12); 
-                        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-            }
+            rawLedgerEvents.forEach(event => {
+                ctx.fillStyle = event.type === 'red' ? COLOR_RED_DOT : COLOR_BLUE_DOT;
+                ctx.beginPath();
+                // variety of dot size (3px to 8px)
+                const radius = Math.random() * 3 + 4; 
+                ctx.arc(event.x, event.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
         }
 
         function triggerBleed() {
@@ -230,28 +235,28 @@
             particles = [];
             frameCount = 0;
             
-            // Sticking to source-over with very low alpha for natural purple blending
+            // source-over (low alpha ink dots blend better)
             ctx.globalCompositeOperation = 'source-over';
 
-            // Convert historical density matrix into particles
+            // Iterate over the grid matrix for the summarized bleed volumes
             for(let col=0; col<COLS; col++) {
                 for(let row=0; row<ROWS; row++) {
-                    const cellData = gridDataMap[col][row];
+                    const volumes = gridDataMap[col][row];
                     
-                    if((cellData.redCount + cellData.blueCount) > 0) {
+                    if((volumes.redVolume + volumes.blueVolume) > 0) {
                         const centerX = (col * CELL_W) + (CELL_W / 2);
                         const centerY = (row * CELL_H) + (CELL_H / 2);
                         
-                        // Spawn Red particles based on redCount (multiplied for better visible ink)
-                        for (let i = 0; i < (cellData.redCount * 4); i++) {
-                            particles.push(new InkParticle(centerX, centerY, COLOR_RED_INK, 0.7));
+                        // Red particles (multiplied counts for better visualization)
+                        for (let i = 0; i < (volumes.redVolume * 0.4); i++) {
+                            particles.push(new InkParticle(centerX, centerY, COLOR_RED_INK, 0.6));
                         }
                         
-                        // Spawn Blue particles based on blueCount. 
-                        // The dominant point will spawn 12,000+ here, pushing out hard.
-                        const speedBias = cellData.blueCount > 5000 ? 2.0 : 1.0; 
-                        for (let i = 0; i < (cellData.blueCount); i++) {
-                            particles.push(new InkParticle(centerX, centerY, COLOR_BLUE_INK, speedBias));
+                        // Blue particles
+                        // Dominant cell will spawn ~25,000+ here, pushing out hard.
+                        const weightBias = volumes.blueVolume > 8000 ? 1.6 : 0.8; 
+                        for (let i = 0; i < (volumes.blueVolume * 0.4); i++) {
+                            particles.push(new InkParticle(centerX, centerY, COLOR_BLUE_INK, weightBias));
                         }
                     }
                 }
@@ -261,7 +266,7 @@
         }
 
         function animate() {
-            // We do not clear the canvas. We allow thousands of micro-dots to stack.
+            // We do not clear the canvas. Thousands of micro-particles stack.
             for (let i = 0; i < particles.length; i++) {
                 particles[i].update();
                 particles[i].draw();
@@ -277,7 +282,7 @@
         document.getElementById('randomize-btn').addEventListener('click', generateHistoricalStackData);
         document.getElementById('bleed-btn').addEventListener('click', triggerBleed);
 
-        // Initialize with a heavy historical load
+        // Initialize heavy historical jitter load on start
         generateHistoricalStackData();
     </script>
 </body>
