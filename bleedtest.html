@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Virtue Ledger - Porous Bleed</title>
+    <title>Virtue Ledger - Historical Multi-Week Bleed</title>
     <style>
         body {
             background-color: #0b0f19;
@@ -80,7 +80,7 @@
     </div>
 
     <div class="button-group">
-        <button id="randomize-btn">Randomize Stack</button>
+        <button id="randomize-btn">Randomize Historical Stack</button>
         <button id="bleed-btn" class="primary">Let it bleed</button>
     </div>
 
@@ -99,17 +99,17 @@
         let particles = [];
         let animationId;
         let frameCount = 0;
-        const MAX_FRAMES = 1200; // Let it bloom longer
+        const MAX_FRAMES = 1500; // Let it bloom significantly
 
-        // Lighter, highly transparent colors to prevent the "black hole" effect
-        const COLOR_RED_INK = 'rgba(200, 40, 60, 0.03)';
-        const COLOR_BLUE_INK = 'rgba(40, 80, 200, 0.03)';
+        // extremely high transparency (0.01) to allow heavy blending
+        const COLOR_RED_INK = 'rgba(190, 40, 60, 0.01)';
+        const COLOR_BLUE_INK = 'rgba(40, 80, 200, 0.01)';
 
-        // Solid colors for the initial dot state
-        const COLOR_RED_SOLID = 'rgba(200, 40, 60, 0.8)';
-        const COLOR_BLUE_SOLID = 'rgba(40, 80, 200, 0.8)';
+        // Deep habit colors for initialization
+        const COLOR_RED_HABIT = 'rgba(190, 40, 60, 0.9)';
+        const COLOR_BLUE_HABIT = 'rgba(40, 80, 200, 0.9)';
 
-        let ledgerData = [];
+        let gridDataMap = []; // Summarized historical matrix
         const COLS = 7;
         const ROWS = 10;
         const CELL_W = canvas.width / COLS;
@@ -117,21 +117,21 @@
 
         class InkParticle {
             constructor(startX, startY, color, weightMultiplier) {
-                // Start exactly at the origin point
+                // Start exactly at the origin point (pore)
                 this.originX = startX;
                 this.originY = startY;
                 this.x = startX;
                 this.y = startY;
                 this.color = color;
                 
-                // The size of the "pore" it bleeds through
-                this.size = Math.random() * 2 + 1;
+                // microscopic pores
+                this.size = Math.random() * 1.5 + 0.5;
                 
-                // How fast this specific particle wanders
-                this.wanderSpeed = Math.random() * 1.5 + 0.5;
+                // Slow soak
+                this.wanderSpeed = Math.random() * 1.2 + 0.2;
                 
-                // An outward pressure to ensure it doesn't just stay in a tight circle
-                this.outwardBias = (Math.random() * 0.5) * weightMultiplier;
+                // High recency/volume points push out harder
+                this.outwardBias = (Math.random() * 0.4) * weightMultiplier;
             }
 
             update() {
@@ -139,17 +139,17 @@
                 this.x += (Math.random() - 0.5) * this.wanderSpeed;
                 this.y += (Math.random() - 0.5) * this.wanderSpeed;
 
-                // 2. Gentle Radial Push (Soaking outward from center)
+                // 2. Continuous outwards bias from original pore
                 const dx = this.x - this.originX;
                 const dy = this.y - this.originY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
-                if (dist > 0) {
+                if (dist > 1) {
                     this.x += (dx / dist) * this.outwardBias;
                     this.y += (dy / dist) * this.outwardBias;
                 }
 
-                // Keep it on the canvas
+                // 3. Keep it on the canvas (The card)
                 if (this.x < 0) this.x = 0;
                 if (this.x > canvas.width) this.x = canvas.width;
                 if (this.y < 0) this.y = 0;
@@ -158,33 +158,38 @@
 
             draw() {
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.size, this.size); // fillRect is faster than arc for thousands of tiny pores
+                // fillRect is much faster than arc for 100,000+ tiny pores
+                ctx.fillRect(this.x, this.y, this.size, this.size); 
             }
         }
 
-        function generateRandomData() {
+        function generateHistoricalStackData() {
             if (animationId) cancelAnimationFrame(animationId);
             
-            ledgerData = [];
-            const numStacks = Math.floor(Math.random() * 8) + 5; // 5 to 12 stacked points
+            // Clear and re-initialize the grid matrix (7x10)
+            gridDataMap = Array(COLS).fill().map(() => Array(ROWS).fill().map(() => ({redCount: 0, blueCount: 0})));
             
-            for(let i=0; i<numStacks; i++) {
+            // Simulate 8 weeks * ~3 daily inputs = ~170 inputs
+            const totalHistoricalEvents = Math.floor(Math.random() * 50) + 170; 
+            
+            for(let i=0; i<totalHistoricalEvents; i++) {
                 // Pick a random Day (0-6) and Virtue (0-9)
                 const col = Math.floor(Math.random() * COLS);
                 const row = Math.floor(Math.random() * ROWS);
                 
-                ledgerData.push({
-                    type: Math.random() > 0.5 ? 'red' : 'blue',
-                    col: col,
-                    row: row,
-                    // Volume represents historical frequency
-                    volume: Math.floor(Math.random() * 1500) + 500 
-                });
+                // Realistic ~35% Red failure rate
+                if(Math.random() > 0.65) {
+                    gridDataMap[col][row].redCount++;
+                } else {
+                    gridDataMap[col][row].blueCount++;
+                }
             }
             
-            // Give one random dot massive dominance
-            ledgerData[ledgerData.length - 1].volume = 8000;
-            
+            // Randomly force one cell to have massive historical weight (the dominant recent habit)
+            const dominantCol = Math.floor(Math.random() * COLS);
+            const dominantRow = Math.floor(Math.random() * ROWS);
+            gridDataMap[dominantCol][dominantRow].blueCount += 12000; // Massive push
+
             drawInitialState();
         }
 
@@ -192,18 +197,32 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.globalCompositeOperation = 'source-over';
             
-            ledgerData.forEach(dot => {
-                // Calculate precise center of the grid cell
-                const centerX = (dot.col * CELL_W) + (CELL_W / 2);
-                const centerY = (dot.row * CELL_H) + (CELL_H / 2);
-
-                ctx.fillStyle = dot.type === 'red' ? COLOR_RED_SOLID : COLOR_BLUE_SOLID;
-                ctx.beginPath();
-                // Draw the dot size slightly based on its volume
-                const radius = Math.min((dot.volume / 1000) + 4, 12); 
-                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                ctx.fill();
-            });
+            // Iterate over every cell to draw the historical habit density
+            for(let col=0; col<COLS; col++) {
+                for(let row=0; row<ROWS; row++) {
+                    const cellData = gridDataMap[col][row];
+                    const totalVolume = cellData.redCount + cellData.blueCount;
+                    
+                    if(totalVolume > 0) {
+                        const centerX = (col * CELL_W) + (CELL_W / 2);
+                        const centerY = (row * CELL_H) + (CELL_H / 2);
+                        
+                        // Habit color logic: Who is winning in this cell historically?
+                        // If Red exists at all, make it Red to highlight failures, weighted towards Blue dominance
+                        if(cellData.redCount > 0 && cellData.blueCount < 5) {
+                            ctx.fillStyle = COLOR_RED_HABIT;
+                        } else {
+                            ctx.fillStyle = COLOR_BLUE_HABIT;
+                        }
+                        
+                        ctx.beginPath();
+                        // Radius scales with total habit volume (3px to 12px)
+                        const radius = Math.min((totalVolume / 30) + 3, 12); 
+                        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
         }
 
         function triggerBleed() {
@@ -211,25 +230,38 @@
             particles = [];
             frameCount = 0;
             
-            // source-over with low opacity prevents the crushed black look
+            // Sticking to source-over with very low alpha for natural purple blending
             ctx.globalCompositeOperation = 'source-over';
 
-            ledgerData.forEach(dot => {
-                const centerX = (dot.col * CELL_W) + (CELL_W / 2);
-                const centerY = (dot.row * CELL_H) + (CELL_H / 2);
-                
-                const inkColor = dot.type === 'red' ? COLOR_RED_INK : COLOR_BLUE_INK;
-                const weightMultiplier = dot.volume > 4000 ? 1.5 : 0.8; 
-                
-                for (let i = 0; i < dot.volume; i++) {
-                    particles.push(new InkParticle(centerX, centerY, inkColor, weightMultiplier));
+            // Convert historical density matrix into particles
+            for(let col=0; col<COLS; col++) {
+                for(let row=0; row<ROWS; row++) {
+                    const cellData = gridDataMap[col][row];
+                    
+                    if((cellData.redCount + cellData.blueCount) > 0) {
+                        const centerX = (col * CELL_W) + (CELL_W / 2);
+                        const centerY = (row * CELL_H) + (CELL_H / 2);
+                        
+                        // Spawn Red particles based on redCount (multiplied for better visible ink)
+                        for (let i = 0; i < (cellData.redCount * 4); i++) {
+                            particles.push(new InkParticle(centerX, centerY, COLOR_RED_INK, 0.7));
+                        }
+                        
+                        // Spawn Blue particles based on blueCount. 
+                        // The dominant point will spawn 12,000+ here, pushing out hard.
+                        const speedBias = cellData.blueCount > 5000 ? 2.0 : 1.0; 
+                        for (let i = 0; i < (cellData.blueCount); i++) {
+                            particles.push(new InkParticle(centerX, centerY, COLOR_BLUE_INK, speedBias));
+                        }
+                    }
                 }
-            });
+            }
 
             animate();
         }
 
         function animate() {
+            // We do not clear the canvas. We allow thousands of micro-dots to stack.
             for (let i = 0; i < particles.length; i++) {
                 particles[i].update();
                 particles[i].draw();
@@ -241,10 +273,12 @@
             }
         }
 
-        document.getElementById('randomize-btn').addEventListener('click', generateRandomData);
+        // Event Listeners
+        document.getElementById('randomize-btn').addEventListener('click', generateHistoricalStackData);
         document.getElementById('bleed-btn').addEventListener('click', triggerBleed);
 
-        generateRandomData();
+        // Initialize with a heavy historical load
+        generateHistoricalStackData();
     </script>
 </body>
 </html>
