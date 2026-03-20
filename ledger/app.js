@@ -350,46 +350,63 @@ initializeSession();
 // --- FLUID BLEED VISUALIZATION ENGINE ---
 // ==========================================
 
-// 1. Setup the Overlay Canvas
+// 1. Fix Layout: Wrap the grid so the canvas locks perfectly to its exact dimensions
+const gridWrapper = document.createElement('div');
+gridWrapper.style.position = 'relative';
+gridWrapper.style.width = '100%';
+container.parentNode.insertBefore(gridWrapper, container);
+gridWrapper.appendChild(container);
+
+// 2. Setup the Overlay Canvas
 const bleedCanvas = document.createElement('canvas');
 bleedCanvas.id = 'ink-canvas';
 bleedCanvas.style.position = 'absolute';
 bleedCanvas.style.top = '0';
 bleedCanvas.style.left = '0';
-bleedCanvas.style.pointerEvents = 'none'; // Lets you click through to the grid
-bleedCanvas.style.zIndex = '100';
-bleedCanvas.style.transition = 'opacity 0.5s ease';
-
-// Ensure the grid's parent is relative so the canvas perfectly overlays it
-container.parentElement.style.position = 'relative';
-container.parentElement.appendChild(bleedCanvas);
+bleedCanvas.style.width = '100%';
+bleedCanvas.style.height = '100%';
+bleedCanvas.style.pointerEvents = 'none'; 
+bleedCanvas.style.zIndex = '10'; // Keeps it strictly over the grid, under UI
+gridWrapper.appendChild(bleedCanvas);
 
 const bCtx = bleedCanvas.getContext('2d');
 
-// 2. Setup the Trigger Button
+// 3. Setup the Trigger Button (Centered beneath the chart)
+const bleedBtnContainer = document.createElement('div');
+bleedBtnContainer.style.display = 'flex';
+bleedBtnContainer.style.justifyContent = 'center';
+bleedBtnContainer.style.marginTop = '30px';
+bleedBtnContainer.style.marginBottom = '30px';
+
 const bleedBtn = document.createElement('button');
 bleedBtn.id = 'bleed-btn';
 bleedBtn.textContent = 'LET IT BLEED';
-bleedBtn.className = 'tool-btn'; // Reusing your existing CSS classes
-bleedBtn.style.marginLeft = '10px';
-bleedBtn.style.backgroundColor = '#2c2f33'; // Dark theme default
-bleedBtn.style.color = '#fff';
+bleedBtn.style.padding = '12px 24px';
+bleedBtn.style.backgroundColor = '#e6e2d8';
+bleedBtn.style.color = '#333';
+bleedBtn.style.border = 'none';
+bleedBtn.style.borderRadius = '5px';
+bleedBtn.style.fontWeight = 'bold';
+bleedBtn.style.cursor = 'pointer';
+bleedBtn.style.letterSpacing = '1px';
+bleedBtn.style.textTransform = 'uppercase';
+bleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
 
-// Inject it right next to the view toggle
-const viewToggleBtn = document.getElementById('view-toggle');
-if (viewToggleBtn && viewToggleBtn.parentElement) {
-    viewToggleBtn.parentElement.appendChild(bleedBtn);
-}
+// Add a simple hover effect inline
+bleedBtn.onmouseover = () => bleedBtn.style.backgroundColor = '#d1ccbe';
+bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
 
-// 3. Physics Engine Variables
+bleedBtnContainer.appendChild(bleedBtn);
+gridWrapper.parentNode.insertBefore(bleedBtnContainer, gridWrapper.nextSibling);
+
+// 4. Physics Engine Variables
 let bleedParticles = [];
 let bleedAnimationId;
 let bleedFrameCount = 0;
 const BLEED_MAX_FRAMES = 900; 
 
-// Base colors (Brightened with high transparency for rich multiply blending)
-const COLOR_SUCCESS_INK = 'rgba(80, 130, 240, 0.015)'; // Blue (Type 1)
-const COLOR_FAILURE_INK = 'rgba(230, 80, 100, 0.015)'; // Red (Type 2)
+const COLOR_SUCCESS_INK = 'rgba(80, 130, 240, 0.015)'; 
+const COLOR_FAILURE_INK = 'rgba(230, 80, 100, 0.015)'; 
 
 class BleedParticle {
     constructor(startX, startY, color, weightMultiplier, boundW, boundH) {
@@ -400,24 +417,17 @@ class BleedParticle {
         this.color = color;
         this.bounds = { w: boundW, h: boundH };
         
-        // Thicker lines for that rich fluid look
         this.size = Math.random() * 2.5 + 1.0; 
-        
-        // Smooth momentum steering
         this.angle = Math.random() * Math.PI * 2;
         this.speed = Math.random() * 0.8 + 0.3;
-        
         this.outwardBias = (Math.random() * 0.15) * weightMultiplier;
     }
 
     update() {
-        // Drift angle smoothly instead of harsh jitter
         this.angle += (Math.random() - 0.5) * 0.25;
-
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed;
 
-        // Radial soak pushing outward from the specific grid cell
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -427,7 +437,6 @@ class BleedParticle {
             this.y += (dy / dist) * this.outwardBias;
         }
 
-        // Keep ink within the grid bounds
         if (this.x < 0) this.x = 0;
         if (this.x > this.bounds.w) this.x = this.bounds.w;
         if (this.y < 0) this.y = 0;
@@ -447,40 +456,35 @@ function triggerLiveBleed() {
     bleedParticles = [];
     bleedFrameCount = 0;
     
-    // Size the canvas precisely to the current grid layout state
-    bleedCanvas.width = container.offsetWidth;
-    bleedCanvas.height = container.offsetHeight;
+    // Match the exact pixel dimensions of the wrapper to prevent coordinate skewing
+    bleedCanvas.width = gridWrapper.offsetWidth;
+    bleedCanvas.height = gridWrapper.offsetHeight;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     bCtx.globalCompositeOperation = 'multiply';
 
-    // Figure out which data to pull based on current view
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
 
-    // Scan the live DOM grid to find where ink should spawn
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const drops = dataSource[cell.dataset.id] || [];
         if (drops.length === 0) return;
 
-        // Find exact center of the cell relative to the grid container
+        // Calculate exact coordinates relative to the new wrapper
         const rect = cell.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const centerX = (rect.left - containerRect.left) + (rect.width / 2);
-        const centerY = (rect.top - containerRect.top) + (rect.height / 2);
+        const wrapperRect = gridWrapper.getBoundingClientRect();
+        const centerX = (rect.left - wrapperRect.left) + (rect.width / 2);
+        const centerY = (rect.top - wrapperRect.top) + (rect.height / 2);
 
         let successVol = 0;
         let failureVol = 0;
 
-        // Tally the live data inside this cell
         drops.forEach(d => {
             if (d.type === 1) successVol++;
             else if (d.type === 2) failureVol++;
         });
 
-        // Tweak volume so week view has enough ink, and stack view doesn't crash the browser
         const particleMultiplier = viewMode === 'aggregate' ? 40 : 150;
 
-        // Spawn Success (Blue) particles
         if (successVol > 0) {
             const sWeight = successVol > failureVol ? 1.4 : 0.8;
             for (let i = 0; i < (successVol * particleMultiplier); i++) {
@@ -488,7 +492,6 @@ function triggerLiveBleed() {
             }
         }
 
-        // Spawn Failure (Red) particles
         if (failureVol > 0) {
             const fWeight = failureVol > successVol ? 1.4 : 0.8;
             for (let i = 0; i < (failureVol * particleMultiplier); i++) {
@@ -519,4 +522,3 @@ document.getElementById('next-week').addEventListener('click', clearCanvas);
 document.getElementById('view-toggle').addEventListener('click', clearCanvas);
 
 bleedBtn.addEventListener('click', triggerLiveBleed);
-
