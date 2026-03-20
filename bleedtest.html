@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Virtue Ledger - Bleed Effect</title>
+    <title>Virtue Ledger - Particle Bleed</title>
     <style>
         body {
             background-color: #0b0f19;
-            color: #f0f0f0;
-            font-family: sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -19,9 +17,10 @@
             width: 400px;
             height: 500px;
             background-color: #f4f1ea;
-            border-radius: 10px;
-            overflow: hidden;
+            border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            /* Important: We need bounds so ink doesn't bleed off the card */
+            overflow: hidden; 
         }
 
         /* The dummy grid underneath */
@@ -37,10 +36,7 @@
             box-sizing: border-box;
         }
 
-        .grid-cell {
-            background-color: #f4f1ea;
-            border: 1px solid #e0ddd6;
-        }
+        .grid-cell { background-color: #f4f1ea; }
 
         /* The hidden canvas on top */
         #ink-canvas {
@@ -50,9 +46,7 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            opacity: 0;
-            transition: opacity 1s ease;
-            image-rendering: pixelated; /* Keeps the organic fractal look crisp */
+            z-index: 10;
         }
 
         button {
@@ -67,10 +61,7 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-
-        button:hover {
-            background-color: #d1ccbe;
-        }
+        button:hover { background-color: #d1ccbe; }
     </style>
 </head>
 <body>
@@ -85,7 +76,7 @@
             <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
         </div>
 
-        <canvas id="ink-canvas" width="200" height="250"></canvas>
+        <canvas id="ink-canvas" width="400" height="500"></canvas>
     </div>
 
     <button id="bleed-btn">Let it bleed</button>
@@ -93,127 +84,119 @@
     <script>
         const canvas = document.getElementById('ink-canvas');
         const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
         
-        // Two grids to handle the cellular automaton calculation
-        let currentGrid = new Float32Array(width * height * 2); // 2 channels: Red, Blue
-        let nextGrid = new Float32Array(width * height * 2);
+        // This makes overlapping translucent colors multiply into rich darks (red+blue=purple)
+        ctx.globalCompositeOperation = 'multiply';
 
-        // Dummy Data: Using recencyWeight to determine initial "volume" of ink
+        let particles = [];
+        let animationId;
+
+        // Extremely low opacity. The color builds up organically as particles overlap.
+        const COLOR_RED = 'rgba(180, 20, 40, 0.04)';
+        const COLOR_BLUE = 'rgba(20, 50, 160, 0.04)';
+
+        // Dummy Data: Weight now dictates how many thousands of particles are spawned
         const ledgerData = [
-            { type: 'red',  x: 50,  y: 60,  weight: 200 },  // Old temperance
-            { type: 'blue', x: 140, y: 90,  weight: 300 },  // Old courage
-            { type: 'blue', x: 100, y: 150, weight: 400 },  // Mid resolution
-            { type: 'blue', x: 160, y: 200, weight: 5000 }  // NEWEST: Massive weight to dominate
+            { color: COLOR_RED,  x: 80,  y: 80,  weight: 800 },   // Older
+            { color: COLOR_BLUE, x: 240, y: 140, weight: 1200 },  // Older
+            { color: COLOR_BLUE, x: 160, y: 220, weight: 1500 },  // Mid
+            { color: COLOR_BLUE, x: 280, y: 350, weight: 8000 }   // NEWEST: Massive dominance
         ];
 
-        function getIndex(x, y) {
-            return (y * width + x) * 2;
+        class InkParticle {
+            constructor(x, y, color, speedPower) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                
+                // Explode outward in a random 360 degree direction
+                const angle = Math.random() * Math.PI * 2;
+                
+                // Newer dots get pushed out faster and further
+                const speed = Math.random() * speedPower;
+                
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                
+                // How many frames this microscopic dot will keep moving
+                this.life = Math.random() * 80 + 20; 
+                this.size = Math.random() * 1.5 + 0.5;
+            }
+
+            update() {
+                // 1. PAPER FIBER SIMULATION: Use pseudo-random math based on coordinates to 
+                // push particles along invisible "grain" lines, creating dendrites.
+                const noiseAngle = (Math.sin(this.x * 0.05) + Math.cos(this.y * 0.05)) * Math.PI * 2;
+                this.vx += Math.cos(noiseAngle) * 0.08;
+                this.vy += Math.sin(noiseAngle) * 0.08;
+
+                // 2. CAPILLARY JITTER: Random chaotic movement to make edges fuzzy
+                this.vx += (Math.random() - 0.5) * 0.5;
+                this.vy += (Math.random() - 0.5) * 0.5;
+
+                // 3. FRICTION: The ink slows down as it soaks into the paper
+                this.vx *= 0.93;
+                this.vy *= 0.93;
+
+                // 4. MOVE: Update position
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // 5. SOAK IN: Particle gets smaller as it runs out of fluid
+                this.size *= 0.98;
+                this.life--;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
-        function dropInk() {
+        function triggerBleed() {
+            // Clear any old particles if button is clicked twice
+            particles = []; 
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Generate the particle swarms based on weight
             ledgerData.forEach(dot => {
-                const idx = getIndex(dot.x, dot.y);
-                if (dot.type === 'red') {
-                    currentGrid[idx] += dot.weight; 
-                } else {
-                    currentGrid[idx + 1] += dot.weight;
+                // Higher weight dots get a higher starting speed to push their boundaries further
+                const speedPower = dot.weight > 3000 ? 5 : 2.5; 
+                
+                for (let i = 0; i < dot.weight; i++) {
+                    particles.push(new InkParticle(dot.x, dot.y, dot.color, speedPower));
                 }
             });
-        }
 
-        function diffuse() {
-            // Diffusion rate and slight randomness for capillary branching
-            const dA = 0.8; 
-            
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
-                    const idx = getIndex(x, y);
-                    
-                    // Add micro-randomness to simulate paper fibers
-                    const fiberVariance = Math.random() * 0.2 + 0.9; 
-                    
-                    for (let c = 0; c < 2; c++) { // Calculate for Red (0) and Blue (1)
-                        const center = currentGrid[idx + c];
-                        const left   = currentGrid[getIndex(x - 1, y) + c];
-                        const right  = currentGrid[getIndex(x + 1, y) + c];
-                        const up     = currentGrid[getIndex(x, y - 1) + c];
-                        const down   = currentGrid[getIndex(x, y + 1) + c];
-                        
-                        // Standard discrete Laplacian operator for diffusion
-                        const laplace = (left + right + up + down) - (4 * center);
-                        
-                        nextGrid[idx + c] = center + (dA * laplace * fiberVariance);
-                        
-                        // Prevent negative ink
-                        if (nextGrid[idx + c] < 0) nextGrid[idx + c] = 0;
-                    }
-                }
-            }
-            
-            // Swap buffers
-            let temp = currentGrid;
-            currentGrid = nextGrid;
-            nextGrid = temp;
-        }
-
-        function draw() {
-            const imageData = ctx.createImageData(width, height);
-            const data = imageData.data;
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const gridIdx = getIndex(x, y);
-                    const imgIdx = (y * width + x) * 4;
-
-                    const rVal = currentGrid[gridIdx];
-                    const bVal = currentGrid[gridIdx + 1];
-
-                    // Map ink volume to visible colors
-                    // Deep red: #8B0000 | Deep blue: #00008B
-                    
-                    let r = 244; // Paper base color
-                    let g = 241;
-                    let b = 234;
-                    let a = 0;   // Transparent until ink hits it
-
-                    if (rVal > 0.1 || bVal > 0.1) {
-                        a = 255; // Ink makes it opaque
-                        
-                        // Blend the colors based on which ink is dominant
-                        if (rVal > bVal) {
-                            r = Math.max(139 - (rVal * 2), 50); // Darkens as it pools
-                            g = 0;
-                            b = 0;
-                        } else {
-                            r = 0;
-                            g = 0;
-                            b = Math.max(139 - (bVal * 2), 50);
-                        }
-                    }
-
-                    data[imgIdx] = r;
-                    data[imgIdx + 1] = g;
-                    data[imgIdx + 2] = b;
-                    data[imgIdx + 3] = a;
-                }
-            }
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        let animationId;
-        function animate() {
-            diffuse();
-            draw();
-            animationId = requestAnimationFrame(animate);
-        }
-
-        document.getElementById('bleed-btn').addEventListener('click', () => {
-            canvas.style.opacity = 1;
-            dropInk();
             if (!animationId) animate();
-        });
+        }
+
+        function animate() {
+            // Note: We deliberately DO NOT clear the canvas here. 
+            // The magic is letting the transparent dots draw over each other frame after frame.
+            
+            let aliveParticles = 0;
+
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                if (p.life > 0) {
+                    p.update();
+                    p.draw();
+                    aliveParticles++;
+                }
+            }
+
+            // Keep animating until the ink "dries" (all particles die)
+            if (aliveParticles > 0) {
+                animationId = requestAnimationFrame(animate);
+            } else {
+                animationId = null; // Animation finished
+            }
+        }
+
+        document.getElementById('bleed-btn').addEventListener('click', triggerBleed);
     </script>
 </body>
 </html>
