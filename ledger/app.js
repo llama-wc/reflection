@@ -351,14 +351,12 @@ initializeSession();
 // --- FLUID BLEED VISUALIZATION ENGINE ---
 // ==========================================
 
-// 1. Fix Layout: Wrap the grid so the canvas locks perfectly to its exact dimensions
 const gridWrapper = document.createElement('div');
 gridWrapper.style.position = 'relative';
 gridWrapper.style.width = '100%';
 container.parentNode.insertBefore(gridWrapper, container);
 gridWrapper.appendChild(container);
 
-// 2. Setup the Overlay Canvas
 const bleedCanvas = document.createElement('canvas');
 bleedCanvas.id = 'ink-canvas';
 bleedCanvas.style.position = 'absolute';
@@ -367,12 +365,11 @@ bleedCanvas.style.left = '0';
 bleedCanvas.style.width = '100%';
 bleedCanvas.style.height = '100%';
 bleedCanvas.style.pointerEvents = 'none'; 
-bleedCanvas.style.zIndex = '10'; // Over grid, under UI
+bleedCanvas.style.zIndex = '10'; 
 gridWrapper.appendChild(bleedCanvas);
 
 const bCtx = bleedCanvas.getContext('2d');
 
-// 3. Setup the Trigger Button (Centered beneath the chart)
 const bleedBtnContainer = document.createElement('div');
 bleedBtnContainer.style.display = 'flex';
 bleedBtnContainer.style.justifyContent = 'center';
@@ -400,50 +397,69 @@ bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
 bleedBtnContainer.appendChild(bleedBtn);
 gridWrapper.parentNode.insertBefore(bleedBtnContainer, gridWrapper.nextSibling);
 
-// 4. Physics Engine Variables & State
+// --- State & Physics ---
 let bleedParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Hyper-realistic deep ink colors
-const COLOR_SUCCESS_INK = 'rgba(15, 35, 110, 0.02)'; // Deep Navy
-const COLOR_FAILURE_INK = 'rgba(140, 15, 25, 0.02)';  // Deep Crimson
+// Brighter base colors. When these multiply repeatedly, they will pool 
+// into rich navy and deep crimson, but take much longer to hit black.
+const COLOR_SUCCESS_INK = 'rgba(80, 140, 240, 0.015)'; 
+const COLOR_FAILURE_INK = 'rgba(240, 80, 100, 0.015)';  
 
 class BleedParticle {
     constructor(startX, startY, color, boundW, boundH) {
+        this.originX = startX;
+        this.originY = startY;
         this.x = startX;
         this.y = startY;
         this.color = color;
         this.bounds = { w: boundW, h: boundH };
         
-        // Slightly larger, softer particles for pooling
-        this.size = Math.random() * 3.0 + 1.5; 
-        this.angle = Math.random() * Math.PI * 2;
+        // Microscopic sizes for soft, cloud-like diffusion (no thick lines)
+        this.size = Math.random() * 1.5 + 0.5; 
         
-        // Very slow movement to simulate thick fluid soaking into paper
-        this.speed = Math.random() * 0.4 + 0.1;
+        // Particles "dry up" and stop drawing after a certain amount of time
+        // This prevents the origin points from being pounded into solid black
+        this.life = Math.floor(Math.random() * 800) + 400; 
+        
+        // Pure capillary action speed
+        this.speed = Math.random() * 1.5 + 0.5; 
     }
 
     update() {
-        // Organic wandering (Capillary action) rather than straight outward lines
-        this.angle += (Math.random() - 0.5) * 0.8; 
-        
-        this.x += Math.cos(this.angle) * this.speed;
-        this.y += Math.sin(this.angle) * this.speed;
+        if (this.life <= 0) return;
 
-        // Keep ink within the grid wrapper bounds
+        // 1. Pure Brownian Motion (Jitter). This creates the fuzzy, soaking edge.
+        this.x += (Math.random() - 0.5) * this.speed;
+        this.y += (Math.random() - 0.5) * this.speed;
+
+        // 2. Very gentle outward pressure from the center
+        const dx = this.x - this.originX;
+        const dy = this.y - this.originY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 0) {
+            // Push outwards, but weakly, so it looks like it's wicking through paper
+            this.x += (dx / dist) * 0.15;
+            this.y += (dy / dist) * 0.15;
+        }
+
+        // Keep within bounds
         if (this.x < 0) this.x = 0;
         if (this.x > this.bounds.w) this.x = this.bounds.w;
         if (this.y < 0) this.y = 0;
         if (this.y > this.bounds.h) this.y = this.bounds.h;
+        
+        this.life--;
     }
 
     draw() {
+        if (this.life <= 0) return;
         bCtx.fillStyle = this.color;
-        bCtx.beginPath();
-        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        bCtx.fill();
+        // fillRect is much better than arc for rendering tiny "pores" of ink
+        bCtx.fillRect(this.x, this.y, this.size, this.size);
     }
 }
 
@@ -464,7 +480,6 @@ function initBleed() {
         const rect = cell.getBoundingClientRect();
         const wrapperRect = gridWrapper.getBoundingClientRect();
 
-        // Spawn particles from the EXACT coordinates of each individual dot
         drops.forEach(d => {
             let posX = d.x !== undefined ? d.x : 50;
             let posY = d.y !== undefined ? d.y : 25;
@@ -474,11 +489,11 @@ function initBleed() {
                 posY = 10 + (posY % 8);
             }
 
-            // Map the dot's local cell coordinates to the canvas overlay
             const originX = (rect.left - wrapperRect.left) + posX;
             const originY = (rect.top - wrapperRect.top) + posY;
 
-            const particleMultiplier = viewMode === 'aggregate' ? 10 : 80;
+            // Increased particle count since they are smaller and die off
+            const particleMultiplier = viewMode === 'aggregate' ? 40 : 250;
             const inkColor = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
 
             for (let i = 0; i < particleMultiplier; i++) {
@@ -491,35 +506,43 @@ function initBleed() {
 function animateBleed() {
     if (!isBleeding) return;
     
+    let activeParticles = 0;
     for (let i = 0; i < bleedParticles.length; i++) {
         bleedParticles[i].update();
         bleedParticles[i].draw();
+        if (bleedParticles[i].life > 0) activeParticles++;
     }
-    bleedAnimationId = requestAnimationFrame(animateBleed);
+    
+    // Automatically stop asking the browser to animate once all ink has "dried"
+    if (activeParticles > 0) {
+        bleedAnimationId = requestAnimationFrame(animateBleed);
+    } else {
+        isBleeding = false;
+        bleedBtn.textContent = 'INK DRIED (RESET)';
+    }
 }
 
 function toggleBleed() {
     if (!hasStartedBleeding) {
-        // First click: Initialize and Play
         initBleed();
         isBleeding = true;
         hasStartedBleeding = true;
         bleedBtn.textContent = 'PAUSE BLEEDING';
         animateBleed();
     } else if (isBleeding) {
-        // Currently playing: Pause
         isBleeding = false;
         cancelAnimationFrame(bleedAnimationId);
         bleedBtn.textContent = 'RESUME BLEEDING';
+    } else if (bleedBtn.textContent === 'INK DRIED (RESET)') {
+        resetBleedState();
+        toggleBleed(); // Automatically restart
     } else {
-        // Currently paused: Resume
         isBleeding = true;
         bleedBtn.textContent = 'PAUSE BLEEDING';
         animateBleed();
     }
 }
 
-// Reset the canvas and button state completely if the user changes weeks, views, or edits the grid
 const resetBleedState = () => {
     isBleeding = false;
     hasStartedBleeding = false;
@@ -531,6 +554,6 @@ const resetBleedState = () => {
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
-container.addEventListener('click', resetBleedState); // Resets if a new drop is added
+container.addEventListener('click', resetBleedState); 
 
 bleedBtn.addEventListener('click', toggleBleed);
