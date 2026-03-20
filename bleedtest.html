@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Virtue Ledger - Particle Bleed</title>
+    <title>Virtue Ledger - Infinite Particle Bleed</title>
     <style>
         body {
             background-color: #0b0f19;
@@ -10,6 +10,7 @@
             flex-direction: column;
             align-items: center;
             padding: 40px;
+            font-family: sans-serif;
         }
 
         .ledger-container {
@@ -19,11 +20,9 @@
             background-color: #f4f1ea;
             border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            /* Important: We need bounds so ink doesn't bleed off the card */
             overflow: hidden; 
         }
 
-        /* The dummy grid underneath */
         .grid-layer {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -38,7 +37,6 @@
 
         .grid-cell { background-color: #f4f1ea; }
 
-        /* The hidden canvas on top */
         #ink-canvas {
             position: absolute;
             top: 0;
@@ -49,8 +47,13 @@
             z-index: 10;
         }
 
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
         button {
-            margin-top: 20px;
             padding: 12px 24px;
             background-color: #e6e2d8;
             color: #333;
@@ -60,8 +63,10 @@
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 1px;
+            transition: background-color 0.2s;
         }
         button:hover { background-color: #d1ccbe; }
+        button.primary { background-color: #c9c1ac; }
     </style>
 </head>
 <body>
@@ -79,29 +84,29 @@
         <canvas id="ink-canvas" width="400" height="500"></canvas>
     </div>
 
-    <button id="bleed-btn">Let it bleed</button>
+    <div class="button-group">
+        <button id="randomize-btn">Randomize Data</button>
+        <button id="bleed-btn" class="primary">Let it bleed</button>
+    </div>
 
     <script>
         const canvas = document.getElementById('ink-canvas');
         const ctx = canvas.getContext('2d');
         
-        // This makes overlapping translucent colors multiply into rich darks (red+blue=purple)
-        ctx.globalCompositeOperation = 'multiply';
-
         let particles = [];
         let animationId;
+        let frameCount = 0;
+        const MAX_FRAMES = 1000; // Stops the animation after ~16 seconds to save CPU
 
-        // Extremely low opacity. The color builds up organically as particles overlap.
-        const COLOR_RED = 'rgba(180, 20, 40, 0.04)';
-        const COLOR_BLUE = 'rgba(20, 50, 160, 0.04)';
+        // Solid colors for the initial state
+        const COLOR_RED_SOLID = 'rgba(180, 20, 40, 0.9)';
+        const COLOR_BLUE_SOLID = 'rgba(20, 50, 160, 0.9)';
+        
+        // Transparent colors for the particle bleed
+        const COLOR_RED_INK = 'rgba(180, 20, 40, 0.04)';
+        const COLOR_BLUE_INK = 'rgba(20, 50, 160, 0.04)';
 
-        // Dummy Data: Weight now dictates how many thousands of particles are spawned
-        const ledgerData = [
-            { color: COLOR_RED,  x: 80,  y: 80,  weight: 800 },   // Older
-            { color: COLOR_BLUE, x: 240, y: 140, weight: 1200 },  // Older
-            { color: COLOR_BLUE, x: 160, y: 220, weight: 1500 },  // Mid
-            { color: COLOR_BLUE, x: 280, y: 350, weight: 8000 }   // NEWEST: Massive dominance
-        ];
+        let ledgerData = [];
 
         class InkParticle {
             constructor(x, y, color, speedPower) {
@@ -109,42 +114,40 @@
                 this.y = y;
                 this.color = color;
                 
-                // Explode outward in a random 360 degree direction
+                // Explode outward
                 const angle = Math.random() * Math.PI * 2;
-                
-                // Newer dots get pushed out faster and further
-                const speed = Math.random() * speedPower;
+                const speed = Math.random() * speedPower + 0.5;
                 
                 this.vx = Math.cos(angle) * speed;
                 this.vy = Math.sin(angle) * speed;
-                
-                // How many frames this microscopic dot will keep moving
-                this.life = Math.random() * 80 + 20; 
                 this.size = Math.random() * 1.5 + 0.5;
             }
 
             update() {
-                // 1. PAPER FIBER SIMULATION: Use pseudo-random math based on coordinates to 
-                // push particles along invisible "grain" lines, creating dendrites.
-                const noiseAngle = (Math.sin(this.x * 0.05) + Math.cos(this.y * 0.05)) * Math.PI * 2;
-                this.vx += Math.cos(noiseAngle) * 0.08;
-                this.vy += Math.sin(noiseAngle) * 0.08;
+                // Noise vector to create organic paper fiber paths
+                const noiseAngle = (Math.sin(this.x * 0.02) + Math.cos(this.y * 0.02)) * Math.PI * 2;
+                this.vx += Math.cos(noiseAngle) * 0.15;
+                this.vy += Math.sin(noiseAngle) * 0.15;
 
-                // 2. CAPILLARY JITTER: Random chaotic movement to make edges fuzzy
+                // Random chaotic wander to keep them spreading
                 this.vx += (Math.random() - 0.5) * 0.5;
                 this.vy += (Math.random() - 0.5) * 0.5;
 
-                // 3. FRICTION: The ink slows down as it soaks into the paper
-                this.vx *= 0.93;
-                this.vy *= 0.93;
+                // Cap the speed so they don't jump too far between frames
+                const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (currentSpeed > 2.5) {
+                    this.vx = (this.vx / currentSpeed) * 2.5;
+                    this.vy = (this.vy / currentSpeed) * 2.5;
+                }
 
-                // 4. MOVE: Update position
                 this.x += this.vx;
                 this.y += this.vy;
-                
-                // 5. SOAK IN: Particle gets smaller as it runs out of fluid
-                this.size *= 0.98;
-                this.life--;
+
+                // Bounce off the edges to keep filling the canvas
+                if (this.x < 0) { this.x = 0; this.vx *= -1; }
+                if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -1; }
+                if (this.y < 0) { this.y = 0; this.vy *= -1; }
+                if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -1; }
             }
 
             draw() {
@@ -155,48 +158,79 @@
             }
         }
 
-        function triggerBleed() {
-            // Clear any old particles if button is clicked twice
-            particles = []; 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function generateRandomData() {
+            if (animationId) cancelAnimationFrame(animationId);
+            
+            ledgerData = [];
+            const numDots = Math.floor(Math.random() * 3) + 3; // Generate 3 to 5 dots
+            
+            for(let i=0; i<numDots; i++) {
+                ledgerData.push({
+                    type: Math.random() > 0.5 ? 'red' : 'blue',
+                    // Keep them slightly away from the absolute edge
+                    x: Math.random() * (canvas.width - 80) + 40,
+                    y: Math.random() * (canvas.height - 80) + 40,
+                    weight: Math.random() * 600 + 400 // Base weights between 400 and 1000
+                });
+            }
+            
+            // Force the VERY LAST item in the array to be the massive dominant weight
+            ledgerData[ledgerData.length - 1].weight = 6000;
+            
+            drawInitialState();
+        }
 
-            // Generate the particle swarms based on weight
+        function drawInitialState() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Use normal overlapping for the solid starting dots
+            ctx.globalCompositeOperation = 'source-over';
+            
             ledgerData.forEach(dot => {
-                // Higher weight dots get a higher starting speed to push their boundaries further
-                const speedPower = dot.weight > 3000 ? 5 : 2.5; 
+                ctx.fillStyle = dot.type === 'red' ? COLOR_RED_SOLID : COLOR_BLUE_SOLID;
+                ctx.beginPath();
+                ctx.arc(dot.x, dot.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function triggerBleed() {
+            if (animationId) cancelAnimationFrame(animationId);
+            particles = [];
+            frameCount = 0;
+            
+            // Switch to multiply for that rich, dark ink blending
+            ctx.globalCompositeOperation = 'multiply';
+
+            ledgerData.forEach(dot => {
+                const inkColor = dot.type === 'red' ? COLOR_RED_INK : COLOR_BLUE_INK;
+                const speedPower = dot.weight > 3000 ? 4 : 1.5; 
                 
                 for (let i = 0; i < dot.weight; i++) {
-                    particles.push(new InkParticle(dot.x, dot.y, dot.color, speedPower));
+                    particles.push(new InkParticle(dot.x, dot.y, inkColor, speedPower));
                 }
             });
 
-            if (!animationId) animate();
+            animate();
         }
 
         function animate() {
-            // Note: We deliberately DO NOT clear the canvas here. 
-            // The magic is letting the transparent dots draw over each other frame after frame.
-            
-            let aliveParticles = 0;
-
             for (let i = 0; i < particles.length; i++) {
-                let p = particles[i];
-                if (p.life > 0) {
-                    p.update();
-                    p.draw();
-                    aliveParticles++;
-                }
+                particles[i].update();
+                particles[i].draw();
             }
 
-            // Keep animating until the ink "dries" (all particles die)
-            if (aliveParticles > 0) {
+            frameCount++;
+            if (frameCount < MAX_FRAMES) {
                 animationId = requestAnimationFrame(animate);
-            } else {
-                animationId = null; // Animation finished
             }
         }
 
+        // Event Listeners
+        document.getElementById('randomize-btn').addEventListener('click', generateRandomData);
         document.getElementById('bleed-btn').addEventListener('click', triggerBleed);
+
+        // Initialize with a random setup on load
+        generateRandomData();
     </script>
 </body>
 </html>
