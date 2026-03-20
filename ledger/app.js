@@ -344,3 +344,179 @@ themeBtn.addEventListener('click', () => {
 });
 
 initializeSession();
+
+
+// ==========================================
+// --- FLUID BLEED VISUALIZATION ENGINE ---
+// ==========================================
+
+// 1. Setup the Overlay Canvas
+const bleedCanvas = document.createElement('canvas');
+bleedCanvas.id = 'ink-canvas';
+bleedCanvas.style.position = 'absolute';
+bleedCanvas.style.top = '0';
+bleedCanvas.style.left = '0';
+bleedCanvas.style.pointerEvents = 'none'; // Lets you click through to the grid
+bleedCanvas.style.zIndex = '100';
+bleedCanvas.style.transition = 'opacity 0.5s ease';
+
+// Ensure the grid's parent is relative so the canvas perfectly overlays it
+container.parentElement.style.position = 'relative';
+container.parentElement.appendChild(bleedCanvas);
+
+const bCtx = bleedCanvas.getContext('2d');
+
+// 2. Setup the Trigger Button
+const bleedBtn = document.createElement('button');
+bleedBtn.id = 'bleed-btn';
+bleedBtn.textContent = 'LET IT BLEED';
+bleedBtn.className = 'tool-btn'; // Reusing your existing CSS classes
+bleedBtn.style.marginLeft = '10px';
+bleedBtn.style.backgroundColor = '#2c2f33'; // Dark theme default
+bleedBtn.style.color = '#fff';
+
+// Inject it right next to the view toggle
+const viewToggleBtn = document.getElementById('view-toggle');
+if (viewToggleBtn && viewToggleBtn.parentElement) {
+    viewToggleBtn.parentElement.appendChild(bleedBtn);
+}
+
+// 3. Physics Engine Variables
+let bleedParticles = [];
+let bleedAnimationId;
+let bleedFrameCount = 0;
+const BLEED_MAX_FRAMES = 900; 
+
+// Base colors (Brightened with high transparency for rich multiply blending)
+const COLOR_SUCCESS_INK = 'rgba(80, 130, 240, 0.015)'; // Blue (Type 1)
+const COLOR_FAILURE_INK = 'rgba(230, 80, 100, 0.015)'; // Red (Type 2)
+
+class BleedParticle {
+    constructor(startX, startY, color, weightMultiplier, boundW, boundH) {
+        this.originX = startX;
+        this.originY = startY;
+        this.x = startX;
+        this.y = startY;
+        this.color = color;
+        this.bounds = { w: boundW, h: boundH };
+        
+        // Thicker lines for that rich fluid look
+        this.size = Math.random() * 2.5 + 1.0; 
+        
+        // Smooth momentum steering
+        this.angle = Math.random() * Math.PI * 2;
+        this.speed = Math.random() * 0.8 + 0.3;
+        
+        this.outwardBias = (Math.random() * 0.15) * weightMultiplier;
+    }
+
+    update() {
+        // Drift angle smoothly instead of harsh jitter
+        this.angle += (Math.random() - 0.5) * 0.25;
+
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+
+        // Radial soak pushing outward from the specific grid cell
+        const dx = this.x - this.originX;
+        const dy = this.y - this.originY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 1) {
+            this.x += (dx / dist) * this.outwardBias;
+            this.y += (dy / dist) * this.outwardBias;
+        }
+
+        // Keep ink within the grid bounds
+        if (this.x < 0) this.x = 0;
+        if (this.x > this.bounds.w) this.x = this.bounds.w;
+        if (this.y < 0) this.y = 0;
+        if (this.y > this.bounds.h) this.y = this.bounds.h;
+    }
+
+    draw() {
+        bCtx.fillStyle = this.color;
+        bCtx.beginPath();
+        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        bCtx.fill();
+    }
+}
+
+function triggerLiveBleed() {
+    if (bleedAnimationId) cancelAnimationFrame(bleedAnimationId);
+    bleedParticles = [];
+    bleedFrameCount = 0;
+    
+    // Size the canvas precisely to the current grid layout state
+    bleedCanvas.width = container.offsetWidth;
+    bleedCanvas.height = container.offsetHeight;
+    
+    bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+    bCtx.globalCompositeOperation = 'multiply';
+
+    // Figure out which data to pull based on current view
+    const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
+
+    // Scan the live DOM grid to find where ink should spawn
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        const drops = dataSource[cell.dataset.id] || [];
+        if (drops.length === 0) return;
+
+        // Find exact center of the cell relative to the grid container
+        const rect = cell.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const centerX = (rect.left - containerRect.left) + (rect.width / 2);
+        const centerY = (rect.top - containerRect.top) + (rect.height / 2);
+
+        let successVol = 0;
+        let failureVol = 0;
+
+        // Tally the live data inside this cell
+        drops.forEach(d => {
+            if (d.type === 1) successVol++;
+            else if (d.type === 2) failureVol++;
+        });
+
+        // Tweak volume so week view has enough ink, and stack view doesn't crash the browser
+        const particleMultiplier = viewMode === 'aggregate' ? 40 : 150;
+
+        // Spawn Success (Blue) particles
+        if (successVol > 0) {
+            const sWeight = successVol > failureVol ? 1.4 : 0.8;
+            for (let i = 0; i < (successVol * particleMultiplier); i++) {
+                bleedParticles.push(new BleedParticle(centerX, centerY, COLOR_SUCCESS_INK, sWeight, bleedCanvas.width, bleedCanvas.height));
+            }
+        }
+
+        // Spawn Failure (Red) particles
+        if (failureVol > 0) {
+            const fWeight = failureVol > successVol ? 1.4 : 0.8;
+            for (let i = 0; i < (failureVol * particleMultiplier); i++) {
+                bleedParticles.push(new BleedParticle(centerX, centerY, COLOR_FAILURE_INK, fWeight, bleedCanvas.width, bleedCanvas.height));
+            }
+        }
+    });
+
+    animateBleed();
+}
+
+function animateBleed() {
+    for (let i = 0; i < bleedParticles.length; i++) {
+        bleedParticles[i].update();
+        bleedParticles[i].draw();
+    }
+
+    bleedFrameCount++;
+    if (bleedFrameCount < BLEED_MAX_FRAMES) {
+        bleedAnimationId = requestAnimationFrame(animateBleed);
+    }
+}
+
+// Clear the canvas automatically if the user changes weeks or views
+const clearCanvas = () => bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+document.getElementById('prev-week').addEventListener('click', clearCanvas);
+document.getElementById('next-week').addEventListener('click', clearCanvas);
+document.getElementById('view-toggle').addEventListener('click', clearCanvas);
+
+bleedBtn.addEventListener('click', triggerLiveBleed);
+
