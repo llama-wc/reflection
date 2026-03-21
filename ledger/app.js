@@ -1,4 +1,4 @@
-Okay let's bring it all together. I don't want to change anything regarding what we have already built. I just want the let it bleed effect to happen on top of what we have here
+
 
 // --- CLOUDFLARE CONFIGURATION ---
 let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
