@@ -347,28 +347,28 @@ initializeSession();
 
 
 
-
 // ==========================================
 // --- FLUID BLEED VISUALIZATION ENGINE ---
 // ==========================================
 
-// 1. Embed Canvas INSIDE the scrollable grid container
-container.style.position = 'relative'; // Anchor for the absolute canvas
+container.style.position = 'relative';
 
-const bleedCanvas = document.createElement('canvas');
-bleedCanvas.id = 'ink-canvas';
-bleedCanvas.style.position = 'absolute';
-bleedCanvas.style.top = '0';
-bleedCanvas.style.left = '0';
-bleedCanvas.style.width = '100%'; 
-bleedCanvas.style.height = '100%';
-bleedCanvas.style.pointerEvents = 'none'; 
-bleedCanvas.style.zIndex = '10'; // Over the grid background, under the dots
-container.appendChild(bleedCanvas);
+let bleedCanvas = document.getElementById('ink-canvas');
+if (!bleedCanvas) {
+    bleedCanvas = document.createElement('canvas');
+    bleedCanvas.id = 'ink-canvas';
+    bleedCanvas.style.position = 'absolute';
+    bleedCanvas.style.top = '0';
+    bleedCanvas.style.left = '0';
+    bleedCanvas.style.width = '100%'; 
+    bleedCanvas.style.height = '100%';
+    bleedCanvas.style.pointerEvents = 'none'; 
+    bleedCanvas.style.zIndex = '10'; 
+    container.appendChild(bleedCanvas);
+}
 
-const bCtx = bleedCanvas.getContext('2d', { alpha: true });
+const bCtx = bleedCanvas.getContext('2d');
 
-// 2. Setup the Trigger Button (Centered beneath the chart)
 let bleedBtnContainer = document.getElementById('bleed-btn-container');
 if (!bleedBtnContainer) {
     bleedBtnContainer = document.createElement('div');
@@ -378,40 +378,39 @@ if (!bleedBtnContainer) {
     bleedBtnContainer.style.marginTop = '20px';
     bleedBtnContainer.style.marginBottom = '40px';
 
-    const bleedBtn = document.createElement('button');
-    bleedBtn.id = 'bleed-btn';
-    bleedBtn.textContent = 'LET IT BLEED';
-    bleedBtn.style.padding = '12px 24px';
-    bleedBtn.style.backgroundColor = '#e6e2d8';
-    bleedBtn.style.color = '#333';
-    bleedBtn.style.border = 'none';
-    bleedBtn.style.borderRadius = '5px';
-    bleedBtn.style.fontWeight = 'bold';
-    bleedBtn.style.cursor = 'pointer';
-    bleedBtn.style.letterSpacing = '1px';
-    bleedBtn.style.textTransform = 'uppercase';
-    bleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-    bleedBtn.style.width = '220px';
+    const newBleedBtn = document.createElement('button');
+    newBleedBtn.id = 'bleed-btn';
+    newBleedBtn.textContent = 'LET IT BLEED';
+    newBleedBtn.style.padding = '12px 24px';
+    newBleedBtn.style.backgroundColor = '#e6e2d8';
+    newBleedBtn.style.color = '#333';
+    newBleedBtn.style.border = 'none';
+    newBleedBtn.style.borderRadius = '5px';
+    newBleedBtn.style.fontWeight = 'bold';
+    newBleedBtn.style.cursor = 'pointer';
+    newBleedBtn.style.letterSpacing = '1px';
+    newBleedBtn.style.textTransform = 'uppercase';
+    newBleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    newBleedBtn.style.width = '220px';
 
-    bleedBtn.onmouseover = () => bleedBtn.style.backgroundColor = '#d1ccbe';
-    bleedBtn.onmouseout = () => bleedBtn.style.backgroundColor = '#e6e2d8';
+    newBleedBtn.onmouseover = () => newBleedBtn.style.backgroundColor = '#d1ccbe';
+    newBleedBtn.onmouseout = () => newBleedBtn.style.backgroundColor = '#e6e2d8';
 
-    bleedBtnContainer.appendChild(bleedBtn);
+    bleedBtnContainer.appendChild(newBleedBtn);
     container.parentNode.insertBefore(bleedBtnContainer, container.nextSibling);
 }
 
 const bleedBtn = document.getElementById('bleed-btn');
 
-// 3. State & Physics
+// --- State & Physics ---
 let bleedParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Hyper-realistic heavy ink colors (Deep Navy & Rich Crimson)
-// Using higher opacity for a wetter, thicker look
-const COLOR_SUCCESS_INK = 'rgba(15, 45, 120, 0.06)'; 
-const COLOR_FAILURE_INK = 'rgba(150, 15, 30, 0.06)';
+// 'source-over' requires extremely low opacity so it pools like real liquid
+const COLOR_SUCCESS_INK = 'rgba(20, 50, 140, 0.035)'; 
+const COLOR_FAILURE_INK = 'rgba(160, 20, 40, 0.035)';
 
 class BleedParticle {
     constructor(startX, startY, color, boundW, boundH, isDominant) {
@@ -422,36 +421,37 @@ class BleedParticle {
         this.color = color;
         this.bounds = { w: boundW, h: boundH };
         
-        // Dominant ink gets slightly thicker particles
-        this.size = (Math.random() * 3.5 + 1.5) + (isDominant ? 1.0 : 0); 
+        // Varying sizes to simulate different paper fiber depths
+        this.size = Math.random() * 2.5 + 1.0; 
         
-        // Very slow movement so the ink pools heavily before spreading
-        this.speed = Math.random() * 0.5 + 0.1; 
-        
+        // Very slow movement so ink stays close to the origin point
+        this.speed = Math.random() * 0.4 + 0.1; 
         this.angle = Math.random() * Math.PI * 2;
         
-        // Shorter life prevents turning to absolute black
-        this.life = Math.floor(Math.random() * 250) + 100; 
-        
+        // Lifespan prevents the black hole effect
+        this.life = Math.floor(Math.random() * 250) + 150; 
         this.isDominant = isDominant;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        this.angle += (Math.random() - 0.5) * 1.2; 
+        // Capillary jitter
+        this.angle += (Math.random() - 0.5) * 1.5; 
         
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed;
 
-        // Push outward gently from the exact point of the dot
+        // Gravity / Bleed direction (ink naturally wants to pull slightly downward)
+        this.y += 0.15; 
+
+        // Gentle outward soak
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         if (dist > 0) {
-            // Dominant ink has a slightly stronger push to overtake borders
-            const pushStr = this.isDominant ? 0.25 : 0.15;
+            const pushStr = this.isDominant ? 0.2 : 0.1;
             this.x += (dx / dist) * pushStr;
             this.y += (dy / dist) * pushStr;
         }
@@ -468,21 +468,19 @@ class BleedParticle {
         if (this.life <= 0) return;
         bCtx.fillStyle = this.color;
         bCtx.beginPath();
-        // Drawing arcs creates a much smoother liquid look than rectangles
         bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         bCtx.fill();
     }
 }
 
 function initBleed() {
-    // Lock the canvas strictly to the inner scrollable area
     bleedCanvas.width = container.scrollWidth;
     bleedCanvas.height = container.scrollHeight;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     
-    // 'darken' composite creates deep, rich pools without washing out colors
-    bCtx.globalCompositeOperation = 'darken';
+    // Natively stacks opacity without relying on the background color
+    bCtx.globalCompositeOperation = 'source-over';
     bleedParticles = [];
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
@@ -494,7 +492,6 @@ function initBleed() {
 
         const rect = cell.getBoundingClientRect();
 
-        // Calculate volume to determine dominance
         let successVol = 0;
         let failureVol = 0;
         drops.forEach(d => { if (d.type === 1) successVol++; else if (d.type === 2) failureVol++; });
@@ -509,15 +506,14 @@ function initBleed() {
                 posY = 10 + (posY % 8);
             }
 
-            // Factor in current scroll position so coordinates map perfectly inside the cell
             const originX = (rect.left - containerRect.left) + container.scrollLeft + posX;
             const originY = (rect.top - containerRect.top) + container.scrollTop + posY;
 
             const inkColor = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
             
-            // Dominant color gets 50% more volume to physically overpower the space
-            const baseMultiplier = viewMode === 'aggregate' ? 15 : 100;
+            // Generate heavy particle volumes to create rich color
+            const baseMultiplier = viewMode === 'aggregate' ? 15 : 120;
             const finalCount = isDominant ? baseMultiplier * 1.5 : baseMultiplier * 0.7;
 
             for (let i = 0; i < finalCount; i++) {
@@ -526,7 +522,7 @@ function initBleed() {
         });
     });
 
-    // CRITICAL FIX: Sort the array so dominant particles render LAST, sitting on top
+    // Ensure dominant ink is rendered last, so it physically pools on top
     bleedParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
@@ -561,7 +557,12 @@ function toggleBleed() {
         bleedBtn.textContent = 'RESUME BLEEDING';
     } else if (bleedBtn.textContent === 'INK DRIED (RESET)') {
         resetBleedState();
-        toggleBleed();
+        // Immediately start a fresh bleed
+        initBleed();
+        isBleeding = true;
+        hasStartedBleeding = true;
+        bleedBtn.textContent = 'PAUSE BLEEDING';
+        animateBleed();
     } else {
         isBleeding = true;
         bleedBtn.textContent = 'PAUSE BLEEDING';
@@ -577,9 +578,12 @@ const resetBleedState = () => {
     bleedBtn.textContent = 'LET IT BLEED';
 };
 
+// Reset events
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
 container.addEventListener('click', resetBleedState); 
 
+// Ensure we don't attach multiple event listeners if the script is re-run
+bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
