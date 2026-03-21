@@ -1,4 +1,4 @@
-// --- CLOUDFLARE CONFIGURATION ---
+⁸// --- CLOUDFLARE CONFIGURATION ---
 let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
 if (!RAW_URL.startsWith('http')) RAW_URL = 'https://' + RAW_URL;
 if (RAW_URL.endsWith('/')) RAW_URL = RAW_URL.slice(0, -1);
@@ -347,8 +347,10 @@ initializeSession();
 
 
 
+
+
 // ==========================================
-// --- FLUID BLEED VISUALIZATION ENGINE ---
+// --- STOCHASTIC FLUID DIFFUSION ENGINE ---
 // ==========================================
 
 container.style.position = 'relative';
@@ -367,7 +369,7 @@ if (!bleedCanvas) {
     container.appendChild(bleedCanvas);
 }
 
-const bCtx = bleedCanvas.getContext('2d');
+const bCtx = bleedCanvas.getContext('2d', { alpha: true });
 
 let bleedBtnContainer = document.getElementById('bleed-btn-container');
 if (!bleedBtnContainer) {
@@ -402,74 +404,73 @@ if (!bleedBtnContainer) {
 
 const bleedBtn = document.getElementById('bleed-btn');
 
-// --- State & Physics ---
-let bleedParticles = [];
+// --- Non-Euclidean Physics State ---
+let inkPools = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// 'source-over' requires extremely low opacity so it pools like real liquid
-const COLOR_SUCCESS_INK = 'rgba(20, 50, 140, 0.035)'; 
-const COLOR_FAILURE_INK = 'rgba(160, 20, 40, 0.035)';
+// We define raw RGB arrays so we can dynamically calculate extreme mathematical transparencies.
+// These are hyper-saturated pigments. When multiplied, they form the void.
+const RGB_SUCCESS = [10, 30, 140]; // Deep, crushing Marianas Trench Navy
+const RGB_FAILURE = [160, 10, 20]; // Oxidized Arterial Crimson
 
-class BleedParticle {
-    constructor(startX, startY, color, boundW, boundH, isDominant) {
-        this.originX = startX;
-        this.originY = startY;
-        this.x = startX;
-        this.y = startY;
-        this.color = color;
-        this.bounds = { w: boundW, h: boundH };
+class CapillaryPool {
+    constructor(originX, originY, isSuccess) {
+        this.originX = originX;
+        this.originY = originY;
+        this.color = isSuccess ? RGB_SUCCESS : RGB_FAILURE;
         
-        // Varying sizes to simulate different paper fiber depths
-        this.size = Math.random() * 2.5 + 1.0; 
+        this.life = 600; // The thermodynamic lifespan of the wet ink
+        this.currentRadius = 1; // Starts as a pinpoint
         
-        // Very slow movement so ink stays close to the origin point
-        this.speed = Math.random() * 0.4 + 0.1; 
-        this.angle = Math.random() * Math.PI * 2;
-        
-        // Lifespan prevents the black hole effect
-        this.life = Math.floor(Math.random() * 250) + 150; 
-        this.isDominant = isDominant;
-    }
-
-    update() {
-        if (this.life <= 0) return;
-
-        // Capillary jitter
-        this.angle += (Math.random() - 0.5) * 1.5; 
-        
-        this.x += Math.cos(this.angle) * this.speed;
-        this.y += Math.sin(this.angle) * this.speed;
-
-        // Gravity / Bleed direction (ink naturally wants to pull slightly downward)
-        this.y += 0.15; 
-
-        // Gentle outward soak
-        const dx = this.x - this.originX;
-        const dy = this.y - this.originY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist > 0) {
-            const pushStr = this.isDominant ? 0.2 : 0.1;
-            this.x += (dx / dist) * pushStr;
-            this.y += (dy / dist) * pushStr;
-        }
-
-        if (this.x < 0) this.x = 0;
-        if (this.x > this.bounds.w) this.x = this.bounds.w;
-        if (this.y < 0) this.y = 0;
-        if (this.y > this.bounds.h) this.y = this.bounds.h;
-        
-        this.life--;
+        // Asymmetry variable: paper grain is rarely perfect. 
+        // We stretch the diffusion field slightly on a random axis.
+        this.grainAxis = Math.random() * Math.PI;
+        this.grainStretch = Math.random() * 0.4 + 0.8;
     }
 
     draw() {
         if (this.life <= 0) return;
-        bCtx.fillStyle = this.color;
-        bCtx.beginPath();
-        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        bCtx.fill();
+
+        // Logarithmic expansion: Ink spreads fast initially, then slows as it dries
+        // This is the heartbeat of the alien math.
+        const growthRate = Math.max(0.05, (this.life / 600) * 0.4);
+        this.currentRadius += growthRate;
+
+        // Gravity warp: the center of mass slowly sags downward over time
+        const gravitySag = (600 - this.life) * 0.03;
+
+        // Monte Carlo Matrix: We spray 'N' microscopic dots within the radius.
+        // They are disconnected. No lines. No spaghetti. Just a porous, soaking field.
+        const dropletsPerFrame = 25; 
+
+        for (let i = 0; i < dropletsPerFrame; i++) {
+            // Bias the distribution heavily toward the center using a square root function
+            // This ensures the origin remains a dense, dark pool, while the edges feather out.
+            const r = this.currentRadius * Math.sqrt(Math.random());
+            const theta = Math.random() * Math.PI * 2;
+
+            // Apply the paper grain asymmetry and gravity
+            const x = this.originX + (r * Math.cos(theta) * (Math.abs(Math.cos(theta - this.grainAxis)) * this.grainStretch + 1));
+            const y = this.originY + (r * Math.sin(theta)) + gravitySag;
+
+            // Droplets get slightly larger at the edges (capillary fingering)
+            const dropSize = Math.random() * 1.5 + (r / this.currentRadius) * 1.5;
+
+            // Opacity calculation: Extreme transparency. 
+            // Closer to the center = darker. Further away = ghostly faint.
+            const distanceRatio = r / this.currentRadius;
+            const alpha = Math.max(0.005, 0.05 * (1 - distanceRatio));
+
+            bCtx.fillStyle = `rgba(${this.color[0]}, ${this.color[1]}, ${this.color[2]}, ${alpha})`;
+            
+            // Using fillRect instead of arc. At this microscopic scale, a rectangle 
+            // looks like a jagged paper fiber, adding to the hyper-realism.
+            bCtx.fillRect(x, y, dropSize, dropSize);
+        }
+
+        this.life--;
     }
 }
 
@@ -479,64 +480,42 @@ function initBleed() {
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     
-    // Natively stacks opacity without relying on the background color
-    bCtx.globalCompositeOperation = 'source-over';
-    bleedParticles = [];
+    // 'multiply' is the only mathematically correct way to blend physical pigment.
+    // Because our alpha is so low (0.005), it will take hundreds of overlaps to reach black.
+    bCtx.globalCompositeOperation = 'multiply';
+    inkPools = [];
 
-    const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
-    const containerRect = container.getBoundingClientRect();
+    const canvasRect = bleedCanvas.getBoundingClientRect();
 
-    document.querySelectorAll('.grid-cell').forEach(cell => {
-        const drops = dataSource[cell.dataset.id] || [];
-        if (drops.length === 0) return;
+    // The Stroke of Genius: We ignore the abstract grid data.
+    // We scrape the DOM for every single physical drop of ink you placed.
+    // If you see it, it bleeds.
+    const renderedDrops = document.querySelectorAll('.ink-drop');
+    
+    renderedDrops.forEach(drop => {
+        const dropRect = drop.getBoundingClientRect();
+        
+        // Exact mathematical center of the physical DOM element, relative to the canvas
+        const originX = dropRect.left - canvasRect.left + (dropRect.width / 2);
+        const originY = dropRect.top - canvasRect.top + (dropRect.height / 2);
+        
+        const isSuccess = drop.classList.contains('ink-success');
 
-        const rect = cell.getBoundingClientRect();
-
-        let successVol = 0;
-        let failureVol = 0;
-        drops.forEach(d => { if (d.type === 1) successVol++; else if (d.type === 2) failureVol++; });
-        const isSuccessDominant = successVol >= failureVol;
-
-        drops.forEach(d => {
-            let posX = d.x !== undefined ? d.x : 50;
-            let posY = d.y !== undefined ? d.y : 25;
-
-            if (viewMode === 'aggregate') {
-                posX = 15 + (posX % 15); 
-                posY = 10 + (posY % 8);
-            }
-
-            const originX = (rect.left - containerRect.left) + container.scrollLeft + posX;
-            const originY = (rect.top - containerRect.top) + container.scrollTop + posY;
-
-            const inkColor = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
-            const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
-            
-            // Generate heavy particle volumes to create rich color
-            const baseMultiplier = viewMode === 'aggregate' ? 15 : 120;
-            const finalCount = isDominant ? baseMultiplier * 1.5 : baseMultiplier * 0.7;
-
-            for (let i = 0; i < finalCount; i++) {
-                bleedParticles.push(new BleedParticle(originX, originY, inkColor, bleedCanvas.width, bleedCanvas.height, isDominant));
-            }
-        });
+        // Instead of 1000 particles, we spawn exactly 1 expanding pool per drop
+        inkPools.push(new CapillaryPool(originX, originY, isSuccess));
     });
-
-    // Ensure dominant ink is rendered last, so it physically pools on top
-    bleedParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
 function animateBleed() {
     if (!isBleeding) return;
     
-    let activeParticles = 0;
-    for (let i = 0; i < bleedParticles.length; i++) {
-        bleedParticles[i].update();
-        bleedParticles[i].draw();
-        if (bleedParticles[i].life > 0) activeParticles++;
+    let activePools = 0;
+    for (let i = 0; i < inkPools.length; i++) {
+        inkPools[i].draw();
+        if (inkPools[i].life > 0) activePools++;
     }
     
-    if (activeParticles > 0) {
+    if (activePools > 0) {
         bleedAnimationId = requestAnimationFrame(animateBleed);
     } else {
         isBleeding = false;
@@ -557,7 +536,6 @@ function toggleBleed() {
         bleedBtn.textContent = 'RESUME BLEEDING';
     } else if (bleedBtn.textContent === 'INK DRIED (RESET)') {
         resetBleedState();
-        // Immediately start a fresh bleed
         initBleed();
         isBleeding = true;
         hasStartedBleeding = true;
@@ -578,12 +556,11 @@ const resetBleedState = () => {
     bleedBtn.textContent = 'LET IT BLEED';
 };
 
-// Reset events
+// Listeners
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
 container.addEventListener('click', resetBleedState); 
 
-// Ensure we don't attach multiple event listeners if the script is re-run
 bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
