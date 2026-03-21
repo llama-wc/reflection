@@ -1,4 +1,6 @@
-⁸// --- CLOUDFLARE CONFIGURATION ---
+Okay let's bring it all together. I don't want to change anything regarding what we have already built. I just want the let it bleed effect to happen on top of what we have here
+
+// --- CLOUDFLARE CONFIGURATION ---
 let RAW_URL = "https://virtue-api.mac-j-wall.workers.dev";
 if (!RAW_URL.startsWith('http')) RAW_URL = 'https://' + RAW_URL;
 if (RAW_URL.endsWith('/')) RAW_URL = RAW_URL.slice(0, -1);
@@ -344,6 +346,3 @@ themeBtn.addEventListener('click', () => {
 });
 
 initializeSession();
-
-
-
