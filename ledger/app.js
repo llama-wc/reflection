@@ -346,3 +346,242 @@ themeBtn.addEventListener('click', () => {
 });
 
 initializeSession();
+
+
+// ========================================================
+// --- STOCHASTIC CAPILLARY DIFFUSION ENGINE (MK. IV) ---
+// ========================================================
+
+container.style.position = 'relative';
+
+let bleedCanvas = document.getElementById('ink-canvas');
+if (!bleedCanvas) {
+    bleedCanvas = document.createElement('canvas');
+    bleedCanvas.id = 'ink-canvas';
+    bleedCanvas.style.position = 'absolute';
+    bleedCanvas.style.top = '0';
+    bleedCanvas.style.left = '0';
+    bleedCanvas.style.pointerEvents = 'none'; 
+    bleedCanvas.style.zIndex = '10'; // Over the grid, under the UI
+    container.appendChild(bleedCanvas);
+}
+
+const bCtx = bleedCanvas.getContext('2d');
+
+let bleedBtnContainer = document.getElementById('bleed-btn-container');
+if (!bleedBtnContainer) {
+    bleedBtnContainer = document.createElement('div');
+    bleedBtnContainer.id = 'bleed-btn-container';
+    bleedBtnContainer.style.display = 'flex';
+    bleedBtnContainer.style.justifyContent = 'center';
+    bleedBtnContainer.style.marginTop = '20px';
+    bleedBtnContainer.style.marginBottom = '40px';
+
+    const newBleedBtn = document.createElement('button');
+    newBleedBtn.id = 'bleed-btn';
+    newBleedBtn.textContent = 'INITIATE DIFFUSION';
+    newBleedBtn.style.padding = '12px 24px';
+    newBleedBtn.style.backgroundColor = '#e6e2d8';
+    newBleedBtn.style.color = '#333';
+    newBleedBtn.style.border = 'none';
+    newBleedBtn.style.borderRadius = '5px';
+    newBleedBtn.style.fontWeight = 'bold';
+    newBleedBtn.style.cursor = 'pointer';
+    newBleedBtn.style.letterSpacing = '1px';
+    newBleedBtn.style.textTransform = 'uppercase';
+    newBleedBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    newBleedBtn.style.width = '240px';
+
+    newBleedBtn.onmouseover = () => newBleedBtn.style.backgroundColor = '#d1ccbe';
+    newBleedBtn.onmouseout = () => newBleedBtn.style.backgroundColor = '#e6e2d8';
+
+    bleedBtnContainer.appendChild(newBleedBtn);
+    container.parentNode.insertBefore(bleedBtnContainer, container.nextSibling);
+}
+
+const bleedBtn = document.getElementById('bleed-btn');
+
+// --- Non-Euclidean Physics State ---
+let activeBlooms = [];
+let bleedAnimationId = null;
+let isBleeding = false;
+let hasStartedBleeding = false;
+
+// We define raw RGB matrices. Hyper-saturated, heavy pigments.
+const PIGMENT_SUCCESS = { r: 15, g: 35, b: 120 }; // Abyssal Navy
+const PIGMENT_FAILURE = { r: 140, g: 15, b: 25 }; // Oxidized Crimson
+
+class CapillaryBloom {
+    constructor(x, y, type, volumeBias) {
+        this.x = x;
+        this.y = y;
+        this.pigment = type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
+        
+        this.life = 0;
+        // Dominant cells bloom longer and wider
+        this.maxLife = Math.floor(Math.random() * 60) + (140 * volumeBias); 
+        this.maxRadius = (Math.random() * 15 + 25) * volumeBias; 
+        
+        // Droplet density scales with importance to suffocate weaker colors
+        this.dropletsPerFrame = Math.floor(150 * volumeBias); 
+        
+        // Micro-asymmetry to simulate imperfect paper grain
+        this.grainAxis = Math.random() * Math.PI;
+    }
+
+    draw() {
+        if (this.life >= this.maxLife) return;
+
+        // Logarithmic expansion: explodes outward instantly, then creeps as it dries
+        const progress = this.life / this.maxLife;
+        const currentRadius = this.maxRadius * (1 - Math.pow(1 - progress, 4)); 
+
+        for (let i = 0; i < this.dropletsPerFrame; i++) {
+            // Gaussian Distribution: Squares the randomizer to cluster 80% of the ink near the dead center.
+            const distributionCurve = Math.pow(Math.random(), 2);
+            const r = currentRadius * distributionCurve;
+            const theta = Math.random() * Math.PI * 2;
+
+            // Capillary Fingering: The edges warp slightly based on the paper grain axis
+            const fiberStretch = 1 + (Math.abs(Math.cos(theta - this.grainAxis)) * 0.2);
+
+            const dropX = this.x + (r * Math.cos(theta) * fiberStretch);
+            const dropY = this.y + (r * Math.sin(theta) * fiberStretch);
+
+            // Calculate extreme transparency. The edges are ghosts; the center is a black hole.
+            const distanceRatio = r / this.maxRadius;
+            const alpha = Math.max(0.005, 0.05 * (1 - distanceRatio));
+
+            bCtx.fillStyle = `rgba(${this.pigment.r}, ${this.pigment.g}, ${this.pigment.b}, ${alpha})`;
+            
+            // Sub-pixel rendering creates a soft, porous, wet-ink texture
+            const dropSize = Math.random() * 1.5 + 0.5;
+            bCtx.fillRect(dropX, dropY, dropSize, dropSize);
+        }
+
+        this.life++;
+    }
+}
+
+function initBleed() {
+    // Lock the mathematical dimensions to the absolute scrollable area
+    bleedCanvas.width = container.scrollWidth;
+    bleedCanvas.height = container.scrollHeight;
+    bleedCanvas.style.width = `${container.scrollWidth}px`;
+    bleedCanvas.style.height = `${container.scrollHeight}px`;
+    
+    bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+    
+    // Natively stacks opacity flawlessly without relying on the background
+    bCtx.globalCompositeOperation = 'source-over';
+    activeBlooms = [];
+
+    const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
+    const containerRect = container.getBoundingClientRect();
+
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        const drops = dataSource[cell.dataset.id] || [];
+        if (drops.length === 0) return;
+
+        // Cell's absolute bounding box
+        const cellRect = cell.getBoundingClientRect();
+
+        // Calculate dominance to let the heavier volume physically sit on top
+        let successCount = 0;
+        let failureCount = 0;
+        drops.forEach(d => { if (d.type === 1) successCount++; else failureCount++; });
+        const isSuccessDominant = successCount >= failureCount;
+
+        drops.forEach(d => {
+            // Extract the precise, pristine mathematical coordinates from the data layer
+            let posX = d.x !== undefined ? d.x : 50;
+            let posY = d.y !== undefined ? d.y : 25;
+
+            // Modulo constraint for the all-time stack view
+            if (viewMode === 'aggregate') {
+                posX = 15 + (posX % 15); 
+                posY = 10 + (posY % 8);
+            }
+
+            // Translate the cell's local offset to the absolute scrollable canvas coordinate
+            const cellLeft = (cellRect.left - containerRect.left) + container.scrollLeft;
+            const cellTop = (cellRect.top - containerRect.top) + container.scrollTop;
+            
+            const originX = cellLeft + posX;
+            const originY = cellTop + posY;
+
+            const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
+            const volumeBias = isDominant ? 1.4 : 0.7; // Dominant ink gets massive algorithmic priority
+
+            activeBlooms.push({
+                bloom: new CapillaryBloom(originX, originY, d.type, volumeBias),
+                isDominant: isDominant
+            });
+        });
+    });
+
+    // The Hierarchy of Rendering: We sort the arrays so the dominant ink is 
+    // mathematically drawn last, forcing it to sit physically on top of the weaker ink.
+    activeBlooms.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
+}
+
+function animateBleed() {
+    if (!isBleeding) return;
+    
+    let isStillWet = false;
+    for (let i = 0; i < activeBlooms.length; i++) {
+        activeBlooms[i].bloom.draw();
+        if (activeBlooms[i].bloom.life < activeBlooms[i].bloom.maxLife) {
+            isStillWet = true;
+        }
+    }
+    
+    if (isStillWet) {
+        bleedAnimationId = requestAnimationFrame(animateBleed);
+    } else {
+        isBleeding = false;
+        bleedBtn.textContent = 'INK DRIED (RESET)';
+    }
+}
+
+function toggleBleed() {
+    if (!hasStartedBleeding) {
+        initBleed();
+        isBleeding = true;
+        hasStartedBleeding = true;
+        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        animateBleed();
+    } else if (isBleeding) {
+        isBleeding = false;
+        cancelAnimationFrame(bleedAnimationId);
+        bleedBtn.textContent = 'RESUME DIFFUSION';
+    } else if (bleedBtn.textContent === 'INK DRIED (RESET)') {
+        resetBleedState();
+        initBleed();
+        isBleeding = true;
+        hasStartedBleeding = true;
+        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        animateBleed();
+    } else {
+        isBleeding = true;
+        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        animateBleed();
+    }
+}
+
+const resetBleedState = () => {
+    isBleeding = false;
+    hasStartedBleeding = false;
+    cancelAnimationFrame(bleedAnimationId);
+    bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+    bleedBtn.textContent = 'INITIATE DIFFUSION';
+};
+
+// Listeners
+document.getElementById('prev-week').addEventListener('click', resetBleedState);
+document.getElementById('next-week').addEventListener('click', resetBleedState);
+document.getElementById('view-toggle').addEventListener('click', resetBleedState);
+container.addEventListener('click', resetBleedState); 
+
+bleedBtn.removeEventListener('click', toggleBleed);
+bleedBtn.addEventListener('click', toggleBleed);
