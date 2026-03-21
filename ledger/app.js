@@ -348,9 +348,9 @@ themeBtn.addEventListener('click', () => {
 initializeSession();
 
 
-// ========================================================
-// --- STOCHASTIC CAPILLARY DIFFUSION ENGINE (MK. IV) ---
-// ========================================================
+// ==========================================
+// --- STOCHASTIC CAPILLARY DIFFUSION ENGINE ---
+// ==========================================
 
 container.style.position = 'relative';
 
@@ -362,7 +362,7 @@ if (!bleedCanvas) {
     bleedCanvas.style.top = '0';
     bleedCanvas.style.left = '0';
     bleedCanvas.style.pointerEvents = 'none'; 
-    bleedCanvas.style.zIndex = '10'; // Over the grid, under the UI
+    bleedCanvas.style.zIndex = '10'; // Over grid, under UI
     container.appendChild(bleedCanvas);
 }
 
@@ -401,139 +401,136 @@ if (!bleedBtnContainer) {
 
 const bleedBtn = document.getElementById('bleed-btn');
 
-// --- Non-Euclidean Physics State ---
-let activeBlooms = [];
+// --- Physics State ---
+let activeParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// We define raw RGB matrices. Hyper-saturated, heavy pigments.
-const PIGMENT_SUCCESS = { r: 15, g: 35, b: 120 }; // Abyssal Navy
-const PIGMENT_FAILURE = { r: 140, g: 15, b: 25 }; // Oxidized Crimson
+// Rich, deep base colors. Because we use 'source-over', these will cap out 
+// at these exact beautiful tones and will NEVER turn black.
+const COLOR_SUCCESS_INK = 'rgba(25, 60, 160, 0.04)'; // Abyssal Navy
+const COLOR_FAILURE_INK = 'rgba(170, 25, 40, 0.04)'; // Deep Crimson
 
-class CapillaryBloom {
-    constructor(x, y, type, volumeBias) {
+class InkParticle {
+    constructor(x, y, color, isDominant) {
+        this.originX = x;
+        this.originY = y;
         this.x = x;
         this.y = y;
-        this.pigment = type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
+        this.color = color;
+        this.isDominant = isDominant;
         
-        this.life = 0;
-        // Dominant cells bloom longer and wider
-        this.maxLife = Math.floor(Math.random() * 60) + (140 * volumeBias); 
-        this.maxRadius = (Math.random() * 15 + 25) * volumeBias; 
+        // Random starting angle
+        this.angle = Math.random() * Math.PI * 2;
         
-        // Droplet density scales with importance to suffocate weaker colors
-        this.dropletsPerFrame = Math.floor(150 * volumeBias); 
+        // Very slow movement. This ensures the ink stays dense in the center.
+        this.speed = Math.random() * 0.4 + 0.1; 
         
-        // Micro-asymmetry to simulate imperfect paper grain
-        this.grainAxis = Math.random() * Math.PI;
+        // Lifespan limits the expansion size
+        this.life = Math.floor(Math.random() * 120) + 60;
+        
+        // Soft, small circles stack into a fuzzy watercolor cloud
+        this.size = Math.random() * 2.5 + 1.0; 
+        
+        // Dominant ink pushes outward slightly harder to overtake weaker colors
+        this.outwardBias = isDominant ? 0.25 : 0.05;
+    }
+
+    update() {
+        if (this.life <= 0) return;
+
+        // High Jitter: This destroys the "spaghetti" look and turns it into a porous cloud
+        this.angle += (Math.random() - 0.5) * 1.5; 
+        
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+
+        // Gentle Capillary Push
+        const dx = this.x - this.originX;
+        const dy = this.y - this.originY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 0) {
+            this.x += (dx / dist) * this.outwardBias;
+            this.y += (dy / dist) * this.outwardBias;
+        }
+
+        this.life--;
     }
 
     draw() {
-        if (this.life >= this.maxLife) return;
-
-        // Logarithmic expansion: explodes outward instantly, then creeps as it dries
-        const progress = this.life / this.maxLife;
-        const currentRadius = this.maxRadius * (1 - Math.pow(1 - progress, 4)); 
-
-        for (let i = 0; i < this.dropletsPerFrame; i++) {
-            // Gaussian Distribution: Squares the randomizer to cluster 80% of the ink near the dead center.
-            const distributionCurve = Math.pow(Math.random(), 2);
-            const r = currentRadius * distributionCurve;
-            const theta = Math.random() * Math.PI * 2;
-
-            // Capillary Fingering: The edges warp slightly based on the paper grain axis
-            const fiberStretch = 1 + (Math.abs(Math.cos(theta - this.grainAxis)) * 0.2);
-
-            const dropX = this.x + (r * Math.cos(theta) * fiberStretch);
-            const dropY = this.y + (r * Math.sin(theta) * fiberStretch);
-
-            // Calculate extreme transparency. The edges are ghosts; the center is a black hole.
-            const distanceRatio = r / this.maxRadius;
-            const alpha = Math.max(0.005, 0.05 * (1 - distanceRatio));
-
-            bCtx.fillStyle = `rgba(${this.pigment.r}, ${this.pigment.g}, ${this.pigment.b}, ${alpha})`;
-            
-            // Sub-pixel rendering creates a soft, porous, wet-ink texture
-            const dropSize = Math.random() * 1.5 + 0.5;
-            bCtx.fillRect(dropX, dropY, dropSize, dropSize);
-        }
-
-        this.life++;
+        if (this.life <= 0) return;
+        bCtx.fillStyle = this.color;
+        bCtx.beginPath();
+        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        bCtx.fill();
     }
 }
 
 function initBleed() {
-    // Lock the mathematical dimensions to the absolute scrollable area
+    // Lock canvas exactly to the scrollable interior
     bleedCanvas.width = container.scrollWidth;
     bleedCanvas.height = container.scrollHeight;
-    bleedCanvas.style.width = `${container.scrollWidth}px`;
-    bleedCanvas.style.height = `${container.scrollHeight}px`;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     
-    // Natively stacks opacity flawlessly without relying on the background
+    // source-over caps the darkness at the raw RGB values
     bCtx.globalCompositeOperation = 'source-over';
-    activeBlooms = [];
+    activeParticles = [];
 
-    const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
     const containerRect = container.getBoundingClientRect();
 
+    // Iterate through every cell to calculate localized dominance
     document.querySelectorAll('.grid-cell').forEach(cell => {
-        const drops = dataSource[cell.dataset.id] || [];
+        // Find every literal, physical drop inside this specific cell
+        const drops = cell.querySelectorAll('.ink-drop');
         if (drops.length === 0) return;
 
-        // Cell's absolute bounding box
-        const cellRect = cell.getBoundingClientRect();
+        // Calculate who wins the cell
+        let successVol = 0;
+        let failureVol = 0;
+        drops.forEach(d => { 
+            if (d.classList.contains('ink-success')) successVol++; 
+            else failureVol++; 
+        });
+        const isSuccessDominant = successVol >= failureVol;
 
-        // Calculate dominance to let the heavier volume physically sit on top
-        let successCount = 0;
-        let failureCount = 0;
-        drops.forEach(d => { if (d.type === 1) successCount++; else failureCount++; });
-        const isSuccessDominant = successCount >= failureCount;
-
-        drops.forEach(d => {
-            // Extract the precise, pristine mathematical coordinates from the data layer
-            let posX = d.x !== undefined ? d.x : 50;
-            let posY = d.y !== undefined ? d.y : 25;
-
-            // Modulo constraint for the all-time stack view
-            if (viewMode === 'aggregate') {
-                posX = 15 + (posX % 15); 
-                posY = 10 + (posY % 8);
-            }
-
-            // Translate the cell's local offset to the absolute scrollable canvas coordinate
-            const cellLeft = (cellRect.left - containerRect.left) + container.scrollLeft;
-            const cellTop = (cellRect.top - containerRect.top) + container.scrollTop;
+        // Map the ink
+        drops.forEach(drop => {
+            // Get the precise, physical location of the dot you see on the screen
+            const dropRect = drop.getBoundingClientRect();
             
-            const originX = cellLeft + posX;
-            const originY = cellTop + posY;
+            // Translate its window coordinates into internal scrollable canvas coordinates
+            const originX = (dropRect.left - containerRect.left) + container.scrollLeft + (dropRect.width / 2);
+            const originY = (dropRect.top - containerRect.top) + container.scrollTop + (dropRect.height / 2);
 
-            const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
-            const volumeBias = isDominant ? 1.4 : 0.7; // Dominant ink gets massive algorithmic priority
+            const isSuccess = drop.classList.contains('ink-success');
+            const isDominant = (isSuccess && isSuccessDominant) || (!isSuccess && !isSuccessDominant);
+            const color = isSuccess ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
+            
+            // Dominant color spawns 3x more ink, allowing it to easily wash over the weaker color
+            const particleCount = isDominant ? 450 : 150;
 
-            activeBlooms.push({
-                bloom: new CapillaryBloom(originX, originY, d.type, volumeBias),
-                isDominant: isDominant
-            });
+            for (let i = 0; i < particleCount; i++) {
+                activeParticles.push(new InkParticle(originX, originY, color, isDominant));
+            }
         });
     });
 
-    // The Hierarchy of Rendering: We sort the arrays so the dominant ink is 
-    // mathematically drawn last, forcing it to sit physically on top of the weaker ink.
-    activeBlooms.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
+    // Rendering Hierarchy: Dominant particles are placed at the end of the array,
+    // ensuring they are mathematically drawn last and sit physically on top.
+    activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
 function animateBleed() {
     if (!isBleeding) return;
     
     let isStillWet = false;
-    for (let i = 0; i < activeBlooms.length; i++) {
-        activeBlooms[i].bloom.draw();
-        if (activeBlooms[i].bloom.life < activeBlooms[i].bloom.maxLife) {
-            isStillWet = true;
-        }
+    for (let i = 0; i < activeParticles.length; i++) {
+        activeParticles[i].update();
+        activeParticles[i].draw();
+        if (activeParticles[i].life > 0) isStillWet = true;
     }
     
     if (isStillWet) {
@@ -577,7 +574,7 @@ const resetBleedState = () => {
     bleedBtn.textContent = 'INITIATE DIFFUSION';
 };
 
-// Listeners
+// Clear bleed if the user interacts with the UI (changes weeks/views)
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
