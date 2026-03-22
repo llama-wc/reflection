@@ -351,16 +351,13 @@ initializeSession();
 
     
 // ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (FINAL) ---
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. V) ---
 // ========================================================
 
-// 1. The Immortal Anchor
-// We must dynamically ensure the canvas exists because renderGrid() annihilates it.
 function ensureCanvas() {
     container.style.position = 'relative'; 
     let canvas = document.getElementById('ink-canvas');
     
-    // If it doesn't exist, or if renderGrid() detached it from the DOM, resurrect it.
     if (!canvas || !container.contains(canvas)) {
         if (!canvas) {
             canvas = document.createElement('canvas');
@@ -369,14 +366,13 @@ function ensureCanvas() {
             canvas.style.top = '0';
             canvas.style.left = '0';
             canvas.style.pointerEvents = 'none'; 
-            canvas.style.zIndex = '10'; // Over grid background, under DOM dots
+            canvas.style.zIndex = '10'; 
         }
         container.appendChild(canvas);
     }
     return canvas;
 }
 
-// 2. Control Panel
 let bleedBtnContainer = document.getElementById('bleed-btn-container');
 if (!bleedBtnContainer) {
     bleedBtnContainer = document.createElement('div');
@@ -410,58 +406,100 @@ if (!bleedBtnContainer) {
 
 const bleedBtn = document.getElementById('bleed-btn');
 
-// --- Non-Euclidean Physics State ---
 let activeParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Deep, crushing pigments. Because we stack them gently, they will 
-// pool into hyper-realistic wet ink and never crash into pitch black.
-const PIGMENT_SUCCESS = 'rgba(25, 55, 140, 0.04)'; // Abyssal Navy
-const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.04)'; // Arterial Crimson
+const PIGMENT_SUCCESS = 'rgba(25, 55, 140, 0.05)'; 
+const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.05)'; 
 
 class CapillaryPore {
-    constructor(x, y, color, isDominant) {
+    // We now pass the 'type' of the ink, and a map of ALL other drops on the board
+    constructor(x, y, color, isDominant, myType, allOrigins) {
         this.originX = x;
         this.originY = y;
         this.x = x;
         this.y = y;
         this.color = color;
         this.isDominant = isDominant;
+        this.myType = myType;
+        this.allOrigins = allOrigins;
         
-        // Glacial movement speed makes it look like heavy liquid soaking upward
-        this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 0.15 + 0.05; 
+        // Using momentum (velocity) instead of angle snapping creates organic "veins"
+        this.vx = (Math.random() - 0.5);
+        this.vy = (Math.random() - 0.5);
         
-        // High lifespan for massive, blooming capillary fields
-        this.life = Math.floor(Math.random() * 200) + 100;
-        
-        // Microscopic particle sizes simulate the texture of wet paper grain
+        this.life = Math.floor(Math.random() * 250) + 100;
         this.size = Math.random() * 1.5 + 0.5; 
         
-        // Hydrostatic dominance: The heavier ink physically pushes outward faster
-        this.outwardBias = isDominant ? 0.35 : 0.05;
+        this.outwardBias = isDominant ? 0.35 : 0.15;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // Brownian Jitter prevents straight lines, ensuring an organic, porous cloud
-        this.angle += (Math.random() - 0.5) * 2.0; 
-        
-        this.x += Math.cos(this.angle) * this.speed;
-        this.y += Math.sin(this.angle) * this.speed;
+        // 1. Dendritic Jitter: Perturb the velocity slightly, simulating paper grain resistance
+        this.vx += (Math.random() - 0.5) * 0.4;
+        this.vy += (Math.random() - 0.5) * 0.4;
 
-        // Capillary thrust from the epicenter
+        // 2. Base Capillary Push (flowing outward from its own center)
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const distToHome = Math.sqrt(dx * dx + dy * dy);
         
-        if (dist > 0) {
-            this.x += (dx / dist) * this.outwardBias;
-            this.y += (dy / dist) * this.outwardBias;
+        if (distToHome > 0) {
+            this.vx += (dx / distToHome) * this.outwardBias;
+            this.vy += (dy / distToHome) * this.outwardBias;
         }
+
+        // 3. WET-ON-WET INTERACTION (The Organic Overlap)
+        let wickingX = 0;
+        let wickingY = 0;
+        let isCoagulating = false;
+
+        // The particle "looks" at all the other drops on the board
+        for (let i = 0; i < this.allOrigins.length; i++) {
+            const other = this.allOrigins[i];
+            
+            // Ignore our own origin
+            if (other.x === this.originX && other.y === this.originY) continue;
+
+            const odx = other.x - this.x;
+            const ody = other.y - this.y;
+            const distToOther = Math.sqrt(odx * odx + ody * ody);
+
+            // If the ink drifts within 60 pixels of another drop, it gets sucked into the wet paper
+            if (distToOther < 60 && distToOther > 0) {
+                // The closer it gets, the stronger the pull
+                const pullStrength = 0.5 / (distToOther * 0.1); 
+                wickingX += (odx / distToOther) * pullStrength;
+                wickingY += (ody / distToOther) * pullStrength;
+                
+                // If it hits an opposing color, it undergoes chemical coagulation
+                if (other.type !== this.myType) {
+                    isCoagulating = true;
+                }
+            }
+        }
+
+        this.vx += wickingX;
+        this.vy += wickingY;
+
+        // 4. Fluid Friction
+        if (isCoagulating) {
+            // Hitting an opposing color acts like a wall. The ink brakes hard, 
+            // dumping its pigment into a dense, dark boundary line.
+            this.vx *= 0.6; 
+            this.vy *= 0.6;
+        } else {
+            // Normal paper friction
+            this.vx *= 0.92;
+            this.vy *= 0.92;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
 
         this.life--;
     }
@@ -479,7 +517,6 @@ function initBleed() {
     const bleedCanvas = ensureCanvas();
     const bCtx = bleedCanvas.getContext('2d');
     
-    // Lock mathematical dimensions purely to the absolute scrolling matrix
     bleedCanvas.width = container.scrollWidth;
     bleedCanvas.height = container.scrollHeight;
     
@@ -488,13 +525,42 @@ function initBleed() {
     activeParticles = [];
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
+    
+    // First Pass: Collect the exact coordinates and types of ALL drops on the board
+    // This creates the "environmental awareness" map for the particles
+    let allDropOrigins = [];
 
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
         const drops = dataSource[cellId] || [];
         if (drops.length === 0) return;
 
-        // Absolute physical mapping ignores scrolling viewport bugs
+        const cellLeft = cell.offsetLeft;
+        const cellTop = cell.offsetTop;
+
+        drops.forEach(d => {
+            let posX = d.x !== undefined ? d.x : 50;
+            let posY = d.y !== undefined ? d.y : 25;
+
+            if (viewMode === 'aggregate') {
+                posX = 15 + (posX % 15); 
+                posY = 10 + (posY % 8);
+            }
+
+            allDropOrigins.push({
+                x: cellLeft + posX,
+                y: cellTop + posY,
+                type: d.type
+            });
+        });
+    });
+
+    // Second Pass: Spawn the particles, feeding them the environmental map
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        const cellId = cell.dataset.id;
+        const drops = dataSource[cellId] || [];
+        if (drops.length === 0) return;
+
         const cellLeft = cell.offsetLeft;
         const cellTop = cell.offsetTop;
 
@@ -511,23 +577,20 @@ function initBleed() {
                 posY = 10 + (posY % 8);
             }
 
-            // The absolute anchor point of the ink drop
             const originX = cellLeft + posX;
             const originY = cellTop + posY;
 
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
             const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
-            // Generate a massive volume of micro-pores to simulate heavy liquid
             const particleCount = isDominant ? 400 : 150;
 
             for (let i = 0; i < particleCount; i++) {
-                activeParticles.push(new CapillaryPore(originX, originY, color, isDominant));
+                activeParticles.push(new CapillaryPore(originX, originY, color, isDominant, d.type, allDropOrigins));
             }
         });
     });
 
-    // The Stroke of Mastery: Render dominant ink last so it physically covers the weak
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
@@ -535,7 +598,7 @@ function animateBleed() {
     if (!isBleeding) return;
     
     const bleedCanvas = document.getElementById('ink-canvas');
-    if (!bleedCanvas) return; // Failsafe if DOM shifts mid-animation
+    if (!bleedCanvas) return; 
     const bCtx = bleedCanvas.getContext('2d');
 
     let isStillWet = false;
@@ -590,7 +653,6 @@ const resetBleedState = () => {
     bleedBtn.textContent = 'INITIATE DIFFUSION';
 };
 
-// UI Triggers must cleanse the slate
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
