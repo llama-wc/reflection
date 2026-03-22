@@ -350,28 +350,33 @@ initializeSession();
 
 
     
-   // ==========================================
-// --- STOCHASTIC CAPILLARY DIFFUSION ENGINE ---
-// ==========================================
+// ========================================================
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (FINAL) ---
+// ========================================================
 
-// Ensure the container is the absolute anchor for the canvas
-container.style.position = 'relative';
-
-let bleedCanvas = document.getElementById('ink-canvas');
-if (!bleedCanvas) {
-    bleedCanvas = document.createElement('canvas');
-    bleedCanvas.id = 'ink-canvas';
-    bleedCanvas.style.position = 'absolute';
-    bleedCanvas.style.top = '0';
-    bleedCanvas.style.left = '0';
-    bleedCanvas.style.pointerEvents = 'none'; 
-    // High z-index keeps it over the grid lines and dots
-    bleedCanvas.style.zIndex = '10'; 
-    container.appendChild(bleedCanvas);
+// 1. The Immortal Anchor
+// We must dynamically ensure the canvas exists because renderGrid() annihilates it.
+function ensureCanvas() {
+    container.style.position = 'relative'; 
+    let canvas = document.getElementById('ink-canvas');
+    
+    // If it doesn't exist, or if renderGrid() detached it from the DOM, resurrect it.
+    if (!canvas || !container.contains(canvas)) {
+        if (!canvas) {
+            canvas = document.createElement('canvas');
+            canvas.id = 'ink-canvas';
+            canvas.style.position = 'absolute';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.pointerEvents = 'none'; 
+            canvas.style.zIndex = '10'; // Over grid background, under DOM dots
+        }
+        container.appendChild(canvas);
+    }
+    return canvas;
 }
 
-const bCtx = bleedCanvas.getContext('2d');
-
+// 2. Control Panel
 let bleedBtnContainer = document.getElementById('bleed-btn-container');
 if (!bleedBtnContainer) {
     bleedBtnContainer = document.createElement('div');
@@ -405,18 +410,18 @@ if (!bleedBtnContainer) {
 
 const bleedBtn = document.getElementById('bleed-btn');
 
-// --- Physics State ---
+// --- Non-Euclidean Physics State ---
 let activeParticles = [];
 let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Higher opacity (0.08) creates a rich, realistic liquid pool.
-// source-over blending ensures it never crushes to black.
-const COLOR_SUCCESS_INK = 'rgba(20, 45, 120, 0.08)'; // Heavy Navy
-const COLOR_FAILURE_INK = 'rgba(150, 20, 30, 0.08)'; // Heavy Crimson
+// Deep, crushing pigments. Because we stack them gently, they will 
+// pool into hyper-realistic wet ink and never crash into pitch black.
+const PIGMENT_SUCCESS = 'rgba(25, 55, 140, 0.04)'; // Abyssal Navy
+const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.04)'; // Arterial Crimson
 
-class InkParticle {
+class CapillaryPore {
     constructor(x, y, color, isDominant) {
         this.originX = x;
         this.originY = y;
@@ -425,32 +430,30 @@ class InkParticle {
         this.color = color;
         this.isDominant = isDominant;
         
-        // Random starting trajectory
+        // Glacial movement speed makes it look like heavy liquid soaking upward
         this.angle = Math.random() * Math.PI * 2;
+        this.speed = Math.random() * 0.15 + 0.05; 
         
-        // Very slow movement keeps the center dense and wet looking
-        this.speed = Math.random() * 0.3 + 0.1; 
+        // High lifespan for massive, blooming capillary fields
+        this.life = Math.floor(Math.random() * 200) + 100;
         
-        // Longer life for wider pooling
-        this.life = Math.floor(Math.random() * 150) + 100;
+        // Microscopic particle sizes simulate the texture of wet paper grain
+        this.size = Math.random() * 1.5 + 0.5; 
         
-        // Soft droplets stack into watercolor clouds
-        this.size = Math.random() * 2.0 + 1.0; 
-        
-        // Dominant ink has higher capillary pressure
-        this.outwardBias = isDominant ? 0.3 : 0.05;
+        // Hydrostatic dominance: The heavier ink physically pushes outward faster
+        this.outwardBias = isDominant ? 0.35 : 0.05;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // Brownian Jitter creates porous paper edges instead of spaghetti lines
-        this.angle += (Math.random() - 0.5) * 1.8; 
+        // Brownian Jitter prevents straight lines, ensuring an organic, porous cloud
+        this.angle += (Math.random() - 0.5) * 2.0; 
         
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed;
 
-        // Capillary push from the origin
+        // Capillary thrust from the epicenter
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -463,21 +466,22 @@ class InkParticle {
         this.life--;
     }
 
-    draw() {
+    draw(ctx) {
         if (this.life <= 0) return;
-        bCtx.fillStyle = this.color;
-        bCtx.beginPath();
-        bCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        bCtx.fill();
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
     }
 }
 
 function initBleed() {
-    // 1. Lock canvas strictly to the inner scrollable dimensions of the table
+    const bleedCanvas = ensureCanvas();
+    const bCtx = bleedCanvas.getContext('2d');
+    
+    // Lock mathematical dimensions purely to the absolute scrolling matrix
     bleedCanvas.width = container.scrollWidth;
     bleedCanvas.height = container.scrollHeight;
-    bleedCanvas.style.width = container.scrollWidth + 'px';
-    bleedCanvas.style.height = container.scrollHeight + 'px';
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
     bCtx.globalCompositeOperation = 'source-over';
@@ -485,17 +489,15 @@ function initBleed() {
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
 
-    // 2. Iterate through physical grid cells to get their relative offsets
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
         const drops = dataSource[cellId] || [];
         if (drops.length === 0) return;
 
-        // Using offsetLeft/Top bypasses scrolling coordinate bugs entirely
+        // Absolute physical mapping ignores scrolling viewport bugs
         const cellLeft = cell.offsetLeft;
         const cellTop = cell.offsetTop;
 
-        // Calculate volumetric dominance
         let successVol = 0, failureVol = 0;
         drops.forEach(d => { if (d.type === 1) successVol++; else failureVol++; });
         const isSuccessDominant = successVol >= failureVol;
@@ -504,39 +506,42 @@ function initBleed() {
             let posX = d.x !== undefined ? d.x : 50;
             let posY = d.y !== undefined ? d.y : 25;
 
-            // Modulo clustering for the All-Time Stack view
             if (viewMode === 'aggregate') {
                 posX = 15 + (posX % 15); 
                 posY = 10 + (posY % 8);
             }
 
-            // The absolute coordinate within the scrollable table
+            // The absolute anchor point of the ink drop
             const originX = cellLeft + posX;
             const originY = cellTop + posY;
 
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
-            const color = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
+            const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
-            // Dominant color gets massive particle superiority to physically bury the weaker color
-            const particleCount = isDominant ? 350 : 100;
+            // Generate a massive volume of micro-pores to simulate heavy liquid
+            const particleCount = isDominant ? 400 : 150;
 
             for (let i = 0; i < particleCount; i++) {
-                activeParticles.push(new InkParticle(originX, originY, color, isDominant));
+                activeParticles.push(new CapillaryPore(originX, originY, color, isDominant));
             }
         });
     });
 
-    // 3. Render Hierarchy: Dominant particles go to the end of the array, drawing last.
+    // The Stroke of Mastery: Render dominant ink last so it physically covers the weak
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
 function animateBleed() {
     if (!isBleeding) return;
     
+    const bleedCanvas = document.getElementById('ink-canvas');
+    if (!bleedCanvas) return; // Failsafe if DOM shifts mid-animation
+    const bCtx = bleedCanvas.getContext('2d');
+
     let isStillWet = false;
     for (let i = 0; i < activeParticles.length; i++) {
         activeParticles[i].update();
-        activeParticles[i].draw();
+        activeParticles[i].draw(bCtx);
         if (activeParticles[i].life > 0) isStillWet = true;
     }
     
@@ -577,11 +582,15 @@ const resetBleedState = () => {
     isBleeding = false;
     hasStartedBleeding = false;
     cancelAnimationFrame(bleedAnimationId);
-    if (bCtx && bleedCanvas) bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-    if (bleedBtn) bleedBtn.textContent = 'INITIATE DIFFUSION';
+    const canvas = document.getElementById('ink-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    bleedBtn.textContent = 'INITIATE DIFFUSION';
 };
 
-// Clear bleed if UI state changes
+// UI Triggers must cleanse the slate
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
@@ -589,4 +598,3 @@ container.addEventListener('click', resetBleedState);
 
 bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
-          
