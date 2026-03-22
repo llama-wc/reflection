@@ -351,7 +351,7 @@ initializeSession();
 
     
  // ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. VI) ---
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. VII) ---
 // ========================================================
 
 function ensureCanvas() {
@@ -412,8 +412,8 @@ let isBleeding = false;
 let hasStartedBleeding = false;
 
 // Rich base colors, high transparency for native source-over stacking
-const PIGMENT_SUCCESS = 'rgba(20, 45, 130, 0.04)'; 
-const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.04)'; 
+const PIGMENT_SUCCESS = 'rgba(20, 45, 130, 0.05)'; 
+const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.05)'; 
 
 class CapillaryPore {
     constructor(x, y, color, isDominant, myType, allOrigins) {
@@ -428,29 +428,28 @@ class CapillaryPore {
         
         this.angle = Math.random() * Math.PI * 2;
         
-        // CRITICAL FIX: Extremely slow base speed (max 0.25 pixels per frame)
-        this.speed = Math.random() * 0.15 + 0.1; 
+        // Slower base speed to prevent the "worm" lines
+        this.speed = Math.random() * 0.15 + 0.05; 
         
-        // Longer life so the slow particles have time to bloom
-        this.life = Math.floor(Math.random() * 200) + 150;
+        // Shorter life so it pools tighter
+        this.life = Math.floor(Math.random() * 120) + 80;
         
-        this.size = Math.random() * 2.0 + 1.0; 
+        // Larger, softer droplet sizes for a watercolor cloud effect
+        this.size = Math.random() * 3.0 + 1.5; 
         
-        // Pure positional bias, NOT acceleration
-        this.outwardBias = isDominant ? 0.15 : 0.05;
+        this.outwardBias = isDominant ? 0.20 : 0.08;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // 1. Organic Jitter (Paper grain wandering)
-        this.angle += (Math.random() - 0.5) * 1.5;
+        // Massive jitter ensures the particles scatter like clouds instead of drawing lines
+        this.angle += (Math.random() - 0.5) * 2.5;
         
-        // Calculate base positional step
         let stepX = Math.cos(this.angle) * this.speed;
         let stepY = Math.sin(this.angle) * this.speed;
 
-        // 2. Capillary Outward Push (Applied to position, preventing laser-beams)
+        // Capillary Outward Push 
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const distToHome = Math.sqrt(dx * dx + dy * dy);
@@ -460,45 +459,44 @@ class CapillaryPore {
             stepY += (dy / distToHome) * this.outwardBias;
         }
 
-        // 3. Organic Wet-on-Wet Interaction
+        // Wet-on-Wet Interaction
         let isCoagulating = false;
 
         for (let i = 0; i < this.allOrigins.length; i++) {
             const other = this.allOrigins[i];
             
-            // Skip self
             if (other.x === this.originX && other.y === this.originY) continue;
 
             const odx = other.x - this.x;
             const ody = other.y - this.y;
             const distToOther = Math.sqrt(odx * odx + ody * ody);
 
-            // Interaction radius of 45 pixels
-            if (distToOther < 45 && distToOther > 0) {
+            // Tighter interaction radius (35px)
+            if (distToOther < 35 && distToOther > 0) {
                 if (other.type !== this.myType) {
-                    // HIT AN OPPOSING COLOR: Form a boundary ridge
+                    // HIT AN OPPOSING COLOR: Trigger heavy friction (NO REPELLING)
                     isCoagulating = true;
-                    // Push slightly away from the opponent to pile up pigment at the border
-                    stepX -= (odx / distToOther) * 0.05;
-                    stepY -= (ody / distToOther) * 0.05;
                 } else {
-                    // HIT AN ALLY COLOR: Wicking effect (gentle attraction)
-                    stepX += (odx / distToOther) * 0.02;
-                    stepY += (ody / distToOther) * 0.02;
+                    // HIT AN ALLY COLOR: Gentle wicking attraction
+                    stepX += (odx / distToOther) * 0.015;
+                    stepY += (ody / distToOther) * 0.015;
                 }
             }
         }
 
-        // 4. Apply physical braking if coagulating
+        // Apply physical braking if it hit an opposing color boundary
         if (isCoagulating) {
-            // Massive speed reduction. Ink dumps heavily here.
-            stepX *= 0.2;
-            stepY *= 0.2;
-            // Shrink the pore slightly to create a sharper, darker line
+            // Hard brake. The ink stops flowing outward and dumps pigment here.
+            stepX *= 0.25;
+            stepY *= 0.25;
+            
+            // Shrink the pore size slightly to create a sharper boundary line
             this.size *= 0.98; 
+            
+            // Die slightly faster when hitting a wall so it doesn't bleed through
+            this.life -= 1; 
         }
 
-        // Execute the step
         this.x += stepX;
         this.y += stepY;
 
@@ -582,8 +580,7 @@ function initBleed() {
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
             const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
-            // Moderate particle counts to keep performance high while maintaining density
-            const particleCount = isDominant ? 350 : 150;
+            const particleCount = isDominant ? 400 : 180;
 
             for (let i = 0; i < particleCount; i++) {
                 activeParticles.push(new CapillaryPore(originX, originY, color, isDominant, d.type, allDropOrigins));
@@ -591,7 +588,6 @@ function initBleed() {
         });
     });
 
-    // Draw dominant ink last
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
