@@ -348,10 +348,13 @@ themeBtn.addEventListener('click', () => {
 initializeSession();
 
 
-// ==========================================
+
+    
+   // ==========================================
 // --- STOCHASTIC CAPILLARY DIFFUSION ENGINE ---
 // ==========================================
 
+// Ensure the container is the absolute anchor for the canvas
 container.style.position = 'relative';
 
 let bleedCanvas = document.getElementById('ink-canvas');
@@ -362,7 +365,8 @@ if (!bleedCanvas) {
     bleedCanvas.style.top = '0';
     bleedCanvas.style.left = '0';
     bleedCanvas.style.pointerEvents = 'none'; 
-    bleedCanvas.style.zIndex = '10'; // Over grid, under UI
+    // High z-index keeps it over the grid lines and dots
+    bleedCanvas.style.zIndex = '10'; 
     container.appendChild(bleedCanvas);
 }
 
@@ -407,10 +411,10 @@ let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Rich, deep base colors. Because we use 'source-over', these will cap out 
-// at these exact beautiful tones and will NEVER turn black.
-const COLOR_SUCCESS_INK = 'rgba(25, 60, 160, 0.04)'; // Abyssal Navy
-const COLOR_FAILURE_INK = 'rgba(170, 25, 40, 0.04)'; // Deep Crimson
+// Higher opacity (0.08) creates a rich, realistic liquid pool.
+// source-over blending ensures it never crushes to black.
+const COLOR_SUCCESS_INK = 'rgba(20, 45, 120, 0.08)'; // Heavy Navy
+const COLOR_FAILURE_INK = 'rgba(150, 20, 30, 0.08)'; // Heavy Crimson
 
 class InkParticle {
     constructor(x, y, color, isDominant) {
@@ -421,32 +425,32 @@ class InkParticle {
         this.color = color;
         this.isDominant = isDominant;
         
-        // Random starting angle
+        // Random starting trajectory
         this.angle = Math.random() * Math.PI * 2;
         
-        // Very slow movement. This ensures the ink stays dense in the center.
-        this.speed = Math.random() * 0.4 + 0.1; 
+        // Very slow movement keeps the center dense and wet looking
+        this.speed = Math.random() * 0.3 + 0.1; 
         
-        // Lifespan limits the expansion size
-        this.life = Math.floor(Math.random() * 120) + 60;
+        // Longer life for wider pooling
+        this.life = Math.floor(Math.random() * 150) + 100;
         
-        // Soft, small circles stack into a fuzzy watercolor cloud
-        this.size = Math.random() * 2.5 + 1.0; 
+        // Soft droplets stack into watercolor clouds
+        this.size = Math.random() * 2.0 + 1.0; 
         
-        // Dominant ink pushes outward slightly harder to overtake weaker colors
-        this.outwardBias = isDominant ? 0.25 : 0.05;
+        // Dominant ink has higher capillary pressure
+        this.outwardBias = isDominant ? 0.3 : 0.05;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // High Jitter: This destroys the "spaghetti" look and turns it into a porous cloud
-        this.angle += (Math.random() - 0.5) * 1.5; 
+        // Brownian Jitter creates porous paper edges instead of spaghetti lines
+        this.angle += (Math.random() - 0.5) * 1.8; 
         
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed;
 
-        // Gentle Capillary Push
+        // Capillary push from the origin
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -469,48 +473,52 @@ class InkParticle {
 }
 
 function initBleed() {
-    // Lock canvas exactly to the scrollable interior
+    // 1. Lock canvas strictly to the inner scrollable dimensions of the table
     bleedCanvas.width = container.scrollWidth;
     bleedCanvas.height = container.scrollHeight;
+    bleedCanvas.style.width = container.scrollWidth + 'px';
+    bleedCanvas.style.height = container.scrollHeight + 'px';
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-    
-    // source-over caps the darkness at the raw RGB values
     bCtx.globalCompositeOperation = 'source-over';
     activeParticles = [];
 
-    const containerRect = container.getBoundingClientRect();
+    const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
 
-    // Iterate through every cell to calculate localized dominance
+    // 2. Iterate through physical grid cells to get their relative offsets
     document.querySelectorAll('.grid-cell').forEach(cell => {
-        // Find every literal, physical drop inside this specific cell
-        const drops = cell.querySelectorAll('.ink-drop');
+        const cellId = cell.dataset.id;
+        const drops = dataSource[cellId] || [];
         if (drops.length === 0) return;
 
-        // Calculate who wins the cell
-        let successVol = 0;
-        let failureVol = 0;
-        drops.forEach(d => { 
-            if (d.classList.contains('ink-success')) successVol++; 
-            else failureVol++; 
-        });
+        // Using offsetLeft/Top bypasses scrolling coordinate bugs entirely
+        const cellLeft = cell.offsetLeft;
+        const cellTop = cell.offsetTop;
+
+        // Calculate volumetric dominance
+        let successVol = 0, failureVol = 0;
+        drops.forEach(d => { if (d.type === 1) successVol++; else failureVol++; });
         const isSuccessDominant = successVol >= failureVol;
 
-        // Map the ink
-        drops.forEach(drop => {
-            // Get the precise, physical location of the dot you see on the screen
-            const dropRect = drop.getBoundingClientRect();
-            
-            // Translate its window coordinates into internal scrollable canvas coordinates
-            const originX = (dropRect.left - containerRect.left) + container.scrollLeft + (dropRect.width / 2);
-            const originY = (dropRect.top - containerRect.top) + container.scrollTop + (dropRect.height / 2);
+        drops.forEach(d => {
+            let posX = d.x !== undefined ? d.x : 50;
+            let posY = d.y !== undefined ? d.y : 25;
 
-            const isSuccess = drop.classList.contains('ink-success');
-            const isDominant = (isSuccess && isSuccessDominant) || (!isSuccess && !isSuccessDominant);
-            const color = isSuccess ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
+            // Modulo clustering for the All-Time Stack view
+            if (viewMode === 'aggregate') {
+                posX = 15 + (posX % 15); 
+                posY = 10 + (posY % 8);
+            }
+
+            // The absolute coordinate within the scrollable table
+            const originX = cellLeft + posX;
+            const originY = cellTop + posY;
+
+            const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
+            const color = d.type === 1 ? COLOR_SUCCESS_INK : COLOR_FAILURE_INK;
             
-            // Dominant color spawns 3x more ink, allowing it to easily wash over the weaker color
-            const particleCount = isDominant ? 450 : 150;
+            // Dominant color gets massive particle superiority to physically bury the weaker color
+            const particleCount = isDominant ? 350 : 100;
 
             for (let i = 0; i < particleCount; i++) {
                 activeParticles.push(new InkParticle(originX, originY, color, isDominant));
@@ -518,8 +526,7 @@ function initBleed() {
         });
     });
 
-    // Rendering Hierarchy: Dominant particles are placed at the end of the array,
-    // ensuring they are mathematically drawn last and sit physically on top.
+    // 3. Render Hierarchy: Dominant particles go to the end of the array, drawing last.
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
@@ -570,11 +577,11 @@ const resetBleedState = () => {
     isBleeding = false;
     hasStartedBleeding = false;
     cancelAnimationFrame(bleedAnimationId);
-    bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-    bleedBtn.textContent = 'INITIATE DIFFUSION';
+    if (bCtx && bleedCanvas) bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+    if (bleedBtn) bleedBtn.textContent = 'INITIATE DIFFUSION';
 };
 
-// Clear bleed if the user interacts with the UI (changes weeks/views)
+// Clear bleed if UI state changes
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
 document.getElementById('next-week').addEventListener('click', resetBleedState);
 document.getElementById('view-toggle').addEventListener('click', resetBleedState);
@@ -582,3 +589,4 @@ container.addEventListener('click', resetBleedState);
 
 bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
+          
