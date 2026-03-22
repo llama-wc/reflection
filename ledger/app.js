@@ -353,7 +353,7 @@ initializeSession();
 
 
 // ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. X) ---
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. XI) ---
 // ========================================================
 
 function ensureCanvas() {
@@ -368,7 +368,8 @@ function ensureCanvas() {
             canvas.style.top = '0';
             canvas.style.left = '0';
             canvas.style.pointerEvents = 'none'; 
-            canvas.style.zIndex = '10'; 
+            // Dropped from 10 to 2 so it slides under the headers
+            canvas.style.zIndex = '2'; 
         }
         container.appendChild(canvas);
     }
@@ -413,9 +414,8 @@ let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Authentic, deep ink colors with low alpha for smooth layering
-const PIGMENT_SUCCESS = 'rgba(25, 45, 120, 0.035)'; // Deep Navy
-const PIGMENT_FAILURE = 'rgba(150, 20, 30, 0.035)'; // Deep Crimson
+const PIGMENT_SUCCESS = 'rgba(25, 45, 120, 0.035)'; 
+const PIGMENT_FAILURE = 'rgba(150, 20, 30, 0.035)'; 
 
 class CapillaryPore {
     constructor(x, y, color) {
@@ -425,27 +425,21 @@ class CapillaryPore {
         this.y = y;
         this.color = color;
         
-        // Random initial trajectory
         const angle = Math.random() * Math.PI * 2;
         const initialThrust = Math.random() * 0.8;
         this.vx = Math.cos(angle) * initialThrust;
         this.vy = Math.sin(angle) * initialThrust;
         
-        // Lifespan dictates how far the ink spreads
         this.life = Math.floor(Math.random() * 150) + 80;
-        
-        // Small sizes to create fine, fractal-like paper fiber details
         this.size = Math.random() * 1.5 + 0.5; 
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // Brownian Motion: Constantly perturb the velocity to simulate finding paths through paper grain
         this.vx += (Math.random() - 0.5) * 0.3;
         this.vy += (Math.random() - 0.5) * 0.3;
 
-        // Gentle outward radial push to ensure the drop expands overall
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -455,14 +449,12 @@ class CapillaryPore {
             this.vy += (dy / dist) * 0.02;
         }
 
-        // Paper Friction: Slows the ink down over time, creating dense, pooled edges
         this.vx *= 0.94;
         this.vy *= 0.94;
 
         this.x += this.vx;
         this.y += this.vy;
         
-        // Shrink slightly as it dries to create sharp capillary tips
         this.size *= 0.995; 
         
         this.life--;
@@ -488,6 +480,17 @@ function initBleed() {
     bCtx.globalCompositeOperation = 'source-over';
     activeParticles = [];
 
+    // --- THE ROOF FIX ---
+    // Ensure all headers (rows and columns) sit above the ink layer
+    document.querySelectorAll('.grid-header').forEach(header => {
+        // Only apply position: relative if it doesn't already have sticky/absolute
+        if (window.getComputedStyle(header).position === 'static') {
+            header.style.position = 'relative';
+        }
+        // Force the stacking context above the canvas (which is at z-index: 2)
+        header.style.zIndex = '20'; 
+    });
+
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
 
     document.querySelectorAll('.grid-cell').forEach(cell => {
@@ -511,8 +514,6 @@ function initBleed() {
             const originY = cellTop + posY;
 
             const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
-            
-            // High volume of micro-particles ensures rich mixing when red hits blue
             const particleCount = 450; 
 
             for (let i = 0; i < particleCount; i++) {
@@ -549,7 +550,7 @@ function toggleBleed() {
         initBleed();
         isBleeding = true;
         hasStartedBleeding = true;
-        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        bleedBtn.textContent = 'PAUSE BLEED';
         animateBleed();
     } else if (isBleeding) {
         isBleeding = false;
@@ -560,11 +561,11 @@ function toggleBleed() {
         initBleed();
         isBleeding = true;
         hasStartedBleeding = true;
-        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        bleedBtn.textContent = 'PAUSE BLEED';
         animateBleed();
     } else {
         isBleeding = true;
-        bleedBtn.textContent = 'PAUSE DIFFUSION';
+        bleedBtn.textContent = 'PAUSE BLEED';
         animateBleed();
     }
 }
@@ -578,7 +579,7 @@ const resetBleedState = () => {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-    bleedBtn.textContent = 'INITIATE DIFFUSION';
+    bleedBtn.textContent = 'LET IT BLEED';
 };
 
 document.getElementById('prev-week').addEventListener('click', resetBleedState);
@@ -588,5 +589,3 @@ container.addEventListener('click', resetBleedState);
 
 bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
-
- 
