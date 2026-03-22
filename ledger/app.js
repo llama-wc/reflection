@@ -351,7 +351,7 @@ initializeSession();
 
     
  // ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. VII) ---
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. VIII) ---
 // ========================================================
 
 function ensureCanvas() {
@@ -411,30 +411,22 @@ let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Rich base colors, high transparency for native source-over stacking
 const PIGMENT_SUCCESS = 'rgba(20, 45, 130, 0.05)'; 
 const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.05)'; 
 
 class CapillaryPore {
-    constructor(x, y, color, isDominant, myType, allOrigins) {
+    constructor(x, y, color, isDominant) {
         this.originX = x;
         this.originY = y;
         this.x = x;
         this.y = y;
         this.color = color;
         this.isDominant = isDominant;
-        this.myType = myType;
-        this.allOrigins = allOrigins;
         
         this.angle = Math.random() * Math.PI * 2;
-        
-        // Slower base speed to prevent the "worm" lines
         this.speed = Math.random() * 0.15 + 0.05; 
         
-        // Shorter life so it pools tighter
         this.life = Math.floor(Math.random() * 120) + 80;
-        
-        // Larger, softer droplet sizes for a watercolor cloud effect
         this.size = Math.random() * 3.0 + 1.5; 
         
         this.outwardBias = isDominant ? 0.20 : 0.08;
@@ -443,13 +435,13 @@ class CapillaryPore {
     update() {
         if (this.life <= 0) return;
 
-        // Massive jitter ensures the particles scatter like clouds instead of drawing lines
+        // 1. Organic Jitter (Paper grain wandering)
         this.angle += (Math.random() - 0.5) * 2.5;
         
         let stepX = Math.cos(this.angle) * this.speed;
         let stepY = Math.sin(this.angle) * this.speed;
 
-        // Capillary Outward Push 
+        // 2. Capillary Outward Push
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const distToHome = Math.sqrt(dx * dx + dy * dy);
@@ -459,47 +451,16 @@ class CapillaryPore {
             stepY += (dy / distToHome) * this.outwardBias;
         }
 
-        // Wet-on-Wet Interaction
-        let isCoagulating = false;
-
-        for (let i = 0; i < this.allOrigins.length; i++) {
-            const other = this.allOrigins[i];
-            
-            if (other.x === this.originX && other.y === this.originY) continue;
-
-            const odx = other.x - this.x;
-            const ody = other.y - this.y;
-            const distToOther = Math.sqrt(odx * odx + ody * ody);
-
-            // Tighter interaction radius (35px)
-            if (distToOther < 35 && distToOther > 0) {
-                if (other.type !== this.myType) {
-                    // HIT AN OPPOSING COLOR: Trigger heavy friction (NO REPELLING)
-                    isCoagulating = true;
-                } else {
-                    // HIT AN ALLY COLOR: Gentle wicking attraction
-                    stepX += (odx / distToOther) * 0.015;
-                    stepY += (ody / distToOther) * 0.015;
-                }
-            }
-        }
-
-        // Apply physical braking if it hit an opposing color boundary
-        if (isCoagulating) {
-            // Hard brake. The ink stops flowing outward and dumps pigment here.
-            stepX *= 0.25;
-            stepY *= 0.25;
-            
-            // Shrink the pore size slightly to create a sharper boundary line
-            this.size *= 0.98; 
-            
-            // Die slightly faster when hitting a wall so it doesn't bleed through
-            this.life -= 1; 
+        // 3. Fluid Pressure Loss
+        // As the ink gets further from the center, it runs out of momentum.
+        // It slows down and deposits pigment heavily, creating a natural watercolor edge.
+        if (distToHome > 35) {
+            this.speed *= 0.95; 
+            this.size *= 0.98; // Thins out at the extreme edges
         }
 
         this.x += stepX;
         this.y += stepY;
-
         this.life--;
     }
 
@@ -525,34 +486,6 @@ function initBleed() {
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
     
-    // Pass 1: Environmental Awareness Map
-    let allDropOrigins = [];
-    document.querySelectorAll('.grid-cell').forEach(cell => {
-        const cellId = cell.dataset.id;
-        const drops = dataSource[cellId] || [];
-        if (drops.length === 0) return;
-
-        const cellLeft = cell.offsetLeft;
-        const cellTop = cell.offsetTop;
-
-        drops.forEach(d => {
-            let posX = d.x !== undefined ? d.x : 50;
-            let posY = d.y !== undefined ? d.y : 25;
-
-            if (viewMode === 'aggregate') {
-                posX = 15 + (posX % 15); 
-                posY = 10 + (posY % 8);
-            }
-
-            allDropOrigins.push({
-                x: cellLeft + posX,
-                y: cellTop + posY,
-                type: d.type
-            });
-        });
-    });
-
-    // Pass 2: Particle Spawning
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
         const drops = dataSource[cellId] || [];
@@ -580,14 +513,16 @@ function initBleed() {
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
             const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
+            // Generate dense clusters
             const particleCount = isDominant ? 400 : 180;
 
             for (let i = 0; i < particleCount; i++) {
-                activeParticles.push(new CapillaryPore(originX, originY, color, isDominant, d.type, allDropOrigins));
+                activeParticles.push(new CapillaryPore(originX, originY, color, isDominant));
             }
         });
     });
 
+    // Draw dominant ink last so it sits on top
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
