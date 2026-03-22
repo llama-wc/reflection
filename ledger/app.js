@@ -353,7 +353,7 @@ initializeSession();
 
 
 // ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. IX) ---
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. X) ---
 // ========================================================
 
 function ensureCanvas() {
@@ -413,76 +413,58 @@ let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-// Brighter base colors with extremely low alpha. 
-// When they 'multiply' together, they will form deep, rich purples without turning black.
-const PIGMENT_SUCCESS = 'rgba(40, 80, 220, 0.015)'; 
-const PIGMENT_FAILURE = 'rgba(230, 40, 60, 0.015)'; 
+// Authentic, deep ink colors with low alpha for smooth layering
+const PIGMENT_SUCCESS = 'rgba(25, 45, 120, 0.035)'; // Deep Navy
+const PIGMENT_FAILURE = 'rgba(150, 20, 30, 0.035)'; // Deep Crimson
 
 class CapillaryPore {
-    constructor(x, y, color, enemyOrigins) {
+    constructor(x, y, color) {
         this.originX = x;
         this.originY = y;
+        this.x = x;
+        this.y = y;
         this.color = color;
-        this.enemyOrigins = enemyOrigins;
         
-        // Scatter start: Prevents the exact center pixel from turning into a black hole
-        const startRadius = Math.random() * 8;
-        const startAngle = Math.random() * Math.PI * 2;
-        this.x = x + Math.cos(startAngle) * startRadius;
-        this.y = y + Math.sin(startAngle) * startRadius;
+        // Random initial trajectory
+        const angle = Math.random() * Math.PI * 2;
+        const initialThrust = Math.random() * 0.8;
+        this.vx = Math.cos(angle) * initialThrust;
+        this.vy = Math.sin(angle) * initialThrust;
         
-        this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 0.2 + 0.1; 
+        // Lifespan dictates how far the ink spreads
+        this.life = Math.floor(Math.random() * 150) + 80;
         
-        this.life = Math.floor(Math.random() * 150) + 100;
-        this.size = Math.random() * 2.5 + 1.0; 
+        // Small sizes to create fine, fractal-like paper fiber details
+        this.size = Math.random() * 1.5 + 0.5; 
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // Organic Jitter
-        this.angle += (Math.random() - 0.5) * 2.0;
-        
-        let stepX = Math.cos(this.angle) * this.speed;
-        let stepY = Math.sin(this.angle) * this.speed;
+        // Brownian Motion: Constantly perturb the velocity to simulate finding paths through paper grain
+        this.vx += (Math.random() - 0.5) * 0.3;
+        this.vy += (Math.random() - 0.5) * 0.3;
 
+        // Gentle outward radial push to ensure the drop expands overall
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
-        const distToHome = Math.sqrt(dx * dx + dy * dy);
+        const dist = Math.sqrt(dx * dx + dy * dy);
         
-        // Capillary Outward Push
-        if (distToHome > 0) {
-            stepX += (dx / distToHome) * 0.18;
-            stepY += (dy / distToHome) * 0.18;
+        if (dist > 0) {
+            this.vx += (dx / dist) * 0.02;
+            this.vy += (dy / dist) * 0.02;
         }
 
-        // --- THE FRONT LINE PHYSICS ---
-        // Find the distance to the closest opposing color drop
-        let nearestEnemyDist = Infinity;
-        for (let i = 0; i < this.enemyOrigins.length; i++) {
-            const eo = this.enemyOrigins[i];
-            const d = Math.sqrt(Math.pow(this.x - eo.x, 2) + Math.pow(this.y - eo.y, 2));
-            if (d < nearestEnemyDist) nearestEnemyDist = d;
-        }
+        // Paper Friction: Slows the ink down over time, creating dense, pooled edges
+        this.vx *= 0.94;
+        this.vy *= 0.94;
 
-        // If the particle is getting dangerously close to an enemy origin...
-        if (nearestEnemyDist < distToHome + 15) {
-            // Hit the chemical boundary. Brake hard.
-            stepX *= 0.1; 
-            stepY *= 0.1; 
-            // Swell up slightly to simulate pooling at the ridge
-            this.size += 0.08; 
-            // Dry up faster so it dumps pigment exactly at the intersection
-            this.life -= 2; 
-        } else if (distToHome > 40) {
-            // Normal edge pressure loss if no enemy is near
-            this.speed *= 0.94; 
-            this.size *= 0.99; 
-        }
-
-        this.x += stepX;
-        this.y += stepY;
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Shrink slightly as it dries to create sharp capillary tips
+        this.size *= 0.995; 
+        
         this.life--;
     }
 
@@ -503,16 +485,10 @@ function initBleed() {
     bleedCanvas.height = container.scrollHeight;
     
     bCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
-    
-    // True pigment mixing
-    bCtx.globalCompositeOperation = 'multiply';
+    bCtx.globalCompositeOperation = 'source-over';
     activeParticles = [];
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
-    
-    // Pass 1: Map all origins by type
-    let successOrigins = [];
-    let failureOrigins = [];
 
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
@@ -534,43 +510,13 @@ function initBleed() {
             const originX = cellLeft + posX;
             const originY = cellTop + posY;
 
-            if (d.type === 1) successOrigins.push({ x: originX, y: originY });
-            else failureOrigins.push({ x: originX, y: originY });
-        });
-    });
-
-    // Pass 2: Spawn particles with environmental awareness
-    document.querySelectorAll('.grid-cell').forEach(cell => {
-        const cellId = cell.dataset.id;
-        const drops = dataSource[cellId] || [];
-        if (drops.length === 0) return;
-
-        const cellLeft = cell.offsetLeft;
-        const cellTop = cell.offsetTop;
-
-        drops.forEach(d => {
-            let posX = d.x !== undefined ? d.x : 50;
-            let posY = d.y !== undefined ? d.y : 25;
-
-            if (viewMode === 'aggregate') {
-                posX = 15 + (posX % 15); 
-                posY = 10 + (posY % 8);
-            }
-
-            const originX = cellLeft + posX;
-            const originY = cellTop + posY;
-
-            const isSuccess = d.type === 1;
-            const color = isSuccess ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
-            // Pass the opposing team's coordinates to the particle
-            const enemyOrigins = isSuccess ? failureOrigins : successOrigins;
+            const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
-            // Because multiply blends inherently, we don't need sorting or dominance bias anymore.
-            // A flat dense volume guarantees gorgeous, dark pooling.
-            const particleCount = 350;
+            // High volume of micro-particles ensures rich mixing when red hits blue
+            const particleCount = 450; 
 
             for (let i = 0; i < particleCount; i++) {
-                activeParticles.push(new CapillaryPore(originX, originY, color, enemyOrigins));
+                activeParticles.push(new CapillaryPore(originX, originY, color));
             }
         });
     });
@@ -642,3 +588,5 @@ container.addEventListener('click', resetBleedState);
 
 bleedBtn.removeEventListener('click', toggleBleed);
 bleedBtn.addEventListener('click', toggleBleed);
+
+ 
