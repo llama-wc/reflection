@@ -350,8 +350,8 @@ initializeSession();
 
 
     
-// ========================================================
-// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. V) ---
+ // ========================================================
+// --- HYPER-REALISTIC FLUID DYNAMICS ENGINE (MK. VI) ---
 // ========================================================
 
 function ensureCanvas() {
@@ -411,11 +411,11 @@ let bleedAnimationId = null;
 let isBleeding = false;
 let hasStartedBleeding = false;
 
-const PIGMENT_SUCCESS = 'rgba(25, 55, 140, 0.05)'; 
-const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.05)'; 
+// Rich base colors, high transparency for native source-over stacking
+const PIGMENT_SUCCESS = 'rgba(20, 45, 130, 0.04)'; 
+const PIGMENT_FAILURE = 'rgba(160, 20, 30, 0.04)'; 
 
 class CapillaryPore {
-    // We now pass the 'type' of the ink, and a map of ALL other drops on the board
     constructor(x, y, color, isDominant, myType, allOrigins) {
         this.originX = x;
         this.originY = y;
@@ -426,80 +426,81 @@ class CapillaryPore {
         this.myType = myType;
         this.allOrigins = allOrigins;
         
-        // Using momentum (velocity) instead of angle snapping creates organic "veins"
-        this.vx = (Math.random() - 0.5);
-        this.vy = (Math.random() - 0.5);
+        this.angle = Math.random() * Math.PI * 2;
         
-        this.life = Math.floor(Math.random() * 250) + 100;
-        this.size = Math.random() * 1.5 + 0.5; 
+        // CRITICAL FIX: Extremely slow base speed (max 0.25 pixels per frame)
+        this.speed = Math.random() * 0.15 + 0.1; 
         
-        this.outwardBias = isDominant ? 0.35 : 0.15;
+        // Longer life so the slow particles have time to bloom
+        this.life = Math.floor(Math.random() * 200) + 150;
+        
+        this.size = Math.random() * 2.0 + 1.0; 
+        
+        // Pure positional bias, NOT acceleration
+        this.outwardBias = isDominant ? 0.15 : 0.05;
     }
 
     update() {
         if (this.life <= 0) return;
 
-        // 1. Dendritic Jitter: Perturb the velocity slightly, simulating paper grain resistance
-        this.vx += (Math.random() - 0.5) * 0.4;
-        this.vy += (Math.random() - 0.5) * 0.4;
+        // 1. Organic Jitter (Paper grain wandering)
+        this.angle += (Math.random() - 0.5) * 1.5;
+        
+        // Calculate base positional step
+        let stepX = Math.cos(this.angle) * this.speed;
+        let stepY = Math.sin(this.angle) * this.speed;
 
-        // 2. Base Capillary Push (flowing outward from its own center)
+        // 2. Capillary Outward Push (Applied to position, preventing laser-beams)
         const dx = this.x - this.originX;
         const dy = this.y - this.originY;
         const distToHome = Math.sqrt(dx * dx + dy * dy);
         
         if (distToHome > 0) {
-            this.vx += (dx / distToHome) * this.outwardBias;
-            this.vy += (dy / distToHome) * this.outwardBias;
+            stepX += (dx / distToHome) * this.outwardBias;
+            stepY += (dy / distToHome) * this.outwardBias;
         }
 
-        // 3. WET-ON-WET INTERACTION (The Organic Overlap)
-        let wickingX = 0;
-        let wickingY = 0;
+        // 3. Organic Wet-on-Wet Interaction
         let isCoagulating = false;
 
-        // The particle "looks" at all the other drops on the board
         for (let i = 0; i < this.allOrigins.length; i++) {
             const other = this.allOrigins[i];
             
-            // Ignore our own origin
+            // Skip self
             if (other.x === this.originX && other.y === this.originY) continue;
 
             const odx = other.x - this.x;
             const ody = other.y - this.y;
             const distToOther = Math.sqrt(odx * odx + ody * ody);
 
-            // If the ink drifts within 60 pixels of another drop, it gets sucked into the wet paper
-            if (distToOther < 60 && distToOther > 0) {
-                // The closer it gets, the stronger the pull
-                const pullStrength = 0.5 / (distToOther * 0.1); 
-                wickingX += (odx / distToOther) * pullStrength;
-                wickingY += (ody / distToOther) * pullStrength;
-                
-                // If it hits an opposing color, it undergoes chemical coagulation
+            // Interaction radius of 45 pixels
+            if (distToOther < 45 && distToOther > 0) {
                 if (other.type !== this.myType) {
+                    // HIT AN OPPOSING COLOR: Form a boundary ridge
                     isCoagulating = true;
+                    // Push slightly away from the opponent to pile up pigment at the border
+                    stepX -= (odx / distToOther) * 0.05;
+                    stepY -= (ody / distToOther) * 0.05;
+                } else {
+                    // HIT AN ALLY COLOR: Wicking effect (gentle attraction)
+                    stepX += (odx / distToOther) * 0.02;
+                    stepY += (ody / distToOther) * 0.02;
                 }
             }
         }
 
-        this.vx += wickingX;
-        this.vy += wickingY;
-
-        // 4. Fluid Friction
+        // 4. Apply physical braking if coagulating
         if (isCoagulating) {
-            // Hitting an opposing color acts like a wall. The ink brakes hard, 
-            // dumping its pigment into a dense, dark boundary line.
-            this.vx *= 0.6; 
-            this.vy *= 0.6;
-        } else {
-            // Normal paper friction
-            this.vx *= 0.92;
-            this.vy *= 0.92;
+            // Massive speed reduction. Ink dumps heavily here.
+            stepX *= 0.2;
+            stepY *= 0.2;
+            // Shrink the pore slightly to create a sharper, darker line
+            this.size *= 0.98; 
         }
 
-        this.x += this.vx;
-        this.y += this.vy;
+        // Execute the step
+        this.x += stepX;
+        this.y += stepY;
 
         this.life--;
     }
@@ -526,10 +527,8 @@ function initBleed() {
 
     const dataSource = viewMode === 'aggregate' ? getAggregateData() : gridData;
     
-    // First Pass: Collect the exact coordinates and types of ALL drops on the board
-    // This creates the "environmental awareness" map for the particles
+    // Pass 1: Environmental Awareness Map
     let allDropOrigins = [];
-
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
         const drops = dataSource[cellId] || [];
@@ -555,7 +554,7 @@ function initBleed() {
         });
     });
 
-    // Second Pass: Spawn the particles, feeding them the environmental map
+    // Pass 2: Particle Spawning
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const cellId = cell.dataset.id;
         const drops = dataSource[cellId] || [];
@@ -583,7 +582,8 @@ function initBleed() {
             const isDominant = (d.type === 1 && isSuccessDominant) || (d.type === 2 && !isSuccessDominant);
             const color = d.type === 1 ? PIGMENT_SUCCESS : PIGMENT_FAILURE;
             
-            const particleCount = isDominant ? 400 : 150;
+            // Moderate particle counts to keep performance high while maintaining density
+            const particleCount = isDominant ? 350 : 150;
 
             for (let i = 0; i < particleCount; i++) {
                 activeParticles.push(new CapillaryPore(originX, originY, color, isDominant, d.type, allDropOrigins));
@@ -591,6 +591,7 @@ function initBleed() {
         });
     });
 
+    // Draw dominant ink last
     activeParticles.sort((a, b) => (a.isDominant === b.isDominant) ? 0 : a.isDominant ? 1 : -1);
 }
 
