@@ -387,7 +387,7 @@ if (!bleedBtnContainer) {
 
     const newBleedBtn = document.createElement('button');
     newBleedBtn.id = 'bleed-btn';
-    newBleedBtn.textContent = 'INITIATE DIFFUSION';
+    newBleedBtn.textContent = 'LET IT BLEED';
     newBleedBtn.style.padding = '12px 24px';
     newBleedBtn.style.backgroundColor = '#e6e2d8';
     newBleedBtn.style.color = '#333';
