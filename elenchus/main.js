@@ -6,9 +6,6 @@ const themeToggle = document.getElementById("theme-toggle");
 const statusText = document.getElementById("loading-status");
 const loadingIndicator = document.getElementById("loading-indicator");
 
-const trackInitial = document.getElementById("track-initial");
-const trackAssumption = document.getElementById("track-assumption");
-const trackContradiction = document.getElementById("track-contradiction");
 const trackUpdated = document.getElementById("track-updated");
 
 let isFirstMessage = true;
@@ -43,16 +40,16 @@ function appendMessage(role, text) {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Upgraded Auto-Synthesis Task
+// Fluid, Bulleted Synthesis
 async function runAutoSynthesis() {
-    trackUpdated.innerText = "Synthesizing current state...";
+    trackUpdated.innerText = "Analyzing logic flow...";
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 messages: [
-                    { role: "system", content: "You are an analytical observer. Summarize the core philosophical conflict between the user's premise and the AI's questioning in exactly one short, insightful sentence. Do not use quotes or introductory phrases." },
+                    { role: "system", content: "You are a background logic analyzer. Review the dialogue. Break down the current state of the argument in 2 to 3 concise bullet points. Focus on the core premise, the flaw or nuance being explored, and where the user currently stands. Be analytical, brief, and use standard hyphens (-) for bullets. Do not include introductory text." },
                     ...chatHistory.slice(-6) 
                 ]
             })
@@ -62,8 +59,7 @@ async function runAutoSynthesis() {
             const data = await response.json();
             let summary = data.response.trim();
             
-            summary = summary.replace(/^(Synthesis|Summary|Assistant|AI):/i, "").trim();
-            
+            // Fallback if the AI returns a blank string
             if (summary.length < 5) {
                 trackUpdated.innerText = "Awaiting deeper context for synthesis...";
             } else {
@@ -93,19 +89,11 @@ async function handleSend() {
         let systemPrompt = "";
 
         if (isFirstMessage) {
-            trackInitial.innerText = `"${text}"`;
             isFirstMessage = false;
-            
-            trackAssumption.innerText = "Clarifying definitions...";
-            trackContradiction.innerText = "Awaiting defense...";
-
             systemPrompt = "You are a master Socratic philosopher. The user just stated a premise. Ask a single, gentle question to clarify their definition of a key term, or ask for the underlying reasoning behind their premise. Keep it under 20 words. Act genuinely curious.";
         } else {
-            trackAssumption.innerText = "Evaluating logic...";
-            trackContradiction.innerText = "Testing boundaries...";
-
-            // THE ESCAPE HATCH: Allows the AI to agree and conclude the debate.
-            systemPrompt = "You are a master Socratic philosopher. Evaluate the user's latest response. IF they have successfully refined their premise to be logically sound and nuanced (e.g., conceding an absolute like 'all' to 'some'), congratulate them on reaching a wiser conclusion, summarize the insight, and DO NOT ask any further questions. End the discussion. IF their logic still has flaws or absolute statements, acknowledge their point in 1 sentence, THEN ask ONE short, probing question to explore its limits.";
+            // Natural Conclusion Escape Hatch
+            systemPrompt = "You are a master Socratic philosopher. Evaluate the user's latest response. IF they have successfully refined their premise to be logically sound (like changing 'all' to 'some'), agree with them naturally in one short, conversational sentence, mention why it's a good distinction, and DO NOT ask any further questions. End the discussion. IF their logic still has flaws, acknowledge their point in 1 sentence, THEN ask ONE short, probing question to explore its limits.";
         }
 
         const response = await fetch('/api/chat', {
@@ -131,15 +119,11 @@ async function handleSend() {
         chatHistory.push({ role: "assistant", content: finalResponse });
         appendMessage("ai", finalResponse);
 
-        // UI Logic: Check if Socrates concluded the debate
-        if (finalResponse.endsWith("?")) {
-            trackAssumption.innerText = "Argument mapped.";
-            trackContradiction.innerText = "Awaiting user response...";
-            userInput.placeholder = "Defend or refine your premise...";
+        // Check if Socrates concluded the debate
+        if (!finalResponse.endsWith("?")) {
+            userInput.placeholder = "Dialogue concluded. Click 'Reset Engine' to restart.";
         } else {
-            trackAssumption.innerText = "Resolution reached.";
-            trackContradiction.innerText = "Dialogue concluded.";
-            userInput.placeholder = "Click 'Reset Engine' to start a new dialogue.";
+            userInput.placeholder = "Defend or refine your premise...";
         }
 
         // Trigger synthesis
@@ -159,10 +143,7 @@ async function handleSend() {
 resetBtn.addEventListener("click", () => {
     isFirstMessage = true;
     chatHistory = []; 
-    trackInitial.innerText = "Awaiting input...";
-    trackAssumption.innerText = "Wait for premise...";
-    trackContradiction.innerText = "Wait for premise...";
-    trackUpdated.innerText = "Awaiting resolution...";
+    trackUpdated.innerText = "Awaiting premise...";
     userInput.placeholder = "State a premise or ask a question...";
     
     Array.from(chatBox.children).forEach(child => {
