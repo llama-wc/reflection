@@ -16,7 +16,7 @@ let chatHistory = [];
 let lockedPremise = ""; 
 
 function initializeEngine() {
-    statusText.innerText = "Status: Online. Director Override Authorized.";
+    statusText.innerText = "Status: Online. Socratic Guide Authorized.";
     statusText.style.color = "#4CAF50";
     userInput.disabled = false;
     sendBtn.disabled = false;
@@ -57,17 +57,19 @@ async function handleSend() {
             synthBtn.style.display = "block";
             
             trackAssumption.innerText = "Extracting core concept...";
-            trackContradiction.innerText = "Formulating logical counter-example...";
+            trackContradiction.innerText = "Exploring exceptions...";
 
-            systemPrompt = "You are a ruthless Socratic debater. The user just stated a premise. Find a specific, concrete counter-example that disproves their absolute statement, and ask a short, punchy question (under 15 words) challenging them with that example. End with a question mark. Do not say anything else. Do not validate them.";
+            // The Wise, Patient Socrates (Turn 1)
+            systemPrompt = "You are a wise, patient Socratic philosopher. The user just stated a premise. Adopt a posture of gentle curiosity. Find a specific, concrete counter-example that complicates their absolute statement, and ask a short, thoughtful question (under 15 words) exploring that exception. End with a question mark. Be polite but intellectually rigorous.";
         } else {
             trackAssumption.innerText = "Processing defense...";
-            trackContradiction.innerText = "Debater engaged...";
+            trackContradiction.innerText = "Philosopher engaged...";
 
-            systemPrompt = "You are Socrates. The user is defending their logic. Ask ONE short question (under 15 words) to expose a flaw in their reasoning. End with a question mark. Do not validate them. Do not answer their question.";
+            // The Wise, Patient Socrates (Turn 2+)
+            systemPrompt = "You are a wise, patient Socratic philosopher. The user is defending their logic. Ask ONE short, gentle question (under 15 words) to help them see a blind spot in their reasoning. End with a question mark. Do not attack; guide them to question their own premise.";
         }
 
-        // Hit the secure backend Cloudflare function we made
+        // Hit the secure backend Cloudflare function
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -86,21 +88,18 @@ async function handleSend() {
 
         let finalQuestion = data.response.trim();
 
-        // Safety cleanup 
+        // Safety cleanup
         finalQuestion = finalQuestion.replace(/^(Assistant|Socrates|AI):/i, "").replace(/^["']|["']$/g, "").trim();
 
         loadingIndicator.style.display = "none";
         chatHistory.push({ role: "assistant", content: finalQuestion });
         appendMessage("ai", finalQuestion);
-   
-    
+
     } catch (error) {
         loadingIndicator.style.display = "none";
         appendMessage("ai", `SYSTEM ERROR: ${error.message}`);
         console.error(error);
     }
-
-
 
     userInput.disabled = false;
     sendBtn.disabled = false;
@@ -122,7 +121,7 @@ async function handleSynthesize() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 messages: [
-                    { role: "system", content: "Summarize the conclusion of this debate in exactly one short sentence starting with 'I now see that...'" },
+                    { role: "system", content: "Summarize the conclusion of this discussion in exactly one short, enlightening sentence starting with 'I now see that...'" },
                     ...chatHistory
                 ]
             })
