@@ -53,7 +53,7 @@ async function runAutoSynthesis() {
             body: JSON.stringify({
                 messages: [
                     { role: "system", content: "You are an analytical observer. Summarize the core philosophical conflict between the user's premise and the AI's questioning in exactly one short, insightful sentence. Do not use quotes or introductory phrases." },
-                    ...chatHistory.slice(-6) // Give it the last few turns of context
+                    ...chatHistory.slice(-6) 
                 ]
             })
         });
@@ -62,10 +62,8 @@ async function runAutoSynthesis() {
             const data = await response.json();
             let summary = data.response.trim();
             
-            // Clean up any weird AI prefixes
             summary = summary.replace(/^(Synthesis|Summary|Assistant|AI):/i, "").trim();
             
-            // Fallback if the AI returns a blank string
             if (summary.length < 5) {
                 trackUpdated.innerText = "Awaiting deeper context for synthesis...";
             } else {
@@ -103,10 +101,11 @@ async function handleSend() {
 
             systemPrompt = "You are a master Socratic philosopher. The user just stated a premise. Ask a single, gentle question to clarify their definition of a key term, or ask for the underlying reasoning behind their premise. Keep it under 20 words. Act genuinely curious.";
         } else {
-            trackAssumption.innerText = "Processing argument...";
-            trackContradiction.innerText = "Testing logic...";
+            trackAssumption.innerText = "Evaluating logic...";
+            trackContradiction.innerText = "Testing boundaries...";
 
-            systemPrompt = "You are a master Socratic philosopher. The user just defended their premise or asked a question. Briefly summarize or acknowledge their point in 1 short sentence, THEN ask ONE probing question to explore its logical limits or steer them back on topic. Be highly intelligent but conversational.";
+            // THE ESCAPE HATCH: Allows the AI to agree and conclude the debate.
+            systemPrompt = "You are a master Socratic philosopher. Evaluate the user's latest response. IF they have successfully refined their premise to be logically sound and nuanced (e.g., conceding an absolute like 'all' to 'some'), congratulate them on reaching a wiser conclusion, summarize the insight, and DO NOT ask any further questions. End the discussion. IF their logic still has flaws or absolute statements, acknowledge their point in 1 sentence, THEN ask ONE short, probing question to explore its limits.";
         }
 
         const response = await fetch('/api/chat', {
@@ -132,11 +131,18 @@ async function handleSend() {
         chatHistory.push({ role: "assistant", content: finalResponse });
         appendMessage("ai", finalResponse);
 
-        // FIX: Reset the Logic Router UI so it doesn't get stuck
-        trackAssumption.innerText = "Argument mapped.";
-        trackContradiction.innerText = "Awaiting user response...";
+        // UI Logic: Check if Socrates concluded the debate
+        if (finalResponse.endsWith("?")) {
+            trackAssumption.innerText = "Argument mapped.";
+            trackContradiction.innerText = "Awaiting user response...";
+            userInput.placeholder = "Defend or refine your premise...";
+        } else {
+            trackAssumption.innerText = "Resolution reached.";
+            trackContradiction.innerText = "Dialogue concluded.";
+            userInput.placeholder = "Click 'Reset Engine' to start a new dialogue.";
+        }
 
-        // Trigger synthesis in the background automatically
+        // Trigger synthesis
         runAutoSynthesis();
 
     } catch (error) {
@@ -157,6 +163,7 @@ resetBtn.addEventListener("click", () => {
     trackAssumption.innerText = "Wait for premise...";
     trackContradiction.innerText = "Wait for premise...";
     trackUpdated.innerText = "Awaiting resolution...";
+    userInput.placeholder = "State a premise or ask a question...";
     
     Array.from(chatBox.children).forEach(child => {
         if (child.id !== "loading-indicator") child.remove();
