@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elenchus | Socratic Engine</title>
+    <title>Elenchus Engine | Mac Wall</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
-        <div class="header-content">
-            <h1>SOCRATIC ENGINE</h1>
-            <button id="theme-toggle" aria-label="Toggle Theme">◐</button>
+        <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>ELENCHUS ENGINE</h1>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <button id="theme-toggle" aria-label="Toggle Theme" style="background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">◐</button>
+                <a href="https://mac-wall.com/portfolio.html" style="color: var(--text-main); text-decoration: none; font-weight: bold; font-family: 'Inter', sans-serif; letter-spacing: 1px;">← BACK TO PORTFOLIO</a>
+            </div>
         </div>
         <div class="status-bar">
-            <span id="loading-status">Status: Online. Director Override Authorized.</span>
+            <span id="loading-status">Status: Online. Elenchus Learning Protocol Active.</span>
             <button id="reset-btn">Reset Engine</button>
         </div>
     </header>
@@ -40,9 +43,6 @@
                 <div id="track-updated" class="card-content monospace" style="flex: 1; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;">Awaiting premise...</div>
             </div>
         </section>
-
-
-        
     </main>
 
     <script src="main.js"></script>
