@@ -10,15 +10,14 @@
 <body>
 
     <div class="header" style="display: flex; justify-content: space-between; align-items: center; padding-right: 20px;">
+        <h1>VIRTUE LEDGER</h1>
         <div style="display: flex; align-items: center; gap: 20px;">
-            <h1>VIRTUE LEDGER</h1>
             <button id="global-theme-toggle" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:inherit;">◐</button>
+            <a href="https://mac-wall.com/portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
         </div>
-        <a href="https://mac-wall.com/portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
     </div>
 
     <div id="virtue-ledger-app">
-        <!-- SVG Definitions -->
         <svg style="width:0; height:0; position:absolute;">
             <defs>
                 <filter id="true-ink" x="-30%" y="-30%" width="160%" height="160%">
@@ -63,9 +62,62 @@
             <div class="status-bar"><span id="save-status"></span></div>
         </div>
 
-        <!-- Modals and internal elements omitted for brevity, keep yours intact -->
-        <!-- ... [Keep all your existing modal HTML here] ... -->
+        <div id="data-modal" class="vl-modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>DATA & SETTINGS</h2>
+                    <button id="close-modal-btn" class="close-btn">×</button>
+                </div>
 
+                <div class="modal-sync-panel">
+                    <label for="sync-url-display" class="palette-label" style="display:block; margin-bottom: 8px;"><b>YOUR SECURE SYNC LINK:</b> Bookmark this URL. It acts as the key to your personal database.</label>
+                    <div class="url-container">
+                        <input type="text" id="sync-url-display" class="vl-input" readonly>
+                        <button id="modal-sync-btn" class="vl-btn primary-btn">SAVE TO CLOUD & COPY LINK</button>
+                    </div>
+                </div>
+
+                <div class="modal-tabs">
+                    <button id="tab-about" class="tab-btn active">ABOUT & GUIDE</button>
+                    <button id="tab-virtues" class="tab-btn">VIRTUES</button>
+                    <button id="tab-data" class="tab-btn">TABULAR DATA</button>
+                </div>
+
+                <div id="panel-about" class="modal-panel active">
+                    <h3>PROJECT ARCHITECTURE & INSPIRATION</h3>
+                    <p class="modal-desc">At age 20, Benjamin Franklin conceived a system to track his personal growth. He identified 13 core virtues and carried a physical notebook, dedicating a page to each. At the end of every day, he would place a dark mark next to any virtue he struggled with.</p>
+                    <p class="modal-desc"><i>Virtue Ledger</i> brings this practice to the digital age, utilizing procedural fluid dynamics via custom SVG filters to simulate real fountain pen ink bleeding into paper fibers. The data architecture is completely serverless, utilizing a custom Cloudflare Worker to securely store compressed coordinate matrices on the edge network.</p>
+                    
+                    <h3 style="margin-top: 20px;">METHODOLOGY</h3>
+                    <ul class="modal-desc">
+                        <li><b>Logging:</b> Select <b>Practiced</b> (Blue) or <b>Slipped</b> (Red) and click a cell. Clicking multiple times will physically pool the pigment.</li>
+                        <li><b>Correcting:</b> Use the Eraser tool, or simply paint over a "Slipped" mark with a "Practiced" drop to physically cover your mistake.</li>
+                        <li><b>All-Time Stack:</b> Click the toggle at the top of the screen to compress your entire history into a single grid. As days stack up, the ink creates a dense physical heatmap of your habits.</li>
+                        <li><b>Data Ownership:</b> Your data is bound strictly to the randomly generated URL assigned to you. Keep it safe to maintain your state across devices.</li>
+                    </ul>
+                </div>
+                
+                <div id="panel-virtues" class="modal-panel hidden">
+                    <p class="modal-desc">Click a virtue's name to edit it. Use the arrows to reorder.</p>
+                    <div id="virtues-list" class="virtues-list"></div>
+                    <div class="add-virtue-container">
+                        <input type="text" id="new-virtue-input" class="vl-input" placeholder="Enter a new virtue..." autocomplete="off">
+                        <button id="add-virtue-btn" class="vl-btn primary-btn">ADD VIRTUE</button>
+                    </div>
+                </div>
+
+                <div id="panel-data" class="modal-panel hidden">
+                    <p class="modal-desc">Type <b>P</b> for Practiced or <b>S</b> for Slipped. (e.g., "P, S, P").</p>
+                    <div class="add-date-container">
+                        <input type="date" id="new-date-input" class="vl-input">
+                        <button id="add-date-btn" class="vl-btn">ADD EMPTY ROW</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="data-table"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 <script src="app.js"></script>
@@ -73,19 +125,16 @@
 <!-- Global Theme Sync Script -->
 <script>
     const globalToggle = document.getElementById('global-theme-toggle');
-    
     function initGlobalTheme() {
         const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
     }
-    
     globalToggle.addEventListener('click', () => {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('portfolio-theme', newTheme);
     });
-
     initGlobalTheme();
 </script>
 </body>
