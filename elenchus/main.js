@@ -92,12 +92,15 @@ async function handleSend() {
         loadingIndicator.style.display = "none";
         chatHistory.push({ role: "assistant", content: finalQuestion });
         appendMessage("ai", finalQuestion);
-
+   
+    
     } catch (error) {
         loadingIndicator.style.display = "none";
-        appendMessage("ai", "Signal lost. Please check your connection to the Oldest House.");
+        appendMessage("ai", `SYSTEM ERROR: ${error.message}`);
         console.error(error);
     }
+
+
 
     userInput.disabled = false;
     sendBtn.disabled = false;
