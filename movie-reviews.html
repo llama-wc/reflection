@@ -44,7 +44,7 @@
         .header-controls {
             display: flex; align-items: center; gap: 20px;
         }
-        #theme-toggle {
+        #global-theme-toggle {
             background: none; border: none; color: var(--text-main);
             font-size: 1.5rem; cursor: pointer; padding: 5px;
         }
@@ -55,29 +55,52 @@
         }
         .back-btn:hover { color: var(--text-main); }
 
-        /* Existing Filter Styles updated for variables */
         .filter-group {
             display: flex; gap: 15px; padding: 20px 40px;
             background: var(--panel-bg); border-bottom: 1px solid var(--border-color); flex-wrap: wrap;
             align-items: stretch;
         }
+        .search-wrapper { 
+            position: relative; flex: 1; min-width: 150px; 
+            display: flex; 
+        }
+        .filter-group > input, .search-wrapper {
+            flex: 1; min-width: 150px;
+        }
         .filter-group input {
             background: var(--bg-color); color: var(--text-main);
             border: 1px solid var(--border-color); padding: 12px 15px; border-radius: 4px;
-            font-family: 'Inter', sans-serif; font-size: 14px;
+            font-family: 'Inter', sans-serif; box-sizing: border-box; 
+            width: 100%; margin: 0; font-size: 14px;
         }
+        .filter-group input:focus { outline: none; border-color: var(--accent-color); }
         
         #resetBtn {
             background: var(--accent-color); color: white; border: none;
             padding: 0 25px; border-radius: 4px; cursor: pointer;
-            font-family: 'Oswald', sans-serif; font-size: 16px;
+            font-family: 'Oswald', sans-serif; font-size: 16px; transition: opacity 0.2s;
+            box-sizing: border-box; height: auto;
         }
+        #resetBtn:hover { opacity: 0.8; }
 
-        /* Dashboard Panels updated for variables */
+        .autocomplete-overlay {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: #1e1e1e; border: 1px solid #333; border-top: none;
+            max-height: 250px; overflow-y: auto; z-index: 9999;
+            border-radius: 0 0 6px 6px; box-shadow: 0 15px 35px rgba(0,0,0,0.9);
+            display: none; flex-direction: column; margin-top: 2px;
+        }
+        .autocomplete-item {
+            padding: 12px 15px; border-bottom: 1px solid #2a2a2a;
+            cursor: pointer; color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
+        }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
+
         #main-stage {
             display: grid; 
             grid-template-columns: 320px 340px 1fr;
-            gap: 30px; padding: 40px;
+            gap: 30px; padding: 40px; opacity: 0; transition: opacity 0.5s ease;
         }
         .panel {
             background: var(--panel-bg); border-radius: 12px; padding: 25px;
@@ -85,22 +108,65 @@
             display: flex; flex-direction: column; 
         }
         
-        #ui-title { font-family: 'Oswald', sans-serif; font-size: 42px; text-transform: uppercase; margin: 0; line-height: 1.1; }
-        #ui-tags { color: var(--accent-color); font-weight: 700; font-size: 14px; margin-bottom: 25px; }
+        #ui-title { font-family: 'Oswald', sans-serif; font-size: 42px; text-transform: uppercase; margin: 0 0 5px 0; line-height: 1.1; }
+        #ui-tags { color: var(--accent-color); font-weight: 700; font-size: 14px; margin-bottom: 25px; letter-spacing: 1px; }
+        .meta-grid {
+            display: grid; grid-template-columns: 80px 1fr; gap: 10px 15px;
+            font-size: 14px; margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 25px;
+        }
+        .meta-label { color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
+        #ui-desc { color: var(--text-muted); line-height: 1.6; font-size: 15px; }
+
+        .chart-title {
+            font-family: 'Oswald', sans-serif; color: var(--text-muted); font-size: 18px;
+            letter-spacing: 1px; margin-top: 0; margin-bottom: 20px; text-transform: uppercase;
+        }
 
         .hero-square {
             width: 100%; max-width: 300px; aspect-ratio: 1 / 1;
             border-radius: 12px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
+            align-items: center; justify-content: center; position: relative;
             background-color: var(--bg-color); box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            transition: background-color 0.4s ease;
             margin: auto; 
         }
-        .score-text { font-family: 'Oswald', sans-serif; font-size: 8rem; margin: 0; color: var(--text-main); }
-        .sub-text { color: var(--text-muted); font-size: 1rem; letter-spacing: 3px; text-transform: uppercase; }
+        .score-text {
+            font-family: 'Oswald', sans-serif; font-size: 8rem; line-height: 1;
+            margin: 0; color: var(--text-main); z-index: 2;
+        }
+        .sub-text {
+            font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+            color: var(--text-muted); z-index: 2; margin-top: -5px;
+        }
 
-        /* Tick colors for D3 charts in light mode */
-        .tick text { fill: var(--text-muted); }
-        .tick line { stroke: var(--border-color); }
+        .chart-container { width: 100%; flex: 1; min-height: 250px; position: relative; }
+        .domain { display: none; } 
+        .tick line { stroke: var(--border-color); stroke-dasharray: 4, 4; } 
+        .tick text { fill: var(--text-muted); font-family: 'Inter', sans-serif; font-size: 12px; }
+
+        .legend { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 10px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-gradient { width: 40px; height: 12px; border-radius: 2px; background: linear-gradient(to right, #FF2A2A, #FF9F00, #00E676); }
+        .legend-dashed { width: 20px; height: 0px; border-top: 2px dashed #666; }
+
+        .methodology-panel { grid-column: 1 / -1; }
+
+        #loading-overlay {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--accent-color); 
+            z-index: 1000; background: var(--bg-color); padding: 20px 40px;
+            border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        @media (max-width: 1400px) {
+            #main-stage { grid-template-columns: 320px 1fr; }
+            .trend-panel { grid-column: 1 / -1; } 
+        }
+        @media (max-width: 900px) {
+            #main-stage { grid-template-columns: 1fr; padding: 20px; gap: 20px; }
+            .panel { grid-column: 1 / -1 !important; }
+            .score-text { font-size: 7rem; }
+        }
     </style>
 </head>
 <body>
@@ -108,30 +174,45 @@
     <div class="header">
         <h1>MOVIE INTELLIGENCE DASHBOARD</h1>
         <div class="header-controls">
-            <button id="theme-toggle">◐</button>
+            <button id="global-theme-toggle">◐</button>
             <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
         </div>
     </div>
 
+    <!-- The missing Datalists are back! -->
     <div class="filter-group">
-        <div class="search-wrapper" style="position: relative; flex: 1;">
-            <input type="text" id="searchBar" placeholder="Search title..." disabled autocomplete="off" style="width:100%;">
+        <div class="search-wrapper">
+            <input type="text" id="searchBar" placeholder="Search for a movie title (e.g., Matrix)..." disabled autocomplete="off">
             <div class="autocomplete-overlay" id="autocompleteOverlay"></div>
         </div>
         <input type="text" id="genreFilter" list="genreList" placeholder="All Genres" disabled>
+        <datalist id="genreList"></datalist>
         <input type="text" id="directorFilter" list="directorList" placeholder="All Directors" disabled>
+        <datalist id="directorList"></datalist>
+        <input type="text" id="studioFilter" list="studioList" placeholder="All Studios" disabled>
+        <datalist id="studioList"></datalist>
+        <input type="text" id="actorFilter" list="actorList" placeholder="All Actors" disabled>
+        <datalist id="actorList"></datalist>
         <button id="resetBtn">RESET</button>
     </div>
 
+    <div id="loading-overlay">Booting Analytics Engine...</div>
+
     <div id="main-stage">
+        
         <div class="panel">
             <h2 id="ui-title">Loading...</h2>
             <div id="ui-tags">--</div>
+            <div class="meta-grid">
+                <div class="meta-label">DIRECTOR</div><div id="ui-director">-</div>
+                <div class="meta-label">STUDIO</div><div id="ui-studio">-</div>
+                <div class="meta-label">CAST</div><div id="ui-cast">-</div>
+            </div>
             <div id="ui-desc">Initializing dataset...</div>
         </div>
 
         <div class="panel" style="align-items: center;">
-            <h3 class="chart-title">Global Average</h3>
+            <h3 class="chart-title" style="align-self: flex-start;">Global Average Rating</h3>
             <div class="hero-square" id="heroSquare">
                 <h1 class="score-text" id="scoreDisplay">-</h1>
                 <div class="sub-text" id="reviewCount">0 REVIEWS</div>
@@ -139,26 +220,50 @@
         </div>
 
         <div class="panel trend-panel">
-            <h3 class="chart-title">Longitudinal Variance</h3>
-            <div id="trend-container" class="chart-container" style="flex:1;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+                <div>
+                    <h3 class="chart-title" style="margin-bottom: 5px;">
+                        Longitudinal Variance & Trend
+                        <span id="clear-trend-btn" style="display:none; font-size:12px; color:var(--accent-color); cursor:pointer; text-transform:none; margin-left: 15px;">✖ Clear Selected Years</span>
+                    </h3>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 0;">Average rating overlayed with ±1 Standard Deviation boundaries</p>
+                </div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-gradient"></div> Score Scale</div>
+                    <div class="legend-item"><div class="legend-dashed"></div> Aggregate Mean</div>
+                </div>
+            </div>
+            <div id="trend-container" class="chart-container"></div>
         </div>
+
+        <div class="panel methodology-panel">
+            <h3 class="chart-title">Project Architecture & Methodology</h3>
+            <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-top: 0;">
+                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+            </p>
+            <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
+            </p>
+        </div>
+
     </div>
 
     <script type="module" src="dashboard.js?v=1"></script>
-    
+
+    <!-- Global Theme Sync Script -->
     <script>
-        const themeToggle = document.getElementById('theme-toggle');
-        function initTheme() {
+        const globalToggle = document.getElementById('global-theme-toggle');
+        function initGlobalTheme() {
             const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
         }
-        themeToggle.addEventListener('click', () => {
+        globalToggle.addEventListener('click', () => {
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('portfolio-theme', newTheme);
         });
-        initTheme();
+        initGlobalTheme();
     </script>
 </body>
 </html>
