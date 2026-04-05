@@ -1,8 +1,8 @@
 const chatBox = document.getElementById("chat-box");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
-const synthBtn = document.getElementById("synth-btn");
 const resetBtn = document.getElementById("reset-btn");
+const themeToggle = document.getElementById("theme-toggle");
 const statusText = document.getElementById("loading-status");
 const loadingIndicator = document.getElementById("loading-indicator");
 
@@ -13,14 +13,26 @@ const trackUpdated = document.getElementById("track-updated");
 
 let isFirstMessage = true;
 let chatHistory = []; 
-let lockedPremise = ""; 
+
+// Theme Toggle Logic
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+themeToggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+});
 
 function initializeEngine() {
-    statusText.innerText = "Status: Online. Socratic Guide Authorized.";
-    statusText.style.color = "#4CAF50";
+    statusText.innerText = "Status: Online. Virtue Socratic Engine Active.";
     userInput.disabled = false;
     sendBtn.disabled = false;
     userInput.focus();
+    initTheme();
 }
 
 function appendMessage(role, text) {
@@ -29,6 +41,29 @@ function appendMessage(role, text) {
     msgDiv.innerText = text;
     chatBox.insertBefore(msgDiv, loadingIndicator); 
     chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Background Task: Auto-Synthesize the conversation
+async function runAutoSynthesis() {
+    trackUpdated.innerText = "Synthesizing current state...";
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: [
+                    { role: "system", content: "You are an analytical observer. Summarize the user's current stance and the AI's counter-argument in exactly one short, neutral sentence. Do not use quotes." },
+                    ...chatHistory
+                ]
+            })
+        });
+        if (response.ok) {
+            const data = await response.json();
+            trackUpdated.innerText = data.response.trim();
+        }
+    } catch (error) {
+        console.error("Auto-synthesis failed:", error);
+    }
 }
 
 async function handleSend() {
@@ -41,9 +76,6 @@ async function handleSend() {
     userInput.value = "";
     userInput.disabled = true;
     sendBtn.disabled = true;
-    synthBtn.disabled = true;
-  
-    // Trigger the FBC loader
     loadingIndicator.style.display = "block"; 
     chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -52,31 +84,28 @@ async function handleSend() {
 
         if (isFirstMessage) {
             trackInitial.innerText = `"${text}"`;
-            lockedPremise = text; 
             isFirstMessage = false;
-            synthBtn.style.display = "block";
             
             trackAssumption.innerText = "Clarifying definitions...";
             trackContradiction.innerText = "Awaiting defense...";
 
-            // TURN 1: Strategic Restraint
-            systemPrompt = "You are a master Socratic philosopher. The user just stated a premise. DO NOT give a counter-example yet. Instead, ask a single, gentle question to clarify their definition of a key term, or ask for the underlying reasoning behind their premise. Keep it under 15 words. Act genuinely curious.";
+            // TURN 1
+            systemPrompt = "You are a master Socratic philosopher. The user just stated a premise. Ask a single, gentle question to clarify their definition of a key term, or ask for the underlying reasoning behind their premise. Keep it under 20 words. Act genuinely curious.";
         } else {
-            trackAssumption.innerText = "Processing defense...";
-            trackContradiction.innerText = "Testing boundaries...";
+            trackAssumption.innerText = "Processing argument...";
+            trackContradiction.innerText = "Testing logic...";
 
-            // TURN 2+: Applying Pressure
-            systemPrompt = "You are a master Socratic philosopher. The user is defending their premise. Now, ask ONE short, probing question that gently introduces a nuance, edge case, or logical extreme they might have missed. Guide them to see the limits of their absolute statement. Keep it under 20 words. Do not be condescending.";
+            // TURN 2+ (Allows summarization before questioning)
+            systemPrompt = "You are a master Socratic philosopher. The user just defended their premise or asked a question. Briefly summarize or acknowledge their point in 1 short sentence, THEN ask ONE probing question to explore its logical limits or steer them back on topic. Be highly intelligent but conversational.";
         }
 
-        // Hit the secure backend Cloudflare function
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 messages: [
                     { role: "system", content: systemPrompt },
-                    ...chatHistory.slice(-4) 
+                    ...chatHistory.slice(-5) // Send slightly more context
                 ]
             })
         });
@@ -86,14 +115,15 @@ async function handleSend() {
         const data = await response.json();
         if (data.error) throw new Error(data.error);
 
-        let finalQuestion = data.response.trim();
-
-        // Safety cleanup
-        finalQuestion = finalQuestion.replace(/^(Assistant|Socrates|AI):/i, "").replace(/^["']|["']$/g, "").trim();
+        let finalResponse = data.response.trim();
+        finalResponse = finalResponse.replace(/^(Assistant|Socrates|AI):/i, "").trim();
 
         loadingIndicator.style.display = "none";
-        chatHistory.push({ role: "assistant", content: finalQuestion });
-        appendMessage("ai", finalQuestion);
+        chatHistory.push({ role: "assistant", content: finalResponse });
+        appendMessage("ai", finalResponse);
+
+        // Trigger synthesis in the background automatically
+        runAutoSynthesis();
 
     } catch (error) {
         loadingIndicator.style.display = "none";
@@ -103,55 +133,16 @@ async function handleSend() {
 
     userInput.disabled = false;
     sendBtn.disabled = false;
-    synthBtn.disabled = false;
     userInput.focus();
-}
-
-async function handleSynthesize() {
-    if (chatHistory.length === 0) return;
-    
-    userInput.disabled = true;
-    sendBtn.disabled = true;
-    synthBtn.disabled = true;
-    trackUpdated.innerText = "Synthesizing...";
-
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                messages: [
-                    { role: "system", content: "Summarize the conclusion of this discussion in exactly one short, enlightening sentence starting with 'I now see that...'" },
-                    ...chatHistory
-                ]
-            })
-        });
-
-        if (!response.ok) throw new Error("API Route failed");
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-        
-        trackUpdated.innerText = data.response.trim().split('\n')[0];
-    } catch (error) {
-        trackUpdated.innerText = "Synthesis failed.";
-        console.error(error);
-    }
-    
-    userInput.disabled = false;
-    sendBtn.disabled = false;
-    synthBtn.disabled = false;
 }
 
 resetBtn.addEventListener("click", () => {
     isFirstMessage = true;
     chatHistory = []; 
-    lockedPremise = "";
     trackInitial.innerText = "Awaiting input...";
     trackAssumption.innerText = "Wait for premise...";
     trackContradiction.innerText = "Wait for premise...";
     trackUpdated.innerText = "Awaiting resolution...";
-    synthBtn.style.display = "none";
     
     Array.from(chatBox.children).forEach(child => {
         if (child.id !== "loading-indicator") child.remove();
@@ -159,8 +150,6 @@ resetBtn.addEventListener("click", () => {
 });
 
 sendBtn.addEventListener("click", handleSend);
-synthBtn.addEventListener("click", handleSynthesize);
 userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleSend(); });
 
-// Start up!
 initializeEngine();
