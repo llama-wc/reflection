@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,11 +8,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     
     <style>
-        :root {
+        /* Theme Variables */
+        :root[data-theme="dark"] {
             --bg-color: #121212;
             --text-color: #e0e0e0;
+            --muted-color: #aaa;
             --accent-color: #FF2A2A;
             --line-color: #333;
+            --card-bg: #1a1a1a;
+        }
+
+        :root[data-theme="light"] {
+            --bg-color: #f5f5f5;
+            --text-color: #121212;
+            --muted-color: #555555;
+            --accent-color: #d32f2f;
+            --line-color: #cccccc;
+            --card-bg: #ffffff;
+        }
+
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         body {
@@ -40,13 +56,31 @@
             line-height: 1;
         }
 
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        #theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        #theme-toggle:hover {
+            color: var(--accent-color);
+        }
+
         .back-link {
             color: var(--text-color);
             text-decoration: none;
             font-size: 1rem;
             text-transform: uppercase;
             letter-spacing: 1px;
-            transition: color 0.2s;
         }
 
         .back-link:hover { color: var(--accent-color); }
@@ -63,10 +97,9 @@
             padding: 2rem;
             text-decoration: none;
             color: var(--text-color);
-            transition: all 0.2s ease-out;
+            background: var(--card-bg);
             display: flex;
             flex-direction: column;
-            background: #1a1a1a;
         }
 
         .project-card:hover {
@@ -78,12 +111,12 @@
             font-family: 'Oswald', sans-serif;
             font-size: 1.5rem;
             margin: 0 0 1rem 0;
-            color: #fff;
+            color: var(--text-color);
         }
 
         .project-card p {
             font-size: 1rem;
-            color: #aaa;
+            color: var(--muted-color);
             line-height: 1.5;
             flex-grow: 1;
         }
@@ -101,10 +134,20 @@
 
     <header>
         <h1>Portfolio</h1>
-        <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Home</a>
+        <div class="header-controls">
+            <button id="theme-toggle" aria-label="Toggle Theme">◐</button>
+            <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Home</a>
+        </div>
     </header>
 
     <div class="project-grid">
+        <!-- THE NEW ELENCHUS ENGINE CARD -->
+        <a href="https://elenchus.mac-wall.com/elenchus/" class="project-card">
+            <h2>Elenchus Engine</h2>
+            <p>An AI-powered master educator built with Llama 3.3 70B via Groq and Cloudflare Workers. Features a custom system prompt architecture, real-time logic synthesis, and an automated fallacy catcher to guide users toward grounded understanding.</p>
+            <div class="tags">Gemini • Llama 3.3 • Groq • Cloudflare Workers</div>
+        </a>
+
         <a href="movie-reviews.html" class="project-card">
             <h2>Audience Score Distributions</h2>
             <p>An interactive, browser-only dashboard analyzing the score distribution of millions of individual movie reviews using DuckDB-Wasm and D3.js.</p>
@@ -118,5 +161,23 @@
         </a>
     </div>
 
+    <!-- Theme Toggle Script -->
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        
+        function initTheme() {
+            const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('portfolio-theme', newTheme);
+        });
+
+        initTheme();
+    </script>
 </body>
 </html>
