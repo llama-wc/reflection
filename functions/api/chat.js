@@ -32,7 +32,7 @@ export async function onRequest(context) {
                 model: 'llama-3.3-70b-versatile', // The upgraded 70B engine
                 messages: chatHistory,
                 temperature: 0.4, // Bumped slightly for more creative questioning
-                max_tokens: 60
+                max_tokens: 150
             })
         });
 
