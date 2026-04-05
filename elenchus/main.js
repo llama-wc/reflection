@@ -56,17 +56,17 @@ async function handleSend() {
             isFirstMessage = false;
             synthBtn.style.display = "block";
             
-            trackAssumption.innerText = "Extracting core concept...";
-            trackContradiction.innerText = "Exploring exceptions...";
+            trackAssumption.innerText = "Clarifying definitions...";
+            trackContradiction.innerText = "Awaiting defense...";
 
-            // The Wise, Patient Socrates (Turn 1)
-            systemPrompt = "You are a wise, patient Socratic philosopher. The user just stated a premise. Adopt a posture of gentle curiosity. Find a specific, concrete counter-example that complicates their absolute statement, and ask a short, thoughtful question (under 15 words) exploring that exception. End with a question mark. Be polite but intellectually rigorous.";
+            // TURN 1: Strategic Restraint
+            systemPrompt = "You are a master Socratic philosopher. The user just stated a premise. DO NOT give a counter-example yet. Instead, ask a single, gentle question to clarify their definition of a key term, or ask for the underlying reasoning behind their premise. Keep it under 15 words. Act genuinely curious.";
         } else {
             trackAssumption.innerText = "Processing defense...";
-            trackContradiction.innerText = "Philosopher engaged...";
+            trackContradiction.innerText = "Testing boundaries...";
 
-            // The Wise, Patient Socrates (Turn 2+)
-            systemPrompt = "You are a wise, patient Socratic philosopher. The user is defending their logic. Ask ONE short, gentle question (under 15 words) to help them see a blind spot in their reasoning. End with a question mark. Do not attack; guide them to question their own premise.";
+            // TURN 2+: Applying Pressure
+            systemPrompt = "You are a master Socratic philosopher. The user is defending their premise. Now, ask ONE short, probing question that gently introduces a nuance, edge case, or logical extreme they might have missed. Guide them to see the limits of their absolute statement. Keep it under 20 words. Do not be condescending.";
         }
 
         // Hit the secure backend Cloudflare function
