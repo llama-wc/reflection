@@ -29,7 +29,7 @@ export async function onRequest(context) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.1-70b-versatile', // The upgraded 70B engine
+                model: 'llama-3.3-70b-versatile', // The upgraded 70B engine
                 messages: chatHistory,
                 temperature: 0.4, // Bumped slightly for more creative questioning
                 max_tokens: 60
