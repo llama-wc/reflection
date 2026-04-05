@@ -16,7 +16,7 @@ let state = {
     isFirstMessage: true,
     originalPremise: "",
     chatHistory: [],
-    // NEW: The "Carry-On Bag". We store the summary here instead of re-reading history.
+    // The "Carry-On Bag" to compress API context
     learningState: "Awaiting initial premise..." 
 };
 
@@ -65,17 +65,13 @@ function toggleLoading(isLoading) {
 // ==========================================
 // 4. CORE ENGINE LOGIC (OPTIMIZED API CALL)
 // ==========================================
-// NOTE: runAutoSynthesis() has been DELETED. 
-// We now do everything in one pass inside handleSend().
-
 async function handleSend() {
     const text = DOM.userInput.value.trim();
     if (!text) return;
 
     appendMessage("user", text);
     
-    // OPTIMIZATION: We only keep the last 4 messages for immediate conversational flow. 
-    // The U-Haul trailer of history is gone.
+    // Keeping only the last 4 messages to save tokens
     state.chatHistory.push({ role: "user", content: text });
     if (state.chatHistory.length > 4) {
         state.chatHistory.shift(); 
@@ -91,7 +87,6 @@ async function handleSend() {
 
     DOM.trackUpdated.innerHTML = "<em>Analyzing learning progress...</em>";
 
-    // THE COMPRESSED SYSTEM PROMPT
     const systemPrompt = `You are a master educator guiding the user to learn a new concept using the method of guided inquiry.
     The user's original premise is: "${state.originalPremise}". 
     
@@ -109,7 +104,7 @@ async function handleSend() {
     {
       "response_text": "Your Socratic reply to the user (under 50 words).",
       "fallacy_detected": "Name of fallacy if used (e.g., 'Ad Hominem'). Return null if none.",
-      "updated_learning_state": "A 2-3 bullet point summary of their current understanding. This replaces the old state."
+      "updated_learning_state": "A 2-3 bullet point summary of their current understanding. (Must be a single string containing line breaks, NEVER a JSON array)."
     }`;
 
     try {
@@ -121,7 +116,6 @@ async function handleSend() {
                     { role: "system", content: systemPrompt },
                     ...state.chatHistory 
                 ],
-                // Tell your backend to pass this flag to Groq to enforce JSON
                 response_format: { type: "json_object" } 
             })
         });
@@ -130,10 +124,8 @@ async function handleSend() {
 
         const data = await response.json();
         
-        // SAFETY NET: Parse the JSON response securely
         let engineData;
         try {
-            // Assuming data.response is the raw string returned by the LLM
             engineData = JSON.parse(data.response); 
         } catch (parseError) {
             console.warn("LLM deviated from JSON format. Attempting extraction...", data.response);
@@ -157,14 +149,27 @@ async function handleSend() {
             DOM.userInput.placeholder = "Explore this concept further...";
         }
 
-        // 3. Update the invisible "Carry-On Bag" state
-        state.learningState = engineData.updated_learning_state || state.learningState;
+        // 3. Update the invisible "Carry-On Bag" state securely
+        let incomingState = engineData.updated_learning_state || state.learningState;
+        
+        // SAFETY NET: Handle accidental Array returns from the LLM
+        if (Array.isArray(incomingState)) {
+            state.learningState = incomingState.map(point => `- ${point}`).join('\n');
+        } else {
+            state.learningState = String(incomingState); 
+        }
 
-        // 4. Render the Synthesis & Fallacy tracking
+        // 4. Render the Synthesis & Fallacy tracking safely
         let synthesisHTML = state.learningState.replace(/\n/g, "<br>");
-        if (engineData.fallacy_detected) {
+        
+        // SAFETY NET: Handle stringified nulls
+        if (engineData.fallacy_detected && 
+            engineData.fallacy_detected !== "null" && 
+            engineData.fallacy_detected.toLowerCase() !== "none") {
+            
             synthesisHTML = `<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: ${engineData.fallacy_detected}]</strong>` + synthesisHTML;
         }
+        
         DOM.trackUpdated.innerHTML = synthesisHTML;
 
     } catch (error) {
@@ -183,7 +188,7 @@ DOM.resetBtn.addEventListener("click", () => {
     state.isFirstMessage = true;
     state.originalPremise = "";
     state.chatHistory = []; 
-    state.learningState = "Awaiting initial premise..."; // Reset the carry-on bag
+    state.learningState = "Awaiting initial premise..."; 
 
     DOM.trackUpdated.innerHTML = "Awaiting premise...";
     DOM.userInput.placeholder = "State a premise or ask a question...";
