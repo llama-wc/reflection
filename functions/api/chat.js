@@ -1,10 +1,21 @@
-export async function onRequestPost(context) {
+export async function onRequest(context) {
+    // 1. Handle hidden Cloudflare/Browser preflight checks
+    if (context.request.method === "OPTIONS") {
+        return new Response(null, {
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+            }
+        });
+    }
+
     try {
-        // Parse the incoming chat history from your frontend
+        // 2. Parse the chat history
         const body = await context.request.json();
         const chatHistory = body.messages;
 
-        // Groq uses an OpenAI-compatible endpoint
+        // 3. Talk to Groq Llama 3
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -12,7 +23,7 @@ export async function onRequestPost(context) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant', // Highly capable and blazingly fast
+                model: 'llama-3.1-8b-instant',
                 messages: chatHistory,
                 temperature: 0.3,
                 max_tokens: 50
@@ -20,18 +31,24 @@ export async function onRequestPost(context) {
         });
 
         if (!groqResponse.ok) {
-            throw new Error(`Groq API error: ${groqResponse.status}`);
+            throw new Error(`Groq blocked us: ${groqResponse.status}`);
         }
 
         const data = await groqResponse.json();
         const aiMessage = data.choices[0].message.content;
 
-        // Send the AI's response back to your frontend
+        // 4. Send the message back to your frontend
         return new Response(JSON.stringify({ response: aiMessage }), {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         });
 
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+        return new Response(JSON.stringify({ error: error.message }), { 
+            status: 500,
+            headers: { 'Access-Control-Allow-Origin': '*' }
+        });
     }
 }
