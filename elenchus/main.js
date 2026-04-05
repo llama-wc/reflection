@@ -40,7 +40,7 @@ function appendMessage(role, text) {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// NOVELTY: The Auto-Fallacy Catcher & Bulleted Synthesis
+// SYNTHESIS UPGRADE: Now sees the entire conversation, not just the last 6 messages
 async function runAutoSynthesis() {
     trackUpdated.innerHTML = "<em>Analyzing logic flow and checking for fallacies...</em>";
     try {
@@ -51,13 +51,13 @@ async function runAutoSynthesis() {
                 messages: [
                     { 
                         role: "system", 
-                        content: `You are a ruthless background logic analyzer. Review the dialogue. Break down the current state of the argument in 2 to 3 concise bullet points. 
+                        content: `You are a ruthless background logic analyzer. Review the ENTIRE dialogue provided. Break down the current state of the argument in 2 to 3 concise bullet points. 
                         
-                        CRITICAL INSTRUCTION: If the user commits a logical fallacy (e.g., ad hominem, strawman, moving the goalposts, false dichotomy, circular reasoning), you MUST start your response with a warning in this exact format: [FALLACY DETECTED: Name of Fallacy]
+                        CRITICAL INSTRUCTION: If the user commits a logical fallacy (e.g., ad hominem, strawman, moving the goalposts), you MUST start your response with a warning in this exact format: [FALLACY DETECTED: Name of Fallacy]
                         
-                        Then provide the bullet points. Do not include any other introductory text. Use standard hyphens (-) for bullets.` 
+                        Focus on the evolution of the core premise. Do not include any other introductory text. Use standard hyphens (-) for bullets.` 
                     },
-                    ...chatHistory.slice(-6) 
+                    ...chatHistory // Passing the full history so it never loses context
                 ]
             })
         });
@@ -66,7 +66,6 @@ async function runAutoSynthesis() {
             const data = await response.json();
             let summary = data.response.trim();
             
-            // Format the Fallacy tag to highlight in red if it exists
             if (summary.includes("[FALLACY DETECTED:")) {
                 summary = summary.replace(/\[FALLACY DETECTED: (.*?)\]/g, '<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: $1]</strong>');
             }
@@ -101,14 +100,15 @@ async function handleSend() {
 
         if (isFirstMessage) {
             isFirstMessage = false;
-            systemPrompt = "You are a sharp, direct Socratic philosopher. The user just stated a premise. Ask a single, pointed question to clarify their definition of a key term or their underlying reasoning. Keep it under 20 words. Do not be polite; be strictly analytical.";
+            systemPrompt = "You are a masterful, authentic Socratic philosopher. The user just stated a premise. Ask a single, pointed question to clarify their definition of a key term or their underlying reasoning. Keep it under 20 words. Be analytical but conversational.";
         } else {
-            // THE IRONCLAD ESCAPE HATCH & ANTI-ROBOT RULES
-            systemPrompt = `You are a sharp, direct Socratic philosopher. Evaluate the user's latest response. 
-            1. IF they successfully refined their premise to be logically sound, agree with them naturally and end the discussion without asking a question.
-            2. IF they are being evasive, giving one-word answers, or making absurd absolute claims, boldly point out the logical contradiction between their current statement and reality (or their previous claims). Force them to reconcile it.
-            3. IF they are engaging in good faith but still have flaws, ask ONE short, probing question.
-            CRITICAL RULE: NEVER use the phrases "I acknowledge", "I see your point", or "That's a good point". Speak like a relentless, highly intelligent philosopher. Keep it under 30 words.`;
+            // PROMPT UPGRADE: Banning trivia, allowing guidance when asked.
+            systemPrompt = `You are an authentic Socratic philosopher, not a pedantic trivia bot. Evaluate the user's latest response.
+            1. Stay strictly focused on the user's core philosophical concept. DO NOT introduce random tangential trivia (like asking about tomatoes being fruits) just to be difficult.
+            2. IF the user asks for help (e.g., "how to improve?"), step out of pure questioning. Offer a brief, guiding philosophical hint, THEN ask a relevant question to prompt their realization.
+            3. IF they successfully refined their premise to be logically sound, agree naturally and end the discussion without asking a question.
+            4. IF they are engaging in good faith but still have flaws, ask ONE highly relevant, probing question to test the limits of their logic.
+            Speak with profound intelligence. Keep it under 40 words.`;
         }
 
         const response = await fetch('/api/chat', {
@@ -117,7 +117,7 @@ async function handleSend() {
             body: JSON.stringify({
                 messages: [
                     { role: "system", content: systemPrompt },
-                    ...chatHistory.slice(-5) 
+                    ...chatHistory.slice(-14) // Increased memory to 14 turns so it holds onto the core argument
                 ]
             })
         });
@@ -134,14 +134,12 @@ async function handleSend() {
         chatHistory.push({ role: "assistant", content: finalResponse });
         appendMessage("ai", finalResponse);
 
-        // Check if Socrates concluded the debate
         if (!finalResponse.includes("?")) {
             userInput.placeholder = "Dialogue concluded. Click 'Reset Engine' to restart.";
         } else {
             userInput.placeholder = "Defend or refine your premise...";
         }
 
-        // Trigger synthesis
         runAutoSynthesis();
 
     } catch (error) {
