@@ -33,28 +33,16 @@
         </section>
 
         <section class="logic-router">
-            <h2>LOGIC ROUTER</h2>
+            <h2>LOGIC LEDGER</h2>
             
-            <div class="router-card">
-                <div class="card-header">1. INITIAL PREMISE</div>
-                <div id="track-initial" class="card-content monospace">Awaiting input...</div>
-            </div>
-
-            <div class="router-card">
-                <div class="card-header">2. SYMBOLIC EXTRACTION</div>
-                <div id="track-assumption" class="card-content monospace">Wait for premise...</div>
-            </div>
-
-            <div class="router-card">
-                <div class="card-header">3. MACHINE DIRECTIVE</div>
-                <div id="track-contradiction" class="card-content monospace">Wait for premise...</div>
-            </div>
-
-            <div class="router-card highlight-card">
-                <div class="card-header">4. SYNTHESIZED VIEW</div>
-                <div id="track-updated" class="card-content monospace">Awaiting resolution...</div>
+            <div class="router-card highlight-card" style="height: 85%; display: flex; flex-direction: column;">
+                <div class="card-header">LIVE ARGUMENT STATE</div>
+                <div id="track-updated" class="card-content monospace" style="flex: 1; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;">Awaiting premise...</div>
             </div>
         </section>
+
+
+        
     </main>
 
     <script src="main.js"></script>
