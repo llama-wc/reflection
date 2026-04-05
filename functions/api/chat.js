@@ -1,21 +1,27 @@
 export async function onRequest(context) {
-    // 1. Handle hidden Cloudflare/Browser preflight checks
+    // 1. THE PULSE CHECK - Lets you test the backend in a browser
+    if (context.request.method === "GET") {
+        return new Response("THE BACKEND IS ALIVE!", { 
+            status: 200,
+            headers: { "Access-Control-Allow-Origin": "*" } 
+        });
+    }
+
+    // 2. Preflight Security Handshake
     if (context.request.method === "OPTIONS") {
         return new Response(null, {
             headers: {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
                 "Access-Control-Allow-Headers": "Content-Type",
             }
         });
     }
 
     try {
-        // 2. Parse the chat history
         const body = await context.request.json();
         const chatHistory = body.messages;
 
-        // 3. Talk to Groq Llama 3
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -23,10 +29,10 @@ export async function onRequest(context) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
+                model: 'llama-3.1-70b-versatile', // The upgraded 70B engine
                 messages: chatHistory,
-                temperature: 0.3,
-                max_tokens: 50
+                temperature: 0.4, // Bumped slightly for more creative questioning
+                max_tokens: 60
             })
         });
 
@@ -37,7 +43,6 @@ export async function onRequest(context) {
         const data = await groqResponse.json();
         const aiMessage = data.choices[0].message.content;
 
-        // 4. Send the message back to your frontend
         return new Response(JSON.stringify({ response: aiMessage }), {
             headers: { 
                 'Content-Type': 'application/json',
