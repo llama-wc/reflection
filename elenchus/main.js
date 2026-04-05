@@ -34,7 +34,8 @@ DOM.themeToggle.addEventListener('click', () => {
 });
 
 function initializeEngine() {
-    DOM.statusText.innerText = "Status: Online. Ironclad Socratic Protocol Active.";
+    // Stripped "Socratic" from the status bar
+    DOM.statusText.innerText = "Status: Online. Elenchus Learning Protocol Active.";
     DOM.userInput.disabled = false;
     DOM.sendBtn.disabled = false;
     DOM.userInput.focus();
@@ -64,15 +65,15 @@ function toggleLoading(isLoading) {
 // 4. CORE ENGINE LOGIC (API CALLS)
 // ==========================================
 
-// Background Task: Analyzes the logic and catches fallacies
 async function runAutoSynthesis() {
-    DOM.trackUpdated.innerHTML = "<em>Analyzing logic flow and checking for fallacies...</em>";
+    DOM.trackUpdated.innerHTML = "<em>Analyzing learning progress...</em>";
     
-    const synthesisPrompt = `You are a ruthless background logic analyzer. Review the ENTIRE dialogue. Break down the current state of the argument in 2 to 3 concise bullet points. 
+    // Updated synthesis to focus on learning rather than arguing
+    const synthesisPrompt = `You are a background logic analyzer. Review the ENTIRE dialogue. Break down the user's current understanding in 2 to 3 concise bullet points. 
     
-    CRITICAL INSTRUCTION: If the user commits a logical fallacy (e.g., ad hominem, strawman, moving the goalposts, evasion), you MUST start your response with a warning in this exact format: [FALLACY DETECTED: Name of Fallacy]
+    CRITICAL INSTRUCTION: If the user relies on a logical fallacy (e.g., ad hominem, strawman, evasion), you MUST start your response with a warning in this exact format: [FALLACY DETECTED: Name of Fallacy]
     
-    Focus on the evolution of the core premise. Do not include any other introductory text. Use standard hyphens (-) for bullets.`;
+    Focus on what the user is learning or exploring. Do not include introductory text. Use standard hyphens (-) for bullets.`;
 
     try {
         const response = await fetch('/api/chat', {
@@ -81,7 +82,7 @@ async function runAutoSynthesis() {
             body: JSON.stringify({
                 messages: [
                     { role: "system", content: synthesisPrompt },
-                    ...state.chatHistory // Full context for synthesis
+                    ...state.chatHistory 
                 ]
             })
         });
@@ -90,7 +91,6 @@ async function runAutoSynthesis() {
             const data = await response.json();
             let summary = data.response.trim();
             
-            // Format Fallacy tags to flash red
             if (summary.includes("[FALLACY DETECTED:")) {
                 summary = summary.replace(/\[FALLACY DETECTED: (.*?)\]/g, '<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: $1]</strong>');
             }
@@ -103,35 +103,32 @@ async function runAutoSynthesis() {
     }
 }
 
-// Main Task: Handles the Socratic dialogue
 async function handleSend() {
     const text = DOM.userInput.value.trim();
     if (!text) return;
 
-    // 1. Update UI and State
     appendMessage("user", text);
     state.chatHistory.push({ role: "user", content: text });
     DOM.userInput.value = "";
     toggleLoading(true);
 
     if (state.isFirstMessage) {
-        state.originalPremise = text; // Anchor the premise
+        state.originalPremise = text; 
         state.isFirstMessage = false;
     }
 
-    // 2. The Ironclad System Prompt
-    const systemPrompt = `You are a relentless, authentic Socratic philosopher. 
-    The user's original premise is: "${state.originalPremise}". Keep the debate anchored to this core concept.
+    // THE MASTER EDUCATOR PROMPT
+    const systemPrompt = `You are a master educator guiding the user to learn a new concept or truth using the method of guided inquiry.
+    The user's original premise is: "${state.originalPremise}". Your goal is to help them expand their understanding, grounded in logic and the wisdom of historical thinkers, scientists, or philosophers.
 
     RULES OF ENGAGEMENT:
-    1. THE LAZY TRAP: If the user gives a short, evasive, or non-committal answer (e.g., "yes", "no", "maybe", "sure", "I suppose"), DO NOT accept it as progress. Call out the evasion and force them to articulate *why*.
-    2. OPEN-ENDED ONLY: You must ask open-ended questions (How, Why, What). NEVER ask a question that can be answered with a simple "Yes" or "No".
-    3. NO TRIVIA: Anchor on the core philosophical logic. Do not devolve into dictionary definitions or pedantic semantic trivia.
-    4. NO PLEASANTRIES: Never use phrases like "I acknowledge", "I see", "Good point", or "That is true". Be sharp and direct.
-    5. RESOLUTION: IF the user has successfully articulated a logically sound, nuanced, and defensible position that refines their original premise, state your agreement clearly, summarize the philosophical truth reached, and END your response. Do NOT ask a question.
-    6. ONGOING DEBATE: If their logic remains flawed, absolute, or contradictory, attack the flaw with ONE concise, open-ended question.
+    1. TEACH THROUGH INQUIRY: Do not just attack their logic. If they lack context or ask a question, briefly introduce a relevant concept from history, science, or philosophy, THEN ask an open-ended question about how it applies to their premise.
+    2. CLEAR & ACCESSIBLE: Keep your language simple, conversational, and encouraging. Absolutely no dense, academic jargon. 
+    3. THE LAZY TRAP: If they give short answers like "maybe", "yes", or "sure", gently push them to articulate *why* they think that.
+    4. NO YES/NO QUESTIONS: Ask "How", "Why", or "What".
+    5. RESOLUTION: When the user reaches a genuine "aha!" moment, successfully refines their premise, or demonstrates understanding of the new concept, validate their insight, summarize the lesson learned, and END the response without a question.
 
-    Keep your response under 40 words.`;
+    Keep your response under 50 words.`;
 
     try {
         const response = await fetch('/api/chat', {
@@ -140,7 +137,6 @@ async function handleSend() {
             body: JSON.stringify({
                 messages: [
                     { role: "system", content: systemPrompt },
-                    // Slice keeps API fast, but originalPremise in prompt prevents amnesia
                     ...state.chatHistory.slice(-10) 
                 ]
             })
@@ -151,17 +147,15 @@ async function handleSend() {
         const data = await response.json();
         if (data.error) throw new Error(data.error);
 
-        // Clean up AI response
-        let finalResponse = data.response.trim().replace(/^(Assistant|Socrates|AI):/i, "").trim();
+        let finalResponse = data.response.trim().replace(/^(Assistant|Teacher|AI):/i, "").trim();
 
         state.chatHistory.push({ role: "assistant", content: finalResponse });
         appendMessage("ai", finalResponse);
 
-        // Update UI based on resolution status
         if (!finalResponse.includes("?")) {
-            DOM.userInput.placeholder = "Dialogue concluded. Click 'Reset Engine' to restart.";
+            DOM.userInput.placeholder = "Concept mastered. Click 'Reset Engine' to explore a new topic.";
         } else {
-            DOM.userInput.placeholder = "Defend or refine your premise...";
+            DOM.userInput.placeholder = "Explore this concept further...";
         }
 
         runAutoSynthesis();
@@ -184,7 +178,6 @@ DOM.resetBtn.addEventListener("click", () => {
     DOM.trackUpdated.innerHTML = "Awaiting premise...";
     DOM.userInput.placeholder = "State a premise or ask a question...";
     
-    // Clear chat box except for the hidden loading indicator
     Array.from(DOM.chatBox.children).forEach(child => {
         if (child.id !== "loading-indicator") child.remove();
     });
@@ -195,5 +188,4 @@ DOM.userInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter" && !DOM.sendBtn.disabled) handleSend(); 
 });
 
-// Boot up
 initializeEngine();
