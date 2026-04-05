@@ -1,61 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Socratic Engine</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Elenchus | Socratic Engine</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <!-- Left: Chat Interface -->
-        <div class="chat-panel">
-            <div class="header">
-                <h1>Socratic Engine</h1>
-                <button id="reset-btn">Reset</button>
-            </div>
-            <p id="loading-status" class="status-text">Status: Initializing...</p>
-            
-            <div id="chat-box" class="chat-box">
-                <!-- FBC Resonance Loader -->
-                <div id="loading-indicator" class="fbc-loader">
-                    <span class="control-text">RESONANCE SYNCING</span>
+    <header>
+        <div class="header-content">
+            <h1>SOCRATIC ENGINE</h1>
+            <button id="theme-toggle" aria-label="Toggle Theme">◐</button>
+        </div>
+        <div class="status-bar">
+            <span id="loading-status">Status: Online. Director Override Authorized.</span>
+            <button id="reset-btn">Reset Engine</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="chat-section">
+            <div id="chat-box">
+                <div id="loading-indicator" style="display: none;">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
                 </div>
             </div>
-            
             <div class="input-area">
-                <input type="text" id="user-input" placeholder="State a premise..." disabled>
-                <button id="send-btn" disabled>Send</button>
+                <input type="text" id="user-input" placeholder="State a premise or ask a question..." disabled>
+                <button id="send-btn" disabled>SEND</button>
             </div>
-            <button id="synth-btn" class="synth-btn" disabled style="display: none;">Synthesize Perspective</button>
-        </div>
+        </section>
 
-        <!-- Right: Logic Router Panel -->
-        <div class="router-panel">
-            <h2>Logic Router</h2>
+        <section class="logic-router">
+            <h2>LOGIC ROUTER</h2>
             
             <div class="router-card">
-                <h3>1. INITIAL PREMISE</h3>
-                <p id="track-initial">Awaiting input...</p>
+                <div class="card-header">1. INITIAL PREMISE</div>
+                <div id="track-initial" class="card-content monospace">Awaiting input...</div>
             </div>
-            
+
             <div class="router-card">
-                <h3>2. SYMBOLIC EXTRACTION (P & Q)</h3>
-                <p id="track-assumption">Wait for premise...</p>
+                <div class="card-header">2. SYMBOLIC EXTRACTION</div>
+                <div id="track-assumption" class="card-content monospace">Wait for premise...</div>
             </div>
-            
+
             <div class="router-card">
-                <h3>3. MACHINE DIRECTIVE</h3>
-                <p id="track-contradiction">Wait for premise...</p>
+                <div class="card-header">3. MACHINE DIRECTIVE</div>
+                <div id="track-contradiction" class="card-content monospace">Wait for premise...</div>
             </div>
-            
-            <div class="router-card synthetic-view">
-                <h3 class="green-text">4. SYNTHESIZED VIEW</h3>
-                <p id="track-updated">Awaiting resolution...</p>
+
+            <div class="router-card highlight-card">
+                <div class="card-header">4. SYNTHESIZED VIEW</div>
+                <div id="track-updated" class="card-content monospace">Awaiting resolution...</div>
             </div>
-        </div>
-    </div>
-    <!-- Standard JS import -->
+        </section>
+    </main>
+
     <script src="main.js"></script>
 </body>
 </html>
