@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socratic Engine</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Left: Chat Interface -->
+        <div class="chat-panel">
+            <div class="header">
+                <h1>Socratic Engine</h1>
+                <button id="reset-btn">Reset</button>
+            </div>
+            <p id="loading-status" class="status-text">Status: Initializing...</p>
+            
+            <div id="chat-box" class="chat-box">
+                <!-- FBC Resonance Loader -->
+                <div id="loading-indicator" class="fbc-loader">
+                    <span class="control-text">RESONANCE SYNCING</span>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="user-input" placeholder="State a premise..." disabled>
+                <button id="send-btn" disabled>Send</button>
+            </div>
+            <button id="synth-btn" class="synth-btn" disabled style="display: none;">Synthesize Perspective</button>
+        </div>
+
+        <!-- Right: Logic Router Panel -->
+        <div class="router-panel">
+            <h2>Logic Router</h2>
+            
+            <div class="router-card">
+                <h3>1. INITIAL PREMISE</h3>
+                <p id="track-initial">Awaiting input...</p>
+            </div>
+            
+            <div class="router-card">
+                <h3>2. SYMBOLIC EXTRACTION (P & Q)</h3>
+                <p id="track-assumption">Wait for premise...</p>
+            </div>
+            
+            <div class="router-card">
+                <h3>3. MACHINE DIRECTIVE</h3>
+                <p id="track-contradiction">Wait for premise...</p>
+            </div>
+            
+            <div class="router-card synthetic-view">
+                <h3 class="green-text">4. SYNTHESIZED VIEW</h3>
+                <p id="track-updated">Awaiting resolution...</p>
+            </div>
+        </div>
+    </div>
+    <!-- Standard JS import -->
+    <script src="main.js"></script>
+</body>
+</html>
