@@ -15,7 +15,7 @@ const DOM = {
 let state = {
     isFirstMessage: true,
     originalPremise: "",
-    chatHistory: [], // We let this grow a bit larger now for better memory
+    chatHistory: [], // Memory for better conversational flow
 };
 
 // ==========================================
@@ -68,11 +68,13 @@ function toggleLoading(isLoading) {
 async function updateLogicLedger() {
     DOM.trackUpdated.innerHTML = "<em>Updating logic state...</em>";
 
+    // UPDATED PROMPT: Added 'ai_state' to track if the AI is questioning or informing
     const ledgerPrompt = `You are a background logic analyzer. Review the dialogue. 
     Output a valid JSON object strictly matching this schema:
     {
       "fallacy_detected": "Name of fallacy if the user used one. Return null if none.",
-      "state_bullets": ["User claims X", "User conceded Y"] // 2-3 bullet points of the USER's logical state.
+      "state_bullets": ["User claims X", "User conceded Y"],
+      "ai_state": "Categorize the AI's latest response as either 'Questioning' (seeking input) or 'Informing' (providing facts/synthesizing without asking)."
     }`;
 
     try {
@@ -92,7 +94,15 @@ async function updateLogicLedger() {
             const data = await response.json();
             const ledgerData = JSON.parse(data.response);
             
-            let synthesisHTML = ledgerData.state_bullets.map(point => `- ${point}`).join("<br>");
+            // Render the AI's current state (Questioning vs Informing)
+            let aiStateHTML = `<div style="margin-bottom: 8px; font-size: 0.9em; color: var(--text-muted);">
+                <strong>AI Posture:</strong> [${ledgerData.ai_state.toUpperCase()}]
+            </div>`;
+
+            // Render the user's logic state bullets
+            let bulletsHTML = ledgerData.state_bullets.map(point => `- ${point}`).join("<br>");
+            
+            let synthesisHTML = aiStateHTML + bulletsHTML;
             
             if (ledgerData.fallacy_detected && ledgerData.fallacy_detected !== "null") {
                 synthesisHTML = `<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: ${ledgerData.fallacy_detected}]</strong>` + synthesisHTML;
@@ -127,15 +137,17 @@ async function handleSend() {
         state.isFirstMessage = false;
     }
 
+    // UPDATED PROMPT: Permission to pause, synthesize, and inform
     const systemPrompt = `You are a master Socratic educator having a natural conversation. 
     The user's original premise is: "${state.originalPremise}". 
 
     RULES:
-    1. INQUIRE NATURALLY: Gently introduce concepts to challenge their view, then ask a guiding question.
-    2. BE HUMAN: If the user calls you out (e.g., "you brought it up"), points out a flaw, or gets confused, ACKNOWLEDGE IT naturally like a normal person before continuing. Do not act like a robot.
-    3. THE KILL SWITCH: If the user concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
+    1. BALANCE INQUIRY WITH INSIGHT: Do not end every message with a question. Periodically pause to synthesize the user's points, share a relevant brief fact, or validate their logic without asking anything in return. Let them respond to the statement.
+    2. INQUIRE NATURALLY: When you do need to probe further, gently introduce concepts to challenge their view, then ask a guiding question.
+    3. BE HUMAN: If the user calls you out (e.g., "you brought it up"), points out a flaw, or gets confused, ACKNOWLEDGE IT naturally like a normal person before continuing. Do not act like a robot.
+    4. THE KILL SWITCH: If the user concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
     
-    Keep your response plain text and under 50 words.`;
+    Keep your response plain text and under 60 words.`;
 
     try {
         const response = await fetch('/api/chat', {
@@ -146,7 +158,6 @@ async function handleSend() {
                     { role: "system", content: systemPrompt },
                     ...state.chatHistory 
                 ]
-                // Notice we REMOVED the strict JSON format requirement here
             })
         });
 
@@ -159,7 +170,7 @@ async function handleSend() {
         appendMessage("ai", finalResponse);
 
         if (!finalResponse.includes("?")) {
-            DOM.userInput.placeholder = "Concept mastered. Click 'Reset Engine' to explore a new topic.";
+            DOM.userInput.placeholder = "Concept mastered (or engine pausing). Explore further...";
         } else {
             DOM.userInput.placeholder = "Explore this concept further...";
         }
