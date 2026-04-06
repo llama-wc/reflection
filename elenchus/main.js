@@ -16,8 +16,8 @@ let state = {
     isFirstMessage: true,
     originalPremise: "",
     chatHistory: [],
-    // The "Carry-On Bag" to compress API context
-    learningState: "Awaiting initial premise..." 
+    // Changed to an array for native JSON compatibility
+    learningState: ["Awaiting initial premise..."] 
 };
 
 // ==========================================
@@ -71,9 +71,9 @@ async function handleSend() {
 
     appendMessage("user", text);
     
-    // Keeping only the last 4 messages to save tokens
+    // Expanded buffer: Keep the last 12 messages (6 full conversational turns)
     state.chatHistory.push({ role: "user", content: text });
-    if (state.chatHistory.length > 4) {
+    if (state.chatHistory.length > 12) {
         state.chatHistory.shift(); 
     }
     
@@ -87,25 +87,30 @@ async function handleSend() {
 
     DOM.trackUpdated.innerHTML = "<em>Analyzing logic state...</em>";
 
+    // Convert the array state into a readable string for the prompt
+    const stringifiedState = state.learningState.map(p => `- ${p}`).join('\n');
+
     // HARDENED SYSTEM PROMPT
     const systemPrompt = `You are a master Socratic educator. Your goal is to guide the user to critically examine their premise using historical, scientific, or philosophical frameworks.
     
     The user's original premise is: "${state.originalPremise}". 
     
     CURRENT LOGICAL STATE:
-    "${state.learningState}"
+    \n${stringifiedState}\n
 
     RULES OF ENGAGEMENT:
-    1. TEACH THROUGH INQUIRY: You MUST introduce a specific, named concept (e.g., The Problem of Induction, Biology, First Principles) to challenge their view, THEN ask a "How" or "Why" question about it.
-    2. NO THERAPY-SPEAK: Do not ask about their feelings or general openness. Stick strictly to the logic of the premise.
-    3. THE KILL SWITCH (RESOLUTION): If the user concedes their original premise is flawed or successfully articulates the new concept, you MUST validate their logical growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
+    1. TEACH THROUGH INQUIRY: Introduce a specific, named concept (e.g., Biology, First Principles) to challenge their view, THEN ask a "How" or "Why" question.
+    2. BE NATURAL: Do NOT say "Introducing the concept of...". Weave the concept into the dialogue naturally as if having a real conversation.
+    3. HANDLE CONFUSION: If the user says "I don't know", "what do you mean?", or expresses confusion, DO NOT introduce a new concept. Briefly explain the previous concept in simple terms, then ask a smaller, guiding step-question to help them bridge the gap.
+    4. NO THERAPY-SPEAK: Do not ask about their feelings or general openness. Stick strictly to the logic of the premise.
+    5. THE KILL SWITCH (RESOLUTION): If the user concedes their original premise is flawed or successfully articulates the new truth, validate their logical growth, summarize the lesson, and explicitly END your response with a period. Absolutely NO questions once they concede.
 
     OUTPUT INSTRUCTIONS:
     You MUST output valid JSON only. No markdown formatting outside the JSON object.
     {
       "response_text": "Your Socratic reply (under 50 words).",
       "fallacy_detected": "Name of fallacy if used. Return null if none.",
-      "updated_learning_state": "A 2-3 bullet point summary of their LOGICAL position (e.g., 'User initially believed X, but now concedes Y'). Do not track their mood. (Must be a single string containing line breaks, NEVER an array)."
+      "updated_learning_state": ["Bullet 1 summarizing user's LOGICAL position", "Bullet 2"] // MUST be a JSON array of strings summarizing the user. Do not summarize your own questions.
     }`;
 
     try {
@@ -150,18 +155,16 @@ async function handleSend() {
             DOM.userInput.placeholder = "Explore this concept further...";
         }
 
-        // 3. Update the invisible "Carry-On Bag" state securely
-        let incomingState = engineData.updated_learning_state || state.learningState;
-        
-        // SAFETY NET: Handle accidental Array returns from the LLM
-        if (Array.isArray(incomingState)) {
-            state.learningState = incomingState.map(point => `- ${point}`).join('\n');
-        } else {
-            state.learningState = String(incomingState); 
+        // 3. Update the invisible "Carry-On Bag" state safely using Native Arrays
+        if (Array.isArray(engineData.updated_learning_state)) {
+            state.learningState = engineData.updated_learning_state;
+        } else if (typeof engineData.updated_learning_state === 'string') {
+            // Fallback in case the LLM stubbornly returns a string anyway
+            state.learningState = engineData.updated_learning_state.split('\n').filter(p => p.trim() !== '');
         }
 
         // 4. Render the Synthesis & Fallacy tracking safely
-        let synthesisHTML = state.learningState.replace(/\n/g, "<br>");
+        let synthesisHTML = state.learningState.map(point => `- ${point.replace(/^- /, '')}`).join("<br>");
         
         // SAFETY NET: Handle stringified nulls
         if (engineData.fallacy_detected && 
@@ -189,7 +192,7 @@ DOM.resetBtn.addEventListener("click", () => {
     state.isFirstMessage = true;
     state.originalPremise = "";
     state.chatHistory = []; 
-    state.learningState = "Awaiting initial premise..."; 
+    state.learningState = ["Awaiting initial premise..."]; 
 
     DOM.trackUpdated.innerHTML = "Awaiting premise...";
     DOM.userInput.placeholder = "State a premise or ask a question...";
