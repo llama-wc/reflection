@@ -15,9 +15,7 @@ const DOM = {
 let state = {
     isFirstMessage: true,
     originalPremise: "",
-    chatHistory: [],
-    // Changed to an array for native JSON compatibility
-    learningState: ["Awaiting initial premise..."] 
+    chatHistory: [], // We let this grow a bit larger now for better memory
 };
 
 // ==========================================
@@ -63,17 +61,61 @@ function toggleLoading(isLoading) {
 }
 
 // ==========================================
-// 4. CORE ENGINE LOGIC (OPTIMIZED API CALL)
+// 4. CORE ENGINE LOGIC (DECOUPLED)
 // ==========================================
+
+// TRACK 2: The Background Ledger
+async function updateLogicLedger() {
+    DOM.trackUpdated.innerHTML = "<em>Updating logic state...</em>";
+
+    const ledgerPrompt = `You are a background logic analyzer. Review the dialogue. 
+    Output a valid JSON object strictly matching this schema:
+    {
+      "fallacy_detected": "Name of fallacy if the user used one. Return null if none.",
+      "state_bullets": ["User claims X", "User conceded Y"] // 2-3 bullet points of the USER's logical state.
+    }`;
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: [
+                    { role: "system", content: ledgerPrompt },
+                    ...state.chatHistory 
+                ],
+                response_format: { type: "json_object" } 
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const ledgerData = JSON.parse(data.response);
+            
+            let synthesisHTML = ledgerData.state_bullets.map(point => `- ${point}`).join("<br>");
+            
+            if (ledgerData.fallacy_detected && ledgerData.fallacy_detected !== "null") {
+                synthesisHTML = `<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: ${ledgerData.fallacy_detected}]</strong>` + synthesisHTML;
+            }
+            
+            DOM.trackUpdated.innerHTML = synthesisHTML;
+        }
+    } catch (error) {
+        console.error("Ledger update failed:", error);
+        DOM.trackUpdated.innerHTML = "<span style='color: var(--text-muted)'>[Ledger temporarily offline]</span>";
+    }
+}
+
+// TRACK 1: The Conversationalist
 async function handleSend() {
     const text = DOM.userInput.value.trim();
     if (!text) return;
 
     appendMessage("user", text);
     
-    // Expanded buffer: Keep the last 12 messages (6 full conversational turns)
+    // Let it remember the last 20 messages for excellent conversational flow
     state.chatHistory.push({ role: "user", content: text });
-    if (state.chatHistory.length > 12) {
+    if (state.chatHistory.length > 20) {
         state.chatHistory.shift(); 
     }
     
@@ -85,33 +127,15 @@ async function handleSend() {
         state.isFirstMessage = false;
     }
 
-    DOM.trackUpdated.innerHTML = "<em>Analyzing logic state...</em>";
-
-    // Convert the array state into a readable string for the prompt
-    const stringifiedState = state.learningState.map(p => `- ${p}`).join('\n');
-
-    // HARDENED SYSTEM PROMPT
-    const systemPrompt = `You are a master Socratic educator. Your goal is to guide the user to critically examine their premise using historical, scientific, or philosophical frameworks.
-    
+    const systemPrompt = `You are a master Socratic educator having a natural conversation. 
     The user's original premise is: "${state.originalPremise}". 
+
+    RULES:
+    1. INQUIRE NATURALLY: Gently introduce concepts to challenge their view, then ask a guiding question.
+    2. BE HUMAN: If the user calls you out (e.g., "you brought it up"), points out a flaw, or gets confused, ACKNOWLEDGE IT naturally like a normal person before continuing. Do not act like a robot.
+    3. THE KILL SWITCH: If the user concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
     
-    CURRENT LOGICAL STATE:
-    \n${stringifiedState}\n
-
-    RULES OF ENGAGEMENT:
-    1. TEACH THROUGH INQUIRY: Introduce a specific, named concept (e.g., Biology, First Principles) to challenge their view, THEN ask a "How" or "Why" question.
-    2. BE NATURAL: Do NOT say "Introducing the concept of...". Weave the concept into the dialogue naturally as if having a real conversation.
-    3. HANDLE CONFUSION: If the user says "I don't know", "what do you mean?", or expresses confusion, DO NOT introduce a new concept. Briefly explain the previous concept in simple terms, then ask a smaller, guiding step-question to help them bridge the gap.
-    4. NO THERAPY-SPEAK: Do not ask about their feelings or general openness. Stick strictly to the logic of the premise.
-    5. THE KILL SWITCH (RESOLUTION): If the user concedes their original premise is flawed or successfully articulates the new truth, validate their logical growth, summarize the lesson, and explicitly END your response with a period. Absolutely NO questions once they concede.
-
-    OUTPUT INSTRUCTIONS:
-    You MUST output valid JSON only. No markdown formatting outside the JSON object.
-    {
-      "response_text": "Your Socratic reply (under 50 words).",
-      "fallacy_detected": "Name of fallacy if used. Return null if none.",
-      "updated_learning_state": ["Bullet 1 summarizing user's LOGICAL position", "Bullet 2"] // MUST be a JSON array of strings summarizing the user. Do not summarize your own questions.
-    }`;
+    Keep your response plain text and under 50 words.`;
 
     try {
         const response = await fetch('/api/chat', {
@@ -121,65 +145,31 @@ async function handleSend() {
                 messages: [
                     { role: "system", content: systemPrompt },
                     ...state.chatHistory 
-                ],
-                response_format: { type: "json_object" } 
+                ]
+                // Notice we REMOVED the strict JSON format requirement here
             })
         });
 
         if (!response.ok) throw new Error(`API Route failed with status: ${response.status}`);
 
         const data = await response.json();
-        
-        let engineData;
-        try {
-            engineData = JSON.parse(data.response); 
-        } catch (parseError) {
-            console.warn("LLM deviated from JSON format. Attempting extraction...", data.response);
-            const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                engineData = JSON.parse(jsonMatch[0]);
-            } else {
-                throw new Error("Failed to parse JSON schema from API.");
-            }
-        }
+        let finalResponse = data.response.trim();
 
-        // 1. Render the AI's reply
-        let finalResponse = engineData.response_text.trim();
         state.chatHistory.push({ role: "assistant", content: finalResponse });
         appendMessage("ai", finalResponse);
 
-        // 2. Check for resolution
         if (!finalResponse.includes("?")) {
             DOM.userInput.placeholder = "Concept mastered. Click 'Reset Engine' to explore a new topic.";
         } else {
             DOM.userInput.placeholder = "Explore this concept further...";
         }
 
-        // 3. Update the invisible "Carry-On Bag" state safely using Native Arrays
-        if (Array.isArray(engineData.updated_learning_state)) {
-            state.learningState = engineData.updated_learning_state;
-        } else if (typeof engineData.updated_learning_state === 'string') {
-            // Fallback in case the LLM stubbornly returns a string anyway
-            state.learningState = engineData.updated_learning_state.split('\n').filter(p => p.trim() !== '');
-        }
-
-        // 4. Render the Synthesis & Fallacy tracking safely
-        let synthesisHTML = state.learningState.map(point => `- ${point.replace(/^- /, '')}`).join("<br>");
-        
-        // SAFETY NET: Handle stringified nulls
-        if (engineData.fallacy_detected && 
-            engineData.fallacy_detected !== "null" && 
-            engineData.fallacy_detected.toLowerCase() !== "none") {
-            
-            synthesisHTML = `<strong style="color: var(--accent-red); display: block; margin-bottom: 10px;">[FALLACY DETECTED: ${engineData.fallacy_detected}]</strong>` + synthesisHTML;
-        }
-        
-        DOM.trackUpdated.innerHTML = synthesisHTML;
+        // Fire off the background ledger update asynchronously
+        updateLogicLedger();
 
     } catch (error) {
         appendMessage("ai", `SYSTEM ERROR: ${error.message}`);
         console.error(error);
-        DOM.trackUpdated.innerHTML = "<span style='color: var(--text-muted)'>[Synthesis temporarily offline]</span>";
     } finally {
         toggleLoading(false);
     }
@@ -192,8 +182,6 @@ DOM.resetBtn.addEventListener("click", () => {
     state.isFirstMessage = true;
     state.originalPremise = "";
     state.chatHistory = []; 
-    state.learningState = ["Awaiting initial premise..."]; 
-
     DOM.trackUpdated.innerHTML = "Awaiting premise...";
     DOM.userInput.placeholder = "State a premise or ask a question...";
 
