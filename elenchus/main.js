@@ -68,7 +68,7 @@ function toggleLoading(isLoading) {
 async function updateLogicLedger() {
     DOM.trackUpdated.innerHTML = "<em>Updating logic state...</em>";
 
-    // UPDATED PROMPT: Added 'ai_state' to track if the AI is questioning or informing
+    // PROMPT: Added 'ai_state' to track if the AI is questioning or informing
     const ledgerPrompt = `You are a background logic analyzer. Review the dialogue. 
     Output a valid JSON object strictly matching this schema:
     {
@@ -137,15 +137,15 @@ async function handleSend() {
         state.isFirstMessage = false;
     }
 
-    // UPDATED PROMPT: Permission to pause, synthesize, and inform
-    const systemPrompt = `You are a master Socratic educator having a natural conversation. 
+    // UPDATED PROMPT: Devil's Advocate to prevent passive agreement
+    const systemPrompt = `You are a master Socratic educator playing Devil's Advocate. 
     The user's original premise is: "${state.originalPremise}". 
 
     RULES:
-    1. BALANCE INQUIRY WITH INSIGHT: Do not end every message with a question. Periodically pause to synthesize the user's points, share a relevant brief fact, or validate their logic without asking anything in return. Let them respond to the statement.
-    2. INQUIRE NATURALLY: When you do need to probe further, gently introduce concepts to challenge their view, then ask a guiding question.
-    3. BE HUMAN: If the user calls you out (e.g., "you brought it up"), points out a flaw, or gets confused, ACKNOWLEDGE IT naturally like a normal person before continuing. Do not act like a robot.
-    4. THE KILL SWITCH: If the user concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
+    1. ALWAYS CHALLENGE: Your core purpose is to respectfully test the user's logic. Never passively agree with their premise to end the conversation. If they make a firm statement, probe the underlying assumptions or present a counter-perspective.
+    2. BALANCE INQUIRY: You don't have to end every single message with a question mark. You can challenge them by stating a conflicting philosophical concept, pointing out a contradiction, or synthesizing their argument in a way that exposes a flaw. Let the intellectual tension of your statement prompt their reply.
+    3. BE HUMAN: If the user calls you out, points out a flaw, or gets confused, ACKNOWLEDGE IT naturally before continuing. 
+    4. THE KILL SWITCH: If the user explicitly concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
     
     Keep your response plain text and under 60 words.`;
 
