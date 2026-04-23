@@ -9,7 +9,7 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 print("🚀 Starting Data Pipeline...")
 
-# --- NEW: DOWNLOAD AND EXTRACT RAW DATA ---
+# DOWNLOAD AND EXTRACT RAW DATA
 print("Downloading MovieLens 25M dataset (This takes about 5-10 seconds on a cloud runner)...")
 ml_url = "https://files.grouplens.org/datasets/movielens/ml-25m.zip"
 response = requests.get(ml_url)
@@ -18,7 +18,6 @@ print("Extracting files...")
 with zipfile.ZipFile(io.BytesIO(response.content)) as z:
     z.extractall("raw_data")
 
-# The extraction creates a folder named 'ml-25m' inside our 'raw_data' directory
 ratings_path = "raw_data/ml-25m/ratings.csv"
 movies_path = "raw_data/ml-25m/movies.csv"
 
@@ -31,7 +30,8 @@ ratings_df = ratings_df.with_columns(
 )
 
 ratings_parquet = ratings_df.select(["movieId", "rating", "review_year"])
-ratings_parquet.write_parquet("ratings.parquet", compression="snappy")
+# THE FIX: Swapped to 'zstd' for maximum file size reduction to prevent GitHub timeout
+ratings_parquet.write_parquet("ratings.parquet", compression="zstd")
 
 # 3. PROCESS & ENRICH MOVIES
 print("Processing Movie Metadata...")
@@ -43,6 +43,7 @@ movies_df = movies_df.with_columns(
 
 # NOTE: Add your specific TMDB API enrichment logic here!
 
-movies_df.write_parquet("movies.parquet", compression="snappy")
+# THE FIX: Swapped to 'zstd' compression
+movies_df.write_parquet("movies.parquet", compression="zstd")
 
 print("✅ Parquet generation complete. Files ready for DuckDB.")
