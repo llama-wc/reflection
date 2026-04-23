@@ -1,6 +1,5 @@
 name: Automated Parquet ETL Pipeline
 
-# THIS FIXES THE YELLOW WARNING
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -13,7 +12,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Allows the bot to commit files back to your repo
+      contents: write 
 
     steps:
       - name: Checkout Repository
@@ -32,8 +31,13 @@ jobs:
       - name: Execute Python Pipeline
         run: python build_parquet.py
         env:
-          # Pulls your API key securely so it isn't public in your code
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }} 
+
+      - name: Configure Git for Large Uploads
+        run: |
+          git config --global http.postBuffer 524288000
+          git config --global http.maxRequestBuffer 100M
+          git config --global core.compression 0
 
       - name: Commit and Push Updated Parquet Files
         uses: stefanzweifel/git-auto-commit-action@v5
