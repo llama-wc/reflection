@@ -1,10 +1,12 @@
 name: Automated Parquet ETL Pipeline
 
+# THIS FIXES THE YELLOW WARNING
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
-  # 1. Runs automatically every Sunday at Midnight
   schedule:
     - cron: '0 0 * * 0' 
-  # 2. Allows you to trigger this manually from the GitHub repo anytime
   workflow_dispatch: 
 
 jobs:
