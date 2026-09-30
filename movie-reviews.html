@@ -3,7 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MovieLens Analytics Dashboard | Mac Wall</title>
+    <title>Movie Ratings Dashboard | Mac Wall</title>
+    <meta name="description" content="Interactive dashboard exploring 25 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Movie Ratings Dashboard | Mac Wall">
+    <meta property="og:description" content="Interactive dashboard exploring 25 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <meta property="og:url" content="https://mac-wall.com/movie-reviews.html">
+    <meta property="og:image" content="https://mac-wall.com/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <script>
+        // Apply the saved theme before first paint to avoid a dark flash
+        try { document.documentElement.setAttribute('data-theme', localStorage.getItem('portfolio-theme') || 'dark'); } catch (e) {}
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
@@ -174,7 +186,7 @@
     <div class="header">
         <h1>MOVIE INTELLIGENCE DASHBOARD</h1>
         <div class="header-controls">
-            <button id="global-theme-toggle">◐</button>
+            <button id="global-theme-toggle" aria-label="Toggle Theme">◐</button>
             <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
         </div>
     </div>
