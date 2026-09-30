@@ -22,7 +22,7 @@ let state = {
 // 2. INITIALIZATION & THEME
 // ==========================================
 function initTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
 }
 
@@ -30,7 +30,7 @@ DOM.themeToggle.addEventListener('click', () => {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
+    localStorage.setItem('portfolio-theme', newTheme);
 });
 
 function initializeEngine() {

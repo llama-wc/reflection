@@ -343,15 +343,6 @@ document.getElementById('modal-sync-btn').addEventListener('click', async () => 
     navigator.clipboard.writeText(document.getElementById('sync-url-display').value).then(() => { modal.classList.add('hidden'); setStatus("Cloud Saved & Link Copied!"); });
 });
 
-const themeBtn = document.getElementById('theme-toggle');
-const appWrapper = document.getElementById('virtue-ledger-app');
-const storedTheme = localStorage.getItem('theme') || 'dark';
-if (storedTheme === 'light') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.add('force-light'); themeBtn.textContent = "DARK MODE"; } else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.add('force-dark'); themeBtn.textContent = "LIGHT MODE"; }
-themeBtn.addEventListener('click', () => {
-    if (document.documentElement.getAttribute('data-theme') === 'dark') { document.documentElement.setAttribute('data-theme', 'light'); appWrapper.classList.remove('force-dark'); appWrapper.classList.add('force-light'); localStorage.setItem('theme', 'light'); themeBtn.textContent = "DARK MODE"; } 
-    else { document.documentElement.setAttribute('data-theme', 'dark'); appWrapper.classList.remove('force-light'); appWrapper.classList.add('force-dark'); localStorage.setItem('theme', 'dark'); themeBtn.textContent = "LIGHT MODE"; }
-});
-
 initializeSession();
 
 
