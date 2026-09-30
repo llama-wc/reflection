@@ -1,59 +1,110 @@
-export async function onRequest(context) {
-    // 1. THE PULSE CHECK - Lets you test the backend in a browser
-    if (context.request.method === "GET") {
-        return new Response("THE BACKEND IS ALIVE!", { 
-            status: 200,
-            headers: { "Access-Control-Allow-Origin": "*" } 
-        });
+// Only pages on these origins may call this endpoint from a browser.
+const ALLOWED_ORIGINS = ["https://elenchus.mac-wall.com", "https://mac-wall.com"];
+
+const MAX_MESSAGES = 20;
+const MAX_MESSAGE_CHARS = 2000;
+const MAX_PREMISE_CHARS = 1000;
+
+// System prompts live on the server so callers can't repurpose the API key.
+function chatPrompt(premise) {
+    return `You are a master Socratic educator playing Devil's Advocate.
+    The user's original premise is: "${premise}".
+
+    RULES:
+    1. ALWAYS CHALLENGE: Your core purpose is to respectfully test the user's logic. Never passively agree with their premise to end the conversation. If they make a firm statement, probe the underlying assumptions or present a counter-perspective.
+    2. BALANCE INQUIRY: You don't have to end every single message with a question mark. You can challenge them by stating a conflicting philosophical concept, pointing out a contradiction, or synthesizing their argument in a way that exposes a flaw. Let the intellectual tension of your statement prompt their reply.
+    3. BE HUMAN: If the user calls you out, points out a flaw, or gets confused, ACKNOWLEDGE IT naturally before continuing.
+    4. THE KILL SWITCH: If the user explicitly concedes their premise is flawed, validate their growth, summarize the truth, and explicitly END your response with a period. Absolutely NO questions once they concede.
+
+    Keep your response plain text and under 60 words.`;
+}
+
+const LEDGER_PROMPT = `You are a background logic analyzer. Review the dialogue.
+    Output a valid JSON object strictly matching this schema:
+    {
+      "fallacy_detected": "Name of fallacy if the user used one. Return null if none.",
+      "state_bullets": ["User claims X", "User conceded Y"],
+      "ai_state": "Categorize the AI's latest response as either 'Questioning' (seeking input) or 'Informing' (providing facts/synthesizing without asking)."
+    }`;
+
+function jsonResponse(body, status = 200) {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" }
+    });
+}
+
+function isValidHistory(messages) {
+    return Array.isArray(messages)
+        && messages.length > 0
+        && messages.length <= MAX_MESSAGES
+        && messages.every(m =>
+            m && (m.role === "user" || m.role === "assistant")
+            && typeof m.content === "string"
+            && m.content.length <= MAX_MESSAGE_CHARS);
+}
+
+export async function onRequestPost(context) {
+    const origin = context.request.headers.get("Origin");
+    if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+        return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    // 2. Preflight Security Handshake
-    if (context.request.method === "OPTIONS") {
-        return new Response(null, {
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-                "Access-Control-Allow-Headers": "Content-Type",
-            }
-        });
+    let body;
+    try {
+        body = await context.request.json();
+    } catch {
+        return jsonResponse({ error: "Invalid request" }, 400);
+    }
+
+    const { mode, premise, messages } = body;
+    if (!isValidHistory(messages)) {
+        return jsonResponse({ error: "Invalid request" }, 400);
+    }
+
+    // Strip any extra fields the client sent along with each message.
+    const history = messages.map(m => ({ role: m.role, content: m.content }));
+
+    let groqBody;
+    if (mode === "chat") {
+        if (typeof premise !== "string" || premise.length > MAX_PREMISE_CHARS) {
+            return jsonResponse({ error: "Invalid request" }, 400);
+        }
+        groqBody = {
+            messages: [{ role: "system", content: chatPrompt(premise) }, ...history],
+            temperature: 0.4,
+            max_tokens: 150
+        };
+    } else if (mode === "ledger") {
+        groqBody = {
+            messages: [{ role: "system", content: LEDGER_PROMPT }, ...history],
+            temperature: 0.2,
+            max_tokens: 400,
+            response_format: { type: "json_object" }
+        };
+    } else {
+        return jsonResponse({ error: "Invalid request" }, 400);
     }
 
     try {
-        const body = await context.request.json();
-        const chatHistory = body.messages;
-
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
+        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
             headers: {
-                'Authorization': `Bearer ${context.env.GROQ_API_KEY}`,
-                'Content-Type': 'application/json'
+                "Authorization": `Bearer ${context.env.GROQ_API_KEY}`,
+                "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile', // The upgraded 70B engine
-                messages: chatHistory,
-                temperature: 0.4, // Bumped slightly for more creative questioning
-                max_tokens: 150
-            })
+            body: JSON.stringify({ model: "llama-3.3-70b-versatile", ...groqBody })
         });
 
         if (!groqResponse.ok) {
-            throw new Error(`Groq blocked us: ${groqResponse.status}`);
+            console.error(`Groq error: ${groqResponse.status}`);
+            return jsonResponse({ error: "Upstream error" }, 502);
         }
 
         const data = await groqResponse.json();
-        const aiMessage = data.choices[0].message.content;
-
-        return new Response(JSON.stringify({ response: aiMessage }), {
-            headers: { 
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            }
-        });
-
+        return jsonResponse({ response: data.choices[0].message.content });
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { 
-            status: 500,
-            headers: { 'Access-Control-Allow-Origin': '*' }
-        });
+        console.error(error);
+        return jsonResponse({ error: "Server error" }, 500);
     }
 }
