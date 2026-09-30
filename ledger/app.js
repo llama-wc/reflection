@@ -68,7 +68,7 @@ async function fetchDataFromCloud() {
         const res = await fetch(`${WORKER_URL}?id=${currentUserId}`);
         if (res.ok) {
             const payload = await res.json();
-            if (payload.v) virtues = payload.v;
+            if (Array.isArray(payload.v)) virtues = payload.v.filter(v => typeof v === 'string');
             if (payload.d) {
                 gridData = {};
                 payload.d.forEach(record => {
@@ -309,12 +309,19 @@ function renderDataTable() {
     const table = document.getElementById('data-table'); table.innerHTML = ''; const allDates = new Set(forcedDates);
     for (const cellId of Object.keys(gridData)) { if(gridData[cellId].length > 0 && cellId.split('_').length === 2) allDates.add(cellId.split('_')[1]); }
     allDates.add(formatDate(new Date())); const sortedDates = Array.from(allDates).sort((a,b) => b.localeCompare(a)); 
-    let thead = '<thead><tr><th>Date</th>'; virtues.forEach(v => thead += `<th>${v}</th>`); table.innerHTML += thead + '</tr></thead>'; let tbody = '<tbody>';
+    // Built with DOM APIs, not HTML strings: virtue names come from the synced (untrusted) payload
+    const thead = table.createTHead(); const headRow = thead.insertRow();
+    ['Date', ...virtues].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.appendChild(th); });
+    const tbody = table.createTBody();
     sortedDates.forEach(date => {
-        let row = `<tr><td><strong>${date}</strong></td>`;
-        virtues.forEach(v => { const drops = gridData[`${v}_${date}`] || []; const val = drops.map(d => d.type === 1 ? 'P' : 'S').join(', '); row += `<td><input type="text" class="cell-input" data-cell="${v}_${date}" value="${val}" placeholder="-"></td>`; });
-        tbody += row + `</tr>`;
-    }); table.innerHTML += tbody + '</tbody>';
+        const row = tbody.insertRow(); const dateCell = document.createElement('strong'); dateCell.textContent = date; row.insertCell().appendChild(dateCell);
+        virtues.forEach(v => {
+            const drops = gridData[`${v}_${date}`] || [];
+            const input = document.createElement('input'); input.type = 'text'; input.className = 'cell-input'; input.placeholder = '-';
+            input.setAttribute('data-cell', `${v}_${date}`); input.value = drops.map(d => d.type === 1 ? 'P' : 'S').join(', ');
+            row.insertCell().appendChild(input);
+        });
+    });
 }
 
 function reconcileTableEdits() {
