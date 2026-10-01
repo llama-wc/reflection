@@ -298,7 +298,7 @@ async function refreshFilters() {
         if (selectedYears.size > 0) joinClause += ` JOIN (SELECT DISTINCT movieId FROM 'ratings.parquet' WHERE review_year IN (${Array.from(selectedYears).join(',')})) y_filt ON m.movieId = y_filt.movieId `;
 
         const baseFrom = `FROM 'movies.parquet' m ${joinClause}`;
-        const dirWhereStr = whereForDir ? `${whereForDir} AND m.director != 'Unknown'` : `WHERE m.director != 'Unknown'`;
+        const dirWhereStr = whereForDir ? `${whereForDir} AND m.director != 'N/A'` : `WHERE m.director != 'N/A'`;
         const stdWhereStr = whereForStudio ? `${whereForStudio} AND m.studio != 'N/A'` : `WHERE m.studio != 'N/A'`;
         const actWhereStr = whereForActor ? `${whereForActor} AND m."cast" != 'N/A'` : `WHERE m."cast" != 'N/A'`;
 

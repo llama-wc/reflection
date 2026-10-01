@@ -3,10 +3,9 @@ name: Automated Parquet ETL Pipeline
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# Weekly schedule paused: build_parquet.py doesn't do the TMDB enrichment yet,
-# so each run overwrote movies.parquet without the director/cast/studio columns
-# the dashboard queries. Re-enable once enrichment is implemented.
 on:
+  schedule:
+    - cron: '0 0 * * 0'
   workflow_dispatch: 
 
 jobs:
