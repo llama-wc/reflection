@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="8" fill="#121212"/>
-  <rect x="8" y="10" width="6" height="44" fill="#FF2A2A"/>
-  <polyline points="20,16 28,48 37,28 46,48 54,16" fill="none" stroke="#e0e0e0" stroke-width="6" stroke-linejoin="miter" stroke-linecap="square"/>
+  <!-- Condensed M, with the W as its exact vertical mirror; strokes are equal width -->
+  <polygon fill="#e0e0e0" points="6.00,58.00 6.00,6.00 10.60,6.00 18.00,26.00 25.40,6.00 30.00,6.00 30.00,58.00 25.40,58.00 25.40,18.68 18.00,38.68 10.60,18.68 10.60,58.00"/>
+  <polygon fill="#FF2A2A" points="34.00,6.00 34.00,58.00 38.60,58.00 46.00,38.00 53.40,58.00 58.00,58.00 58.00,6.00 53.40,6.00 53.40,45.32 46.00,25.32 38.60,45.32 38.60,6.00"/>
 </svg>
