@@ -26,7 +26,9 @@ jobs:
       - name: Install Data Engineering Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install polars pyarrow requests 
+          # Pinned: polars writes its version into each file, so an upgrade would
+          # change every byte and commit a fresh 81MB ratings_full.parquet.
+          pip install polars==1.44.2 requests
 
       - name: Execute Python Pipeline
         run: python build_parquet.py
