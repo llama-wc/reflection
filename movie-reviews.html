@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ratings Dashboard | Mac Wall</title>
-    <meta name="description" content="Interactive dashboard exploring 25 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <meta name="description" content="Interactive dashboard exploring 33.8 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Movie Ratings Dashboard | Mac Wall">
-    <meta property="og:description" content="Interactive dashboard exploring 25 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <meta property="og:description" content="Interactive dashboard exploring 33.8 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
     <meta property="og:url" content="https://mac-wall.com/movie-reviews.html">
     <meta property="og:image" content="https://mac-wall.com/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
@@ -86,6 +86,7 @@
             width: 100%; margin: 0; font-size: 14px;
         }
         .filter-group input:focus { outline: none; border-color: var(--accent-color); }
+        .filter-group input.no-match { border-color: var(--accent-color); border-style: dashed; color: var(--text-muted); }
         
         #resetBtn {
             background: var(--accent-color); color: white; border: none;
@@ -107,6 +108,8 @@
             cursor: pointer; color: #e0e0e0; font-size: 14px; font-family: 'Inter', sans-serif;
         }
         .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-kind { float: right; margin-left: 12px; color: #888; font-size: 12px; }
+        .autocomplete-item:hover .autocomplete-kind { color: #fff; }
         .autocomplete-item:hover, .autocomplete-item:active { background: #ff4b4b; color: #fff; }
 
         #main-stage {
@@ -161,7 +164,54 @@
         .legend-gradient { width: 40px; height: 12px; border-radius: 2px; background: linear-gradient(to right, #FF2A2A, #FF9F00, #00E676); }
         .legend-dashed { width: 20px; height: 0px; border-top: 2px dashed #666; }
 
-        .methodology-panel { grid-column: 1 / -1; }
+        .methodology-panel, .records-panel { grid-column: 1 / -1; }
+
+        #ui-source { color: var(--text-muted); }
+        .source-badge {
+            display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; font-weight: 700; letter-spacing: 0.5px; vertical-align: 1px;
+            background: #01b4e4; color: #0d253f;
+        }
+        .trend-message {
+            height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center;
+            text-align: center; padding: 0 20px; color: var(--text-muted); font-size: 15px;
+        }
+        .data-sources { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 0; border-top: 1px solid var(--border-color); padding-top: 15px; }
+        .data-sources a { color: var(--text-main); }
+
+        .records-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; }
+        .records-sub { color: var(--text-muted); font-size: 13px; margin: 0; }
+        #records-status { color: var(--text-muted); font-size: 13px; text-align: right; min-width: 220px; }
+        .records-progress { height: 4px; background: var(--border-color); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+        .records-progress div { height: 100%; width: 0; background: var(--accent-color); transition: width 0.2s ease; }
+        #records-load-btn, .records-pager button {
+            background: none; color: var(--text-main); border: 1px solid var(--border-color);
+            padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px;
+        }
+        #records-load-btn { border-color: var(--accent-color); color: var(--accent-color); font-weight: 700; }
+        .records-pager button:disabled { opacity: 0.35; cursor: default; }
+        #records-user-chip {
+            display: none; margin-top: 15px; align-self: flex-start;
+            background: var(--accent-color); color: #fff; border: none; border-radius: 14px;
+            padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        .records-table-wrap { overflow-x: auto; margin-top: 15px; }
+        .records-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+        .records-table th {
+            text-align: left; color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+            padding: 10px 12px; border-bottom: 1px solid var(--border-color); white-space: nowrap;
+        }
+        .records-table th[data-sort] { cursor: pointer; }
+        .records-table th[data-sort]:hover { color: var(--text-main); }
+        .records-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        .records-table td.movie { white-space: normal; min-width: 180px; }
+        .records-table .num { text-align: right; }
+        .records-table .user-link { background: none; border: none; padding: 0; color: var(--text-main); cursor: pointer; font: inherit; text-decoration: underline dotted var(--text-muted); }
+        .records-table .user-link:hover { color: var(--accent-color); }
+        .records-table .empty { color: var(--text-muted); text-align: center; padding: 30px; }
+        .records-footer[hidden] { display: none; }
+        .records-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 15px; font-size: 13px; color: var(--text-muted); }
+        .records-pager { display: flex; align-items: center; gap: 10px; }
 
         #loading-overlay {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -219,12 +269,13 @@
                 <div class="meta-label">DIRECTOR</div><div id="ui-director">-</div>
                 <div class="meta-label">STUDIO</div><div id="ui-studio">-</div>
                 <div class="meta-label">CAST</div><div id="ui-cast">-</div>
+                <div class="meta-label">SOURCE</div><div id="ui-source">-</div>
             </div>
             <div id="ui-desc">Initializing dataset...</div>
         </div>
 
         <div class="panel" style="align-items: center;">
-            <h3 class="chart-title" style="align-self: flex-start;">Global Average Rating</h3>
+            <h3 class="chart-title" id="hero-label" style="align-self: flex-start;">MovieLens Average Rating</h3>
             <div class="hero-square" id="heroSquare">
                 <h1 class="score-text" id="scoreDisplay">-</h1>
                 <div class="sub-text" id="reviewCount">0 REVIEWS</div>
@@ -248,19 +299,65 @@
             <div id="trend-container" class="chart-container"></div>
         </div>
 
+        <div class="panel records-panel">
+            <div class="records-header">
+                <div>
+                    <h3 class="chart-title" style="margin-bottom: 5px;">Raw Records</h3>
+                    <p class="records-sub">Every individual rating, queried live in your browser. Follows the filters above; click a user number to see everything that person rated.</p>
+                </div>
+                <div id="records-status">
+                    <span id="records-status-text">Waiting for the dashboard to load...</span>
+                    <div class="records-progress" id="records-progress" hidden><div></div></div>
+                    <button id="records-load-btn" hidden>Load all 33.8M records (81 MB)</button>
+                </div>
+            </div>
+            <button id="records-user-chip"></button>
+            <div class="records-table-wrap">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="date">DATE</th>
+                            <th class="num">USER</th>
+                            <th>MOVIE</th>
+                            <th class="num" data-sort="rating">RATING</th>
+                        </tr>
+                    </thead>
+                    <tbody id="records-body"></tbody>
+                </table>
+            </div>
+            <div class="records-footer" hidden>
+                <span id="records-timing"></span>
+                <div class="records-pager">
+                    <button id="records-prev" disabled>‹ Prev</button>
+                    <span id="records-page"></span>
+                    <button id="records-next" disabled>Next ›</button>
+                </div>
+            </div>
+        </div>
+
         <div class="panel methodology-panel">
             <h3 class="chart-title">Project Architecture & Methodology</h3>
             <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-top: 0;">
-                This dashboard is a high-performance, in-browser analytics engine processing over 25 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+                This dashboard is a high-performance, in-browser analytics engine processing 33.8 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
             </p>
             <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-bottom: 0;">
                 The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
+            </p>
+            <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                Data loads in two tiers. A 3&nbsp;MB pre-aggregated summary (one row per movie, year and star rating, with a count) powers the charts within a second of opening the page. The full 81&nbsp;MB file of all 33.8 million individual ratings then streams in the background and is queried directly from Parquet for the raw records table, so there's no server, API or database behind any of it.
+            </p>
+            <p class="data-sources">
+                <strong>Data sources.</strong>
+                Ratings: <a href="https://grouplens.org/datasets/movielens/" target="_blank" rel="noopener">MovieLens</a> (GroupLens Research, University of Minnesota), the <code>ml-latest</code> release covering January 1995 to July 2023. F. Maxwell Harper and Joseph A. Konstan, “The MovieLens Datasets: History and Context,” <em>ACM TiiS</em> 5(4), 2015.
+                Film details, and community scores for films released after the MovieLens snapshot: <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, refreshed weekly.
+                TMDB scores are out of 10 and are never mixed into the MovieLens averages.
+                This product uses the TMDB API but is not endorsed or certified by TMDB.
             </p>
         </div>
 
     </div>
 
-    <script type="module" src="dashboard.js?v=1"></script>
+    <script type="module" src="dashboard.js?v=7"></script>
 
     <!-- Global Theme Sync Script -->
     <script>
