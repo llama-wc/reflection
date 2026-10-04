@@ -24,6 +24,7 @@ description: Notes by Mac Wall on data projects, the decisions behind them, and 
                 <a class="note-link" href="{{ post.url }}">{{ post.title }}</a>
                 {%- if post.description %}<p>{{ post.description }}</p>{% endif %}
                 {%- if project %}<span class="project-chip">{{ project.name }}</span>{% endif %}
+                {%- if post.author == "claude" %}<span class="project-chip author-chip">Written by Claude</span>{% endif %}
             </div>
         </li>
         {%- endfor %}
