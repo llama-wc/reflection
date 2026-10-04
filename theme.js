@@ -38,6 +38,11 @@
         save(next);
     }
 
+    // A change made in another tab or page (or a page shown inside the board) applies here too.
+    window.addEventListener('storage', (e) => {
+        if (e.key === KEY && (e.newValue === 'dark' || e.newValue === 'light')) apply(e.newValue);
+    });
+
     // One handler for every page's toggle button.
     document.addEventListener('click', (e) => {
         if (e.target.closest('#theme-toggle, #global-theme-toggle')) toggle();
