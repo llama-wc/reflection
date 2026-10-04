@@ -20,6 +20,19 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
     <style>
+        /* Rating bands: poor / fair / good / great. "-ink" is the readable text colour on each. */
+        :root[data-theme="dark"] {
+            --band-poor: #e5485a;  --band-poor-ink: #111111;
+            --band-fair: #e39330;  --band-fair-ink: #111111;
+            --band-good: #86c4a8;  --band-good-ink: #111111;
+            --band-great: #4ef5b5; --band-great-ink: #111111;
+        }
+        :root[data-theme="light"] {
+            --band-poor: #f2808c;  --band-poor-ink: #111111;
+            --band-fair: #c7860c;  --band-fair-ink: #111111;
+            --band-good: #649985;  --band-good-ink: #111111;
+            --band-great: #00704b; --band-great-ink: #ffffff;
+        }
         :root[data-theme="dark"] {
             --bg-color: #0a0a0a;
             --panel-bg: #151515;
@@ -142,17 +155,19 @@
             border-radius: 12px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; position: relative;
             background-color: var(--bg-color); box-shadow: 0 30px 60px rgba(0,0,0,0.2);
-            transition: background-color 0.4s ease;
+            color: var(--text-main);   /* set per band from JS so text stays readable */
+            transition: background-color 0.4s ease, color 0.4s ease;
             margin: auto; 
         }
         .score-text {
             font-family: 'Oswald', sans-serif; font-size: 8rem; line-height: 1;
-            margin: 0; color: var(--text-main); z-index: 2;
+            margin: 0; color: inherit; z-index: 2;
         }
         .sub-text {
             font-size: 1rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
-            color: var(--text-muted); z-index: 2; margin-top: -5px;
+            color: inherit; opacity: 0.72; z-index: 2; margin-top: -5px;
         }
+        .hero-delta { font-size: 0.8rem; letter-spacing: 1.5px; margin-top: 6px; opacity: 0.85; text-align: center; padding: 0 10px; }
 
         .chart-container { width: 100%; flex: 1; min-height: 250px; position: relative; }
         .domain { display: none; } 
@@ -161,7 +176,9 @@
 
         .legend { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 10px; }
         .legend-item { display: flex; align-items: center; gap: 8px; }
-        .legend-gradient { width: 40px; height: 12px; border-radius: 2px; background: linear-gradient(to right, #FF2A2A, #FF9F00, #00E676); }
+        .legend { flex-wrap: wrap; }
+        .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+        .band-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
         .legend-dashed { width: 20px; height: 0px; border-top: 2px dashed #666; }
 
         .methodology-panel, .records-panel { grid-column: 1 / -1; }
@@ -279,6 +296,7 @@
             <div class="hero-square" id="heroSquare">
                 <h1 class="score-text" id="scoreDisplay">-</h1>
                 <div class="sub-text" id="reviewCount">0 REVIEWS</div>
+                <div class="sub-text hero-delta" id="heroDelta"></div>
             </div>
         </div>
 
@@ -292,7 +310,10 @@
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 0;">Average rating overlayed with ±1 Standard Deviation boundaries</p>
                 </div>
                 <div class="legend">
-                    <div class="legend-item"><div class="legend-gradient"></div> Score Scale</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background: var(--band-poor)"></span> Poor &lt;2.5</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background: var(--band-fair)"></span> Fair 2.5–3.4</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background: var(--band-good)"></span> Good 3.5–3.9</div>
+                    <div class="legend-item"><span class="legend-swatch" style="background: var(--band-great)"></span> Great 4.0+</div>
                     <div class="legend-item"><div class="legend-dashed"></div> Aggregate Mean</div>
                 </div>
             </div>
@@ -357,7 +378,7 @@
 
     </div>
 
-    <script type="module" src="dashboard.js?v=7"></script>
+    <script type="module" src="dashboard.js?v=8"></script>
 
     <!-- Global Theme Sync Script -->
     <script>

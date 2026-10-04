@@ -15,8 +15,10 @@
 - [ ] Typo-tolerant search ("Noland" -> "Did you mean Christopher Nolan?"), e.g. DuckDB
       jaro_winkler_similarity. Deferred.
 - [ ] RESET button wraps onto its own line around 1160px wide.
-- [ ] Check the first scheduled data refresh (Sun 2026-10-04) succeeds and doesn't
-      commit unchanged parquet files every week (ratings_full is 81MB of history each time).
+- [x] First scheduled refresh (Sun 2026-10-04) succeeded and only committed movies.parquet
+      (refreshed TMDB scores); the ratings files rebuilt byte-identical.
+- [x] Replaced the red/amber/green score colours with four rating bands (coral / amber /
+      soft jade / vivid jade), shared by the score square, trend chart, table and score filter.
 - [ ] Idea: the trend chart's "violin" width is drawn from yearly review count, not
       the actual rating spread. ratings_summary.parquet keeps per-star counts, so a real
       distribution (or a star histogram) is possible.
@@ -28,3 +30,4 @@
 - [ ] `mac-wall.com/elenchus/` is a broken copy (chat calls 405 on GitHub Pages); the
       real app is elenchus.mac-wall.com. Exclude `elenchus/` and `functions/` from the
       Pages build via `_config.yml`.
+- [ ] Add a "blog feature" that allows me to write up what I learned etc. I can link specific projects, but also just post regular entries 

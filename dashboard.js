@@ -51,11 +51,31 @@ function fetchData(url) {
     return fetch(url, { cache: 'no-cache' });
 }
 
-// PURE FLAT COLOR SCALE
-const colorScale = d3.scaleLinear()
-    .domain([0.5, 2.75, 5.0]) 
-    .range(["#FF2A2A", "#FF9F00", "#00E676"]) 
-    .interpolate(d3.interpolateRgb); 
+// RATING BANDS
+// Four fixed colours (coral / amber / soft jade / vivid jade). The colours are
+// CSS variables per theme in movie-reviews.html, so the theme toggle restyles
+// everything without redrawing. Bands follow the score as displayed (one
+// decimal), so a 3.47 shown as "3.5" is "Good", matching the score filter.
+const BANDS = [
+    { key: 'poor',  label: 'Poor',  below: 2.45 },
+    { key: 'fair',  label: 'Fair',  below: 3.45 },
+    { key: 'good',  label: 'Good',  below: 3.95 },
+    { key: 'great', label: 'Great', below: Infinity },
+];
+const bandOf = v => BANDS.find(b => v < b.below);
+const bandColor = v => `var(--band-${bandOf(v).key})`;
+const bandInk = v => `var(--band-${bandOf(v).key}-ink)`;
+
+// SQL condition for the score filter, using the same band edges.
+function scoreCondition(val) {
+    const i = BANDS.findIndex(b => b.key === val);
+    if (i < 0) return null;
+    const lo = i > 0 ? `ma.avg_rating >= ${BANDS[i - 1].below}` : null;
+    const hi = BANDS[i].below !== Infinity ? `ma.avg_rating < ${BANDS[i].below}` : null;
+    return [lo, hi].filter(Boolean).join(' AND ');
+}
+
+let overallMean = null;   // MovieLens average across every rating, for "vs average"
 
 async function initializeDashboard() {
     const loadingText = document.getElementById('loading-overlay');
@@ -74,10 +94,10 @@ async function initializeDashboard() {
             scoreSelect.disabled = true; 
             scoreSelect.innerHTML = `
                 <option value="All">All Scores</option>
-                <option value="4">4.0+ (Great)</option>
-                <option value="3">3.0 - 3.9 (Good)</option>
-                <option value="2">2.0 - 2.9 (Mixed)</option>
-                <option value="1">Under 2.0 (Poor)</option>
+                <option value="great">Great (4.0+)</option>
+                <option value="good">Good (3.5–3.9)</option>
+                <option value="fair">Fair (2.5–3.4)</option>
+                <option value="poor">Poor (under 2.5)</option>
             `;
             scoreSelect.style.cssText = `
                 background: var(--bg-color); color: var(--text-main);
@@ -123,6 +143,9 @@ async function initializeDashboard() {
             GROUP BY movieId
         `);
 
+        const meanRes = await conn.query(`SELECT SUM(rating * n) / SUM(n) AS m FROM summary`);
+        overallMean = Number(meanRes.toArray()[0].toJSON().m);
+
         loadingText.innerText = "Indexing Metadata...";
         await refreshFilters(++updateGen);
 
@@ -167,10 +190,7 @@ async function initializeDashboard() {
             let scoreJoin = "";
             if (scoreFilterVal !== "All") {
                 scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
-                if (scoreFilterVal === "4") clauses.push("ma.avg_rating >= 4.0");
-                else if (scoreFilterVal === "3") clauses.push("ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0");
-                else if (scoreFilterVal === "2") clauses.push("ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0");
-                else if (scoreFilterVal === "1") clauses.push("ma.avg_rating < 2.0");
+                clauses.push(scoreCondition(scoreFilterVal));
             }
 
             if (fuzzyText !== "") {
@@ -421,10 +441,7 @@ async function refreshFilters(gen = updateGen) {
         let scoreWhere = null;
         if (scoreFilterVal !== "All") {
             scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
-            if (scoreFilterVal === "4") scoreWhere = "ma.avg_rating >= 4.0";
-            else if (scoreFilterVal === "3") scoreWhere = "ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0";
-            else if (scoreFilterVal === "2") scoreWhere = "ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0";
-            else if (scoreFilterVal === "1") scoreWhere = "ma.avg_rating < 2.0";
+            scoreWhere = scoreCondition(scoreFilterVal);
         }
 
         let srcClause = null;
@@ -514,10 +531,7 @@ async function applyUnifiedFilters(gen = updateGen) {
 
         if (scoreFilterVal !== "All") {
             scoreJoin = " JOIN movie_averages ma ON m.movieId = ma.movieId ";
-            if (scoreFilterVal === "4") clauses.push("ma.avg_rating >= 4.0");
-            else if (scoreFilterVal === "3") clauses.push("ma.avg_rating >= 3.0 AND ma.avg_rating < 4.0");
-            else if (scoreFilterVal === "2") clauses.push("ma.avg_rating >= 2.0 AND ma.avg_rating < 3.0");
-            else if (scoreFilterVal === "1") clauses.push("ma.avg_rating < 2.0");
+            clauses.push(scoreCondition(scoreFilterVal));
         }
 
         if (searchWhereStr) clauses.push(`(${searchWhereStr})`);
@@ -668,7 +682,25 @@ function updateTmdbHero(score, votes) {
           return function(t) { this.textContent = i(t).toFixed(1); };
       });
     document.getElementById('reviewCount').innerText = `OUT OF 10 · ${votes.toLocaleString()} VOTES`;
-    document.getElementById('heroSquare').style.backgroundColor = colorScale(score / 2);
+    // Banded on the 5-star equivalent (8.0/10 -> 4.0)
+    paintHero(score / 2, `${bandOf(score / 2).label} on TMDB`);
+}
+
+// Band colour, readable text colour and the "vs average" line for the score square.
+function paintHero(value, deltaText) {
+    const heroSquare = document.getElementById('heroSquare');
+    heroSquare.style.backgroundColor = bandColor(value);
+    heroSquare.style.color = bandInk(value);
+    const delta = document.getElementById('heroDelta');
+    if (delta) delta.innerText = deltaText;
+}
+
+function vsAverageText(avg) {
+    const label = bandOf(avg).label;
+    if (overallMean === null) return label;
+    const d = avg - overallMean;
+    if (Math.abs(d) < 0.05) return `${label} · ≈ average`;
+    return `${label} · ${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(2)} ${d > 0 ? 'above' : 'below'} avg`;
 }
 
 function showTrendMessage(text) {
@@ -688,7 +720,10 @@ function updateHeroMetric(avg, count) {
     if (count === 0) {
         displayElement.innerText = "N/A";
         countElement.innerText = "0 REVIEWS";
-        heroSquare.style.backgroundColor = "#121212";
+        heroSquare.style.backgroundColor = "var(--bg-color)";
+        heroSquare.style.color = "var(--text-main)";
+        const delta = document.getElementById('heroDelta');
+        if (delta) delta.innerText = "";
         return;
     }
 
@@ -706,7 +741,7 @@ function updateHeroMetric(avg, count) {
       });
 
     countElement.innerText = `${count.toLocaleString()} REVIEWS`;
-    heroSquare.style.backgroundColor = colorScale(avg);
+    paintHero(avg, vsAverageText(avg));
 }
 
 // --- BLENDED VIOLIN PLOT RENDERER ---
@@ -752,9 +787,14 @@ function updateTrendChart(data, globalMean) {
         .attr("x1", 0).attr("y1", y(5.0))  
         .attr("x2", 0).attr("y2", y(0.5)); 
 
-    gradient.append("stop").attr("offset", "0%").attr("stop-color", "#00E676"); 
-    gradient.append("stop").attr("offset", "50%").attr("stop-color", "#FF9F00"); 
-    gradient.append("stop").attr("offset", "100%").attr("stop-color", "#FF2A2A"); 
+    // Hard stops at the band edges: the line takes each band's colour where it
+    // crosses that band's range (y runs 5.0 at the top to 0.5 at the bottom).
+    const offset = v => `${((5.0 - v) / 4.5 * 100).toFixed(2)}%`;
+    const edges = [5.0, ...BANDS.slice(0, -1).map(b => b.below).reverse(), 0.5];   // 5, 3.95, 3.45, 2.45, 0.5
+    [...BANDS].reverse().forEach((band, i) => {
+        gradient.append("stop").attr("offset", offset(edges[i])).style("stop-color", `var(--band-${band.key})`);
+        gradient.append("stop").attr("offset", offset(edges[i + 1])).style("stop-color", `var(--band-${band.key})`);
+    });
 
     let xTicksCount = 10;
     if (width < 450) xTicksCount = 3;      
@@ -821,8 +861,8 @@ function updateTrendChart(data, globalMean) {
         .attr("cx", d => x(d.year))
         .attr("cy", d => y(d.avg))
         .attr("r", dotRadius)
-        .attr("fill", d => selectedYears.has(d.year) ? "#fff" : "#0a0a0a") 
-        .attr("stroke", d => colorScale(d.avg)) 
+        .style("fill", d => selectedYears.has(d.year) ? "var(--text-main)" : "var(--panel-bg)")
+        .style("stroke", d => bandColor(d.avg))
         .attr("stroke-width", 2.5)
         .style("cursor", "pointer")
         .on("click", (e, d) => {
@@ -1096,9 +1136,12 @@ function renderRecords(rows) {
 
         const rating = tr.appendChild(document.createElement('td'));
         rating.className = 'num';
-        rating.innerText = `${Number(row.rating).toFixed(1)} ★`;
-        rating.style.color = colorScale(Number(row.rating));
+        const dot = rating.appendChild(document.createElement('span'));
+        dot.className = 'band-dot';
+        dot.style.background = bandColor(Number(row.rating));
+        rating.append(`${Number(row.rating).toFixed(1)} ★`);
         rating.style.fontWeight = '700';
+        rating.title = bandOf(Number(row.rating)).label;
 
         body.appendChild(tr);
     }
