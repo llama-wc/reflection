@@ -26,9 +26,17 @@ title glide land in the wrong place. Notes need nothing: their cards are live.
 
 ## 2. Cache versions
 
-If you change `dashboard.js` or `elenchus/main.js`, bump the `?v=` number where the
-page loads it (`movie-reviews.html`, `elenchus/index.html`) so returning visitors get
-the new script.
+If you change `dashboard.js`, `elenchus/main.js` or `garden/garden.js`/`garden.css`, bump
+the `?v=` number where the page loads it (`movie-reviews.html`, `elenchus/index.html`,
+`garden/index.html`) so returning visitors get the new files.
+
+## 2b. The garden is the default view
+
+`theme.js` sends anyone opening a page directly on mac-wall.com to that page's card
+in the garden (`/portfolio.html` → `/garden/#/portfolio.html`). A new page only gets
+this once its path is added to the list in `theme.js` (and it has a card in
+`_data/garden.yml`). Addresses with `?` or `#` are never redirected, so Virtue Ledger
+private links keep working; local previews aren't redirected either.
 
 ## 3. Cloudflare (elenchus.mac-wall.com)
 

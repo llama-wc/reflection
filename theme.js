@@ -6,6 +6,20 @@
 // site with its own localStorage, so localStorage alone can't carry the
 // choice between them. localStorage is still written as a fallback (local
 // testing, older visits) under the original key.
+// The garden (/garden/) is the site's default view: opening a page directly on
+// mac-wall.com shows it there instead, at that page's card. Left alone: pages
+// already inside the garden, other hosts (the Elenchus subdomain, local
+// previews, the thumbnail script), and any address with a query or fragment,
+// such as a Virtue Ledger private link (?id=...).
+(function () {
+    if (window.top !== window.self || !/^(www\.)?mac-wall\.com$/.test(location.hostname)) return;
+    if (location.search || location.hash) return;
+    const path = location.pathname.replace(/index\.html$/, '');
+    if (/^\/(portfolio\.html|movie-reviews\.html|ledger\/|elenchus\/|notes\/.*)?$/.test(path)) {
+        location.replace(path === '/' ? '/garden/' : `/garden/#${path}`);
+    }
+})();
+
 (function () {
     const KEY = 'portfolio-theme';
     const onSiteDomain = /(^|\.)mac-wall\.com$/.test(location.hostname);
