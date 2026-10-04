@@ -119,7 +119,7 @@ async function initializeDashboard() {
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         URL.revokeObjectURL(worker_url);
 
-        loadingText.innerText = "Mounting Parquet Files...";
+        loadingText.innerText = "Loading ratings…";
         
         const [mRes, rRes] = await Promise.all([
             fetchData('movies.parquet'),
@@ -129,7 +129,7 @@ async function initializeDashboard() {
         await db.registerFileBuffer('ratings_summary.parquet', new Uint8Array(await rRes.arrayBuffer()));
         conn = await db.connect();
         
-        loadingText.innerText = "Calculating Averages...";
+        loadingText.innerText = "Crunching...";
         // Load both files into memory once; every filter change then queries
         // in-memory tables rather than decoding Parquet again.
         // summary holds one row per (movieId, review_year, rating) with a
@@ -146,7 +146,7 @@ async function initializeDashboard() {
         const meanRes = await conn.query(`SELECT SUM(rating * n) / SUM(n) AS m FROM summary`);
         overallMean = Number(meanRes.toArray()[0].toJSON().m);
 
-        loadingText.innerText = "Indexing Metadata...";
+        loadingText.innerText = "Preparing filters…";
         await refreshFilters(++updateGen);
 
         loadingText.style.display = 'none';
@@ -372,7 +372,7 @@ async function initializeDashboard() {
 
     } catch (error) {
         console.error("Dashboard Engine Failed:", error);
-        loadingText.innerText = "Engine Error. Check browser console.";
+        loadingText.innerText = "Something went wrong loading the data. Please reload the page.";
     }
 }
 
@@ -561,16 +561,16 @@ async function applyUnifiedFilters(gen = updateGen) {
         } 
         else if (clauses.length > 0) {
             document.getElementById('ui-title').innerText = searchVal && !exactMovieData ? `"${searchVal}"` : "Filtered Results";
-            document.getElementById('ui-tags').innerText = "CROSS-SECTIONAL METADATA";
-            document.getElementById('ui-desc').innerText = matchedMovies.length === 0 ? "No movies match these exact constraints." : "Viewing exact aggregate data based on your selected filters.";
+            document.getElementById('ui-tags').innerText = "FILTERED VIEW";
+            document.getElementById('ui-desc').innerText = matchedMovies.length === 0 ? "No movies match these filters." : "Averages for the movies that match your filters.";
             document.getElementById('ui-director').innerText = director !== "All" ? director : "-";
             document.getElementById('ui-studio').innerText = studio !== "All" ? studio : "-";
             document.getElementById('ui-cast').innerText = actor !== "All" ? actor : "-";
         } 
         else {
             document.getElementById('ui-title').innerText = "All Movies";
-            document.getElementById('ui-tags').innerText = "33.8M REVIEWS • GLOBAL DATASET";
-            document.getElementById('ui-desc').innerText = "Viewing the exact aggregate math for the entire MovieLens dataset.";
+            document.getElementById('ui-tags').innerText = "33.8 MILLION RATINGS";
+            document.getElementById('ui-desc').innerText = "Averages across every rating in the MovieLens dataset.";
             document.getElementById('ui-director').innerText = "-";
             document.getElementById('ui-studio').innerText = "-";
             document.getElementById('ui-cast').innerText = "-";
@@ -627,7 +627,7 @@ async function applyUnifiedFilters(gen = updateGen) {
         if (tmdbMovie) {
             currentTrendData = [];
             updateTmdbHero(Number(tmdbMovie.tmdb_score), Number(tmdbMovie.tmdb_votes));
-            showTrendMessage(`No MovieLens ratings: this film was released after the ${ML_SNAPSHOT_LABEL} snapshot.`);
+            showTrendMessage(`No MovieLens ratings for this film: the MovieLens data ends in July 2023, before its release.`);
             setSource(`TMDB community score · ${Number(tmdbMovie.tmdb_votes).toLocaleString()} votes`);
         } else {
             updateHeroMetric(currentExactAvg, currentExactCount);
@@ -654,7 +654,7 @@ async function applyUnifiedFilters(gen = updateGen) {
         console.error("Master Filter Failed:", error);
         // Say so on the page rather than leaving the previous numbers frozen.
         showTrendMessage("Couldn't update the charts. Please reload the page.");
-        document.getElementById('reviewCount').innerText = 'UPDATE FAILED';
+        document.getElementById('reviewCount').innerText = "COULDN'T UPDATE";
     }
 }
 
@@ -757,7 +757,7 @@ function updateTrendChart(data, globalMean) {
     if(clean.length === 0) return;
 
     const trendDesc = document.querySelector('.trend-panel p');
-    if (trendDesc) trendDesc.innerText = 'Average rating overlayed with review volume density (Continuous Violin)';
+    if (trendDesc) trendDesc.innerText = 'Average rating by year. The shaded area is wider in years with more reviews.';
 
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 350;
@@ -897,9 +897,9 @@ function applyCrossFilters() {
     refreshRecords(true);
 
     if (isFiltered) {
-        document.getElementById('ui-title').innerText = "Visual Filter Active";
-        document.getElementById('ui-tags').innerText = "DYNAMIC TIME SELECTION";
-        document.getElementById('ui-desc').innerText = `Filtering dataset to specific years selected on the timeline.`;
+        document.getElementById('ui-title').innerText = "Selected years";
+        document.getElementById('ui-tags').innerText = "YEAR FILTER";
+        document.getElementById('ui-desc').innerText = `Showing ratings from the years you picked on the chart.`;
         document.getElementById('ui-director').innerText = "-";
         document.getElementById('ui-studio').innerText = "-";
         document.getElementById('ui-cast').innerText = "-";
@@ -963,7 +963,7 @@ function initRecords() {
     const saveData = navigator.connection && navigator.connection.saveData;
     const smallDevice = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
     if (saveData || smallDevice) {
-        setRecordsStatus('The full dataset is 33.8 million rows.');
+        setRecordsStatus('The full set is 33.8 million ratings.');
         const btn = document.getElementById('records-load-btn');
         btn.hidden = false;
         btn.addEventListener('click', () => { btn.hidden = true; loadFullDataset(); }, { once: true });
@@ -1004,7 +1004,7 @@ async function loadFullDataset() {
             startRecordsEngine(),
             fetchWithProgress(FULL_FILE, (got, total) => {
                 bar.style.width = `${Math.min(100, got / total * 100)}%`;
-                setRecordsStatus(`Streaming 33.8M records... ${(got / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`);
+                setRecordsStatus(`Downloading all ratings… ${(got / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`);
             }),
             fetchData('titles.parquet').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
         ]);
@@ -1020,7 +1020,7 @@ async function loadFullDataset() {
     } catch (error) {
         console.error("Full dataset load failed:", error);
         progress.hidden = true;
-        setRecordsStatus('Could not load the full dataset.');
+        setRecordsStatus("Couldn't load the individual ratings. Please reload the page.");
     }
 }
 
@@ -1060,7 +1060,7 @@ async function runRecordsQuery() {
         const arrow = th.dataset.sort === records.sort.col ? (records.sort.dir === 'DESC' ? ' ↓' : ' ↑') : '';
         th.innerText = th.dataset.sort.toUpperCase() + arrow;
     });
-    document.getElementById('records-timing').innerText = 'Querying...';
+    document.getElementById('records-timing').innerText = 'Searching…';
 
     const where = recordsWhere();
     const started = performance.now();
@@ -1095,12 +1095,12 @@ async function runRecordsQuery() {
         if (records.dirty) return;   // newer state is waiting; skip drawing this one
 
         renderRecords(pageRes.toArray().map(r => r.toJSON()));
-        const secs = ((performance.now() - started) / 1000).toFixed(2);
+        const secs = ((performance.now() - started) / 1000).toFixed(1);
         document.getElementById('records-timing').innerText =
-            `${records.total.toLocaleString()} matching ratings · scanned 33,832,162 rows in ${secs}s`;
+            `${records.total.toLocaleString()} matching ratings · searched all 33.8 million in ${secs} s`;
     } catch (error) {
         console.error("Records query failed:", error);
-        document.getElementById('records-timing').innerText = 'Query failed. Check browser console.';
+        document.getElementById('records-timing').innerText = "Couldn't load these ratings. Please reload the page.";
     }
 }
 

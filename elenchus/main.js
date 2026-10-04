@@ -34,7 +34,7 @@ DOM.themeToggle.addEventListener('click', () => {
 });
 
 function initializeEngine() {
-    DOM.statusText.innerText = "Status: Online. Elenchus Learning Protocol Active.";
+    DOM.statusText.innerText = "Ready. State an idea and I'll question it.";
     DOM.userInput.disabled = false;
     DOM.sendBtn.disabled = false;
     DOM.userInput.focus();
@@ -100,7 +100,7 @@ async function updateLogicLedger() {
         if (fallacy && fallacy !== "null") {
             const warning = document.createElement("strong");
             warning.style.cssText = "color: var(--accent-red); display: block; margin-bottom: 10px;";
-            warning.textContent = `[FALLACY DETECTED: ${fallacy}]`;
+            warning.textContent = `Possible fallacy: ${fallacy}`;
             fragment.appendChild(warning);
         }
 
@@ -108,7 +108,7 @@ async function updateLogicLedger() {
         const posture = document.createElement("div");
         posture.style.cssText = "margin-bottom: 8px; font-size: 0.9em; color: var(--text-muted);";
         const label = document.createElement("strong");
-        label.textContent = "AI Posture:";
+        label.textContent = "Tutor's stance:";
         posture.append(label, ` [${String(ledgerData.ai_state || "Unknown").toUpperCase()}]`);
         fragment.appendChild(posture);
 
@@ -165,9 +165,9 @@ async function handleSend() {
         appendMessage("ai", finalResponse);
 
         if (!finalResponse.includes("?")) {
-            DOM.userInput.placeholder = "Concept mastered (or engine pausing). Explore further...";
+            DOM.userInput.placeholder = "Nice work. Ask a follow-up or start a new topic…";
         } else {
-            DOM.userInput.placeholder = "Explore this concept further...";
+            DOM.userInput.placeholder = "Ask a follow-up…";
         }
 
         // Fire off the background ledger update asynchronously
@@ -188,8 +188,8 @@ DOM.resetBtn.addEventListener("click", () => {
     state.isFirstMessage = true;
     state.originalPremise = "";
     state.chatHistory = []; 
-    DOM.trackUpdated.textContent = "Awaiting premise...";
-    DOM.userInput.placeholder = "State a premise or ask a question...";
+    DOM.trackUpdated.textContent = "Your argument will appear here.";
+    DOM.userInput.placeholder = "State an idea or ask a question…";
 
     Array.from(DOM.chatBox.children).forEach(child => {
         if (child.id !== "loading-indicator") child.remove();

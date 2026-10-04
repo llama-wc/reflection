@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ratings Dashboard | Mac Wall</title>
-    <meta name="description" content="Interactive dashboard exploring 33.8 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <meta name="description" content="Explore 33.8 million MovieLens ratings by director, actor and genre, right in your browser.">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Movie Ratings Dashboard | Mac Wall">
-    <meta property="og:description" content="Interactive dashboard exploring 33.8 million MovieLens ratings in the browser with DuckDB-Wasm and D3.js.">
+    <meta property="og:description" content="Explore 33.8 million MovieLens ratings by director, actor and genre, right in your browser.">
     <meta property="og:url" content="https://mac-wall.com/movie-reviews.html">
     <meta property="og:image" content="https://mac-wall.com/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
@@ -251,7 +251,7 @@
 <body>
 
     <div class="header">
-        <h1>MOVIE INTELLIGENCE DASHBOARD</h1>
+        <h1>MOVIE RATINGS DASHBOARD</h1>
         <div class="header-controls">
             <button id="global-theme-toggle" aria-label="Toggle Theme">◐</button>
             <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
@@ -261,7 +261,7 @@
     <!-- The missing Datalists are back! -->
     <div class="filter-group">
         <div class="search-wrapper">
-            <input type="text" id="searchBar" placeholder="Search for a movie title (e.g., Matrix)..." disabled autocomplete="off">
+            <input type="text" id="searchBar" placeholder="Search movies or people (e.g. Matrix, Tarantino)…" disabled autocomplete="off">
             <div class="autocomplete-overlay" id="autocompleteOverlay"></div>
         </div>
         <input type="text" id="genreFilter" list="genreList" placeholder="All Genres" disabled>
@@ -275,7 +275,7 @@
         <button id="resetBtn">RESET</button>
     </div>
 
-    <div id="loading-overlay">Booting Analytics Engine...</div>
+    <div id="loading-overlay">Loading…</div>
 
     <div id="main-stage">
         
@@ -288,7 +288,7 @@
                 <div class="meta-label">CAST</div><div id="ui-cast">-</div>
                 <div class="meta-label">SOURCE</div><div id="ui-source">-</div>
             </div>
-            <div id="ui-desc">Initializing dataset...</div>
+            <div id="ui-desc">Loading the dataset…</div>
         </div>
 
         <div class="panel" style="align-items: center;">
@@ -304,17 +304,17 @@
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
                 <div>
                     <h3 class="chart-title" style="margin-bottom: 5px;">
-                        Longitudinal Variance & Trend
-                        <span id="clear-trend-btn" style="display:none; font-size:12px; color:var(--accent-color); cursor:pointer; text-transform:none; margin-left: 15px;">✖ Clear Selected Years</span>
+                        Ratings over time
+                        <span id="clear-trend-btn" style="display:none; font-size:12px; color:var(--accent-color); cursor:pointer; text-transform:none; margin-left: 15px;">✖ Clear selected years</span>
                     </h3>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 0;">Average rating overlayed with ±1 Standard Deviation boundaries</p>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 0;">Average rating by year. The shaded area is wider in years with more reviews.</p>
                 </div>
                 <div class="legend">
                     <div class="legend-item"><span class="legend-swatch" style="background: var(--band-poor)"></span> Poor &lt;2.5</div>
                     <div class="legend-item"><span class="legend-swatch" style="background: var(--band-fair)"></span> Fair 2.5–3.4</div>
                     <div class="legend-item"><span class="legend-swatch" style="background: var(--band-good)"></span> Good 3.5–3.9</div>
                     <div class="legend-item"><span class="legend-swatch" style="background: var(--band-great)"></span> Great 4.0+</div>
-                    <div class="legend-item"><div class="legend-dashed"></div> Aggregate Mean</div>
+                    <div class="legend-item"><div class="legend-dashed"></div> Overall average</div>
                 </div>
             </div>
             <div id="trend-container" class="chart-container"></div>
@@ -323,13 +323,13 @@
         <div class="panel records-panel">
             <div class="records-header">
                 <div>
-                    <h3 class="chart-title" style="margin-bottom: 5px;">Raw Records</h3>
-                    <p class="records-sub">Every individual rating, queried live in your browser. Follows the filters above; click a user number to see everything that person rated.</p>
+                    <h3 class="chart-title" style="margin-bottom: 5px;">Individual ratings</h3>
+                    <p class="records-sub">Every single rating, searched live in your browser. The table follows the filters above; click a user number to see everything that person rated.</p>
                 </div>
                 <div id="records-status">
-                    <span id="records-status-text">Waiting for the dashboard to load...</span>
+                    <span id="records-status-text">Loads once the charts are ready…</span>
                     <div class="records-progress" id="records-progress" hidden><div></div></div>
-                    <button id="records-load-btn" hidden>Load all 33.8M records (81 MB)</button>
+                    <button id="records-load-btn" hidden>Load all 33.8 million ratings (81 MB)</button>
                 </div>
             </div>
             <button id="records-user-chip"></button>
@@ -357,15 +357,15 @@
         </div>
 
         <div class="panel methodology-panel">
-            <h3 class="chart-title">Project Architecture & Methodology</h3>
+            <h3 class="chart-title">How it works</h3>
             <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-top: 0;">
-                This dashboard is a high-performance, in-browser analytics engine processing 33.8 million user reviews. To construct a complete analytical picture, the raw dataset was enriched via a custom Python data pipeline that fetched real-time metadata directly from the TMDB REST API before compiling the results into highly compressed Parquet files.
+                This dashboard runs entirely in your browser and works through 33.8 million movie ratings from MovieLens. A Python script adds details like director, cast and studio from TMDB and refreshes the data every week.
             </p>
             <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-bottom: 0;">
-                The front-end leverages <strong>DuckDB-Wasm</strong> for lightning-fast, client-side SQL querying and <strong>D3.js</strong> for reactive visualization. Clicking specific years on the control chart triggers instant dynamic filtering and weighted average recalculations without relying on a remote server.
+                The charts use <strong>DuckDB</strong>, a database that runs inside the web page, and <strong>D3</strong> for drawing. Pick a director, genre or actor, or click years on the chart, and every number recalculates instantly, with no server involved.
             </p>
             <p style="color: var(--text-muted); line-height: 1.6; font-size: 15px; margin-bottom: 0;">
-                Data loads in two tiers. A 3&nbsp;MB pre-aggregated summary (one row per movie, year and star rating, with a count) powers the charts within a second of opening the page. The full 81&nbsp;MB file of all 33.8 million individual ratings then streams in the background and is queried directly from Parquet for the raw records table, so there's no server, API or database behind any of it.
+                To keep it quick, the page loads a 3&nbsp;MB summary first, so the charts are ready in about a second. The full 81&nbsp;MB file of individual ratings then downloads in the background for the table at the bottom.
             </p>
             <p class="data-sources">
                 <strong>Data sources.</strong>
@@ -378,7 +378,7 @@
 
     </div>
 
-    <script type="module" src="dashboard.js?v=8"></script>
+    <script type="module" src="dashboard.js?v=9"></script>
 
     <!-- Global Theme Sync Script -->
     <script>
