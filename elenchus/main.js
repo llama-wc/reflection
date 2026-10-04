@@ -21,24 +21,13 @@ let state = {
 // ==========================================
 // 2. INITIALIZATION & THEME
 // ==========================================
-function initTheme() {
-    const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-}
-
-DOM.themeToggle.addEventListener('click', () => {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('portfolio-theme', newTheme);
-});
+// Theme is handled site-wide by /theme.js (shared with mac-wall.com).
 
 function initializeEngine() {
     DOM.statusText.innerText = "Ready. State an idea and I'll question it.";
     DOM.userInput.disabled = false;
     DOM.sendBtn.disabled = false;
     DOM.userInput.focus();
-    initTheme();
 }
 
 // ==========================================
