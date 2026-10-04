@@ -16,6 +16,7 @@
     const TITLE_SCALE = 2.5;   // how much larger a page's heading is drawn on its card
     const BAR = 52;      // bottom bar height; the page area is everything above it
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const FLY_SPEED = Math.min(Math.max(Number(new URLSearchParams(location.search).get('fly')) || 1, 0.25), 4);
 
     const board = document.getElementById('board');
     const world = document.getElementById('world');
@@ -25,6 +26,10 @@
     const morphLayer = document.getElementById('morph');
     const toggle = document.getElementById('board-toggle');
     const hint = document.getElementById('board-hint');
+    const nav = document.getElementById('page-nav');
+    const navBack = document.getElementById('nav-back');
+    const navMenu = document.getElementById('nav-menu');
+    const directory = document.getElementById('nav-directory');
 
     // ---------- nodes ----------
     const regionKeys = new Set(data.regions.map(r => r.key));
@@ -231,6 +236,7 @@
         view = v;
         const t = transformFor(v);
         world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+        world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
     }
     // On a card, it fills the page area exactly: full width, top edge at the top of the window.
     function focusView(n) {
@@ -245,16 +251,20 @@
     }
 
     let flight = null;
-    function fly(target) {
+    // onFrame(t) is called every frame with the flight's progress (0 to 1, linear time).
+    function fly(target, onFrame) {
         return new Promise(resolve => {
             if (flight) flight.stop();
             if (reduceMotion) { apply(target); return resolve(); }
-            // Quick and decisive: a shallow arc, a quarter-second hop for neighbours, never over half a second
+            // A shallow arc that eases out of the start, travels quickly, and settles
+            // gently onto the card: about half a second to a neighbour, at most 1.1s
+            // across the board. ?fly=1.5 (or 0.7, ...) scales it for trying speeds.
             const interp = d3.interpolateZoom.rho(0.9)(view, target);
-            const duration = Math.min(Math.max(interp.duration * 0.3, 250), 520);
+            const duration = Math.min(Math.max(interp.duration * 0.55, 500), 1100) * FLY_SPEED;
             flight = d3.timer(elapsed => {
                 const t = Math.min(1, elapsed / duration);
                 apply(interp(d3.easeCubicInOut(t)));
+                if (onFrame) onFrame(t);
                 if (t === 1) { flight.stop(); flight = null; resolve(); }
             });
         });
@@ -266,6 +276,7 @@
         const vw = board.clientWidth, vh = board.clientHeight;
         view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
         world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+        world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
     });
     function syncZoom() {
         const t = transformFor(view);
@@ -276,8 +287,9 @@
         toggle.setAttribute('aria-pressed', 'true');
         board.classList.add('free');
         board.setAttribute('aria-hidden', 'false');
-        await leavePage();
-        await fly(overviewView());
+        updateNav();
+        const leaving = beginLeave();
+        await fly(overviewView(), t => leaving && leaving.step(t / LEAVE_SPAN));
         if (!free) return;
         syncZoom();
         d3.select(board).call(zoom).on('dblclick.zoom', null);
@@ -290,6 +302,7 @@
         board.setAttribute('aria-hidden', 'true');
         d3.select(board).on('.zoom', null);
         hint.hidden = true;
+        updateNav();
     }
 
     // ---------- pages ----------
@@ -310,7 +323,7 @@
             width: `${r.width}px`, height: `${r.height}px`, transformOrigin: '0 0',
         });
         ghost.removeAttribute('id');
-        morphLayer.replaceChildren(ghost);
+        morphLayer.append(ghost);
         return { ghost, rect: { left: r.left, top: r.top + top, width: r.width } };
     }
     // Transform that puts the ghost exactly over the card's title
@@ -319,9 +332,90 @@
         return `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width})`;
     }
     const GLIDE = { duration: 200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };   // fast start, soft landing
+    // Wait for an animation, but never past its length: Chromium can leave one unfinished
+    // (seen after Back), which would otherwise stall the move to the next page.
+    const settle = anim => Promise.race([anim.finished.catch(() => {}), wait(GLIDE.duration + 100)]);
 
-    // Leaving: the page's heading grows into the card title while the page fades
-    // into its (matching) card.
+    // ---------- titles that move with the camera ----------
+    // Moving between pages is one motion: while the camera pulls out, the page's
+    // heading grows into its card's title; as it settles on the next card, that
+    // card's title shrinks into the new page's heading.
+    const LEAVE_SPAN = 0.5;      // the old title grows over the first half of the flight
+    const LAND_START = 0.5;      // the new one shrinks over the second half
+    const clamp01 = x => Math.min(1, Math.max(0, x));
+    // A ghost heading `g` (from ghostOf) drawn part way between two screen rects.
+    // Either end can be a function, re-read every frame, to follow a moving card.
+    function placeGhost(g, from, to, f) {
+        const a = typeof from === 'function' ? from() : from, b = typeof to === 'function' ? to() : to;
+        const e = d3.easeCubicInOut(clamp01(f));
+        const left = a.left + (b.left - a.left) * e, top = a.top + (b.top - a.top) * e;
+        const width = a.width + (b.width - a.width) * e;
+        g.ghost.style.transform = `translate(${left - g.rect.left}px, ${top - g.rect.top}px) scale(${width / g.rect.width})`;
+    }
+    const titleRect = n => n.titleEl.getBoundingClientRect();
+
+    // Start leaving the open page: it fades into its card, and its heading becomes a
+    // ghost that step(f) carries into the card's title. Null if there's no page, or
+    // nothing to animate (then the page just fades).
+    let hidePage = null;
+    function beginLeave() {
+        if (page.hidden) return null;
+        const n = current, h = pageHeading();
+        if (n) n.el.classList.remove('arrived');
+        page.classList.remove('shown');
+        clearTimeout(hidePage);
+        hidePage = setTimeout(() => { page.hidden = true; }, 180);
+        if (!n || !h || reduceMotion || h.getClientRects().length === 0) return null;
+        const g = ghostOf(h);
+        h.style.visibility = 'hidden';
+        n.el.classList.add('handoff');          // card title stays hidden until the ghost lands
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            n.el.classList.remove('handoff');
+            g.ghost.remove();
+        };
+        return {
+            step: f => (f >= 1 ? finish() : placeGhost(g, g.rect, () => titleRect(n), f)),   // landed: the card shows it again
+            finish,
+        };
+    }
+
+    // Start landing on card n while the camera is still moving: the card's title
+    // becomes a ghost that step(f) carries into the new page's heading. Needs the
+    // page loaded (it is measured while still transparent); null if it can't.
+    function beginLanding(n) {
+        clearTimeout(hidePage);
+        page.hidden = false;                    // transparent until finish(), but measurable
+        const h = pageHeading();
+        if (!h || h.getClientRects().length === 0) return null;
+        const g = ghostOf(h);
+        h.style.visibility = 'hidden';
+        n.el.classList.add('handoff');
+        return {
+            step: f => placeGhost(g, () => titleRect(n), g.rect, f),
+            async finish() {
+                g.ghost.style.transform = 'none';
+                page.classList.add('shown');    // the page fades in around the landed heading
+                await wait(180);
+                n.el.classList.add('arrived');
+                n.el.classList.remove('handoff');
+                h.style.visibility = '';
+                g.ghost.remove();
+            },
+        };
+    }
+    // A newer click interrupts a move part way: drop any ghosts it left behind.
+    function clearGhosts() {
+        morphLayer.replaceChildren();
+        for (const n of nodes.values()) n.el.classList.remove('handoff');
+        const h = pageHeading();
+        if (h) h.style.visibility = '';
+    }
+
+    // Leaving without the camera (first load, reduced motion): the page's heading
+    // glides into the card title while the page fades into its (matching) card.
     async function leavePage() {
         if (page.hidden) return;
         const n = current, h = pageHeading();
@@ -337,9 +431,9 @@
         n.el.classList.add('handoff');           // card title stays hidden until the ghost lands
         n.el.classList.remove('arrived');
         page.classList.remove('shown');
-        await ghost.animate([{ transform: 'none' }, { transform: cardTitleTransform(n, rect) }], GLIDE).finished.catch(() => {});
+        await settle(ghost.animate([{ transform: 'none' }, { transform: cardTitleTransform(n, rect) }], GLIDE));
         n.el.classList.remove('handoff');
-        morphLayer.replaceChildren();
+        ghost.remove();
         h.style.visibility = '';
         page.hidden = true;
     }
@@ -362,6 +456,7 @@
     // Arriving: the card title shrinks back into the page's heading while the
     // live page fades in over the card.
     async function arrive(n, animate) {
+        clearTimeout(hidePage);
         page.hidden = false;
         const h = pageHeading();
         if (!animate || !h || h.getClientRects().length === 0) {
@@ -375,11 +470,11 @@
         h.style.visibility = 'hidden';
         n.el.classList.add('handoff');
         page.classList.add('shown');
-        await ghost.animate([{ transform: start }, { transform: 'none' }], GLIDE).finished.catch(() => {});
+        await settle(ghost.animate([{ transform: start }, { transform: 'none' }], GLIDE));
         n.el.classList.add('arrived');          // hide the card's copy before the real heading shows
         n.el.classList.remove('handoff');
         h.style.visibility = '';
-        morphLayer.replaceChildren();
+        ghost.remove();
     }
 
     function markCurrent(n) {
@@ -391,43 +486,144 @@
         document.getElementById('where-region').textContent = region ? region.name : '';
         document.getElementById('where-title').textContent = n.title;
         document.title = n.id === 'home' ? 'Mac Wall' : `${n.title} | Mac Wall`;
+        updateNav();
     }
 
     let openId = 0;
     async function open(n, { instant = false } = {}) {
         const id = ++openId;
+        clearGhosts();
         if (free) leaveBoard();
-        await leavePage();
+        if (instant || reduceMotion) await leavePage();
+        const leaving = instant || reduceMotion ? null : beginLeave();
         markCurrent(n);
         if (instant) {
             apply(focusView(n));
             await loadFrame(n);
             return arrive(n, false);
         }
-        // The page loads while the camera travels, so it is ready on arrival
-        await Promise.all([fly(focusView(n)), loadFrame(n)]);
+        if (reduceMotion) {
+            await Promise.all([fly(focusView(n)), loadFrame(n)]);
+            if (id === openId && !free) await arrive(n, false);
+            return;
+        }
+        // The new page loads while the camera travels (once the old one has faded),
+        // so its heading can be measured in time to land in it.
+        let loaded = false, landing = null, landFrom = 0;
+        const loading = wait(leaving ? 190 : 0).then(() => id === openId && loadFrame(n)).then(() => { loaded = true; });
+        await fly(focusView(n), t => {
+            if (leaving) leaving.step(t / LEAVE_SPAN);
+            if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
+                landing = beginLanding(n);
+                landFrom = t;
+            }
+            if (landing) landing.step((t - landFrom) / (1 - landFrom));
+        });
         if (id !== openId || free) return;     // a newer click took over
-        await arrive(n, !reduceMotion);
+        if (leaving) leaving.finish();
+        if (landing) return landing.finish();
+        await loading;                          // a slow page: glide in once it's ready
+        if (id !== openId || free) return;
+        await arrive(n, true);
     }
 
     // Every page has its own address (#/path), so back/forward and sharing work.
+    // Each step records how many garden pages lie behind it, so Back knows whether
+    // there is a garden page to return to.
     const hashFor = n => `#${new URL(n.url, location.origin).pathname}`;
+    const depth = () => (history.state && history.state.gardenDepth) || 0;
     function go(n) {
-        if (location.hash === hashFor(n)) { open(n); return; }
-        location.hash = hashFor(n);
+        if (location.hash !== hashFor(n)) history.pushState({ gardenDepth: depth() + 1 }, '', hashFor(n));
+        open(n);
     }
     function fromHash() {
         const n = location.hash.length > 1 ? nodeFor(location.hash.slice(1)) : nodes.get('home');
         return n || nodes.get('home');
     }
-    window.addEventListener('hashchange', () => open(fromHash()));
+    window.addEventListener('popstate', () => open(fromHash()));   // also fires when the address is edited
+
+    // ---------- Back and the directory (every page but Home) ----------
+    // Without a garden page behind it (someone arrived here directly), Back goes
+    // up a level instead: to the page that links to this one, or Home.
+    function parentOf(n) {
+        if (n.kind === 'Note') return nodes.get(n.region) || nodes.get('notes') || nodes.get('home');
+        return [...nodes.values()].find(p => (p.links || []).includes(n.id)) || nodes.get('home');
+    }
+    navBack.addEventListener('click', () => {
+        closeDirectory();
+        if (depth() > 0) history.back();
+        else if (current) {
+            // Replace rather than add, so pressing Back again keeps climbing instead of looping.
+            const up = parentOf(current);
+            history.replaceState({ gardenDepth: 0 }, '', hashFor(up));
+            open(up);
+        }
+    });
+
+    // The directory: the main pages, then each project with its notes beneath it,
+    // then notes that belong to no project.
+    function addHeading(text) {
+        const h = document.createElement('h2');
+        h.textContent = text;
+        directory.append(h);
+    }
+    function addLink(n, title = n.title) {
+        const a = document.createElement('a');
+        a.href = hashFor(n);
+        a.textContent = title;
+        a.dataset.id = n.id;
+        if (n.kind === 'Note') a.className = 'note';
+        a.addEventListener('click', e => { e.preventDefault(); closeDirectory(); go(n); });
+        directory.append(a);
+    }
+    const inRegion = key => [...nodes.values()].filter(n => n.region === key);
+    addHeading('Pages');
+    for (const n of inRegion('hub')) addLink(n, n.id === 'home' ? 'Home' : n.title);
+    addHeading('Projects');
+    for (const r of data.regions) {
+        const project = nodes.get(r.key);
+        if (!project || r.key === 'hub') continue;
+        addLink(project);
+        for (const n of inRegion(r.key)) if (n !== project) addLink(n);
+    }
+    const loose = inRegion('thinking');
+    if (loose.length) {
+        addHeading((data.regions.find(r => r.key === 'thinking') || {}).name || 'Notes');
+        for (const n of loose) addLink(n);
+    }
+    function openDirectory() {
+        for (const a of directory.querySelectorAll('a')) {
+            if (current && a.dataset.id === current.id) a.setAttribute('aria-current', 'page');
+            else a.removeAttribute('aria-current');
+        }
+        directory.hidden = false;
+        navMenu.setAttribute('aria-expanded', 'true');
+        (directory.querySelector('[aria-current]') || directory.querySelector('a')).focus();
+    }
+    function closeDirectory() {
+        if (directory.hidden) return;
+        directory.hidden = true;
+        navMenu.setAttribute('aria-expanded', 'false');
+    }
+    navMenu.addEventListener('click', () => (directory.hidden ? openDirectory() : closeDirectory()));
+    document.addEventListener('click', e => { if (!nav.contains(e.target)) closeDirectory(); });
+    function updateNav() {
+        nav.hidden = free || !current || current.id === 'home';
+        if (nav.hidden) closeDirectory();
+    }
 
     // Links inside the open page fly to their card instead of loading normally.
     frame.addEventListener('load', () => {
         let doc;
         try { doc = frame.contentDocument; } catch (e) { return; }
         if (!doc) return;
+        // The garden's Back and theme buttons replace each page's own; hidden, not removed, so nothing shifts.
+        const style = doc.createElement('style');
+        style.textContent = '.back-btn, .back-link, #theme-toggle, #global-theme-toggle { visibility: hidden !important; }';
+        (doc.head || doc.documentElement).append(style);
+        doc.addEventListener('keydown', e => { if (e.key === 'Escape') closeDirectory(); });
         doc.addEventListener('click', e => {
+            closeDirectory();
             const a = e.target.closest && e.target.closest('a[href]');
             if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
             const url = new URL(a.getAttribute('href'), doc.baseURI);
@@ -440,11 +636,17 @@
     });
 
     toggle.addEventListener('click', () => (free ? open(current) : enterBoard()));
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && free) open(current); });
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        if (!directory.hidden) { closeDirectory(); navMenu.focus(); }
+        else if (free) open(current);
+    });
     window.addEventListener('resize', () => {
         if (free) syncZoom();
         else if (current) apply(focusView(current));
     });
 
-    open(fromHash(), { instant: true });
+    // First load: the page appears on its own, without its card showing first.
+    if (!history.state) history.replaceState({ gardenDepth: 0 }, '', location.href);
+    open(fromHash(), { instant: true }).then(() => document.body.classList.remove('booting'));
 })();
