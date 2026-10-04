@@ -3,6 +3,7 @@ title: "From 83 MB to 3 MB: loading 33.8 million ratings in a browser"
 description: "The movie dashboard downloaded every rating before it could draw a chart. Counting identical rows instead cut the first download by 96% without changing a single number."
 project: movie-dashboard
 date: 2026-10-03
+author: claude
 ---
 
 *Sample draft, written from the project history. Rewrite it in your own words or delete it.*

@@ -44,6 +44,15 @@ GROUP BY movieId;
 ![The site's link preview image](/og-image.png)
 *A caption goes on the line straight after the image.*
 
+## Notes written by Claude
+
+A note with `author: claude` in its top lines is shown as Claude's: a mono font on a faint red wash, "Written by Claude" under the title, and a red tint on its card in the garden. Anything you'd rather it didn't say can be redacted: the words are removed from the file and a bar takes their place, like <span class="redacted">████████████</span> this.
+
+{:.margin-note}
+> A margin note: your own comment beside the text, in the normal font and without the tint. On narrow screens it sits in the text instead.
+
+Margin notes go just above the paragraph they're about.
+
 ---
 
 Images for a note go in `notes/images/`.

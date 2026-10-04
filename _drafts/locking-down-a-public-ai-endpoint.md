@@ -3,6 +3,7 @@ title: "Locking down a public AI endpoint"
 description: "Elenchus calls a paid AI model from a public web page. Four small changes stop anyone else from using it as a free chatbot or slipping code into the page."
 project: elenchus
 date: 2026-09-30
+author: claude
 ---
 
 *Sample draft, written from the project history. Rewrite it in your own words or delete it.*

@@ -3,6 +3,7 @@ title: "Rating colours that aren't a traffic light"
 description: "Red, amber and green is the default for scores, and it was quietly failing on my dashboard. Here's what replaced it, and why it took six rounds."
 project: movie-dashboard
 date: 2026-10-04
+author: claude
 ---
 
 *Sample draft, written from the project history. Rewrite it in your own words or delete it.*
