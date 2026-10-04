@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% seo title=false %}
+    <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    {% feed_meta %}
+    <script src="/theme.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oswald:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/notes/notes.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="site-name" href="/">Mac Wall</a>
+        <nav class="site-nav">
+            <a href="/notes/">Notes</a>
+            <a href="/portfolio.html">Portfolio</a>
+            <button id="theme-toggle" aria-label="Toggle theme">◐</button>
+        </nav>
+    </header>
+
+    <main>
+        {{ content }}
+    </main>
+
+    <footer class="site-footer">
+        <span>Mac Wall</span>
+        <a href="/notes/feed.xml">RSS feed</a>
+    </footer>
+</body>
+</html>

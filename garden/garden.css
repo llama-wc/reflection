@@ -1,0 +1,121 @@
+/* Garden prototype: the site as a board of pages. Colours match the portfolio. */
+:root[data-theme="dark"] {
+    --bg: #0e0e0f;
+    --board-dot: #262628;
+    --panel: rgba(255, 255, 255, 0.025);
+    --panel-line: #2c2c2f;
+    --card: #1a1a1b;
+    --card-line: #333336;
+    --text: #e6e6e6;
+    --muted: #9a9a9e;
+    --accent: #ff4b4b;
+    --string: rgba(255, 75, 75, 0.55);
+    --string-faint: rgba(255, 255, 255, 0.10);
+    --chrome: #0e0e0f;
+    --shade: rgba(14, 14, 15, 0.62);
+}
+:root[data-theme="light"] {
+    --bg: #ecebe7;
+    --board-dot: #d2d0ca;
+    --panel: rgba(0, 0, 0, 0.025);
+    --panel-line: #cfcdc6;
+    --card: #ffffff;
+    --card-line: #d4d2cc;
+    --text: #141414;
+    --muted: #5c5c5c;
+    --accent: #d32f2f;
+    --string: rgba(211, 47, 47, 0.6);
+    --string-faint: rgba(0, 0, 0, 0.12);
+    --chrome: #ecebe7;
+    --shade: rgba(236, 235, 231, 0.66);
+}
+
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
+
+/* Board and world */
+#board {
+    position: fixed; inset: 0; overflow: hidden;
+    background-image: radial-gradient(var(--board-dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+}
+#board.free { cursor: grab; }
+#board.free:active { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+#strings { position: absolute; overflow: visible; left: 0; top: 0; pointer-events: none; }
+#strings path { fill: none; stroke: var(--string-faint); stroke-width: 1.5; transition: stroke 0.3s, stroke-width 0.3s; }
+#strings path.relation { stroke: var(--string); }
+#strings path.lit { stroke: var(--accent); stroke-width: 2.5; }
+
+/* Regions ("cases") */
+.region {
+    position: absolute; border: 1px dashed var(--panel-line); border-radius: 6px; background: var(--panel);
+}
+.region-label {
+    position: absolute; top: -34px; left: 0;
+    font-family: 'Oswald', sans-serif; font-size: 20px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    white-space: nowrap;
+}
+
+/* Cards: each looks like its page, with the title written large across it */
+.card {
+    position: absolute; box-sizing: border-box; padding: 0; overflow: hidden;
+    background: var(--card); border: 1px solid var(--card-line); border-radius: 3px; color: var(--text);
+    font: inherit; text-align: left; cursor: pointer;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.22);
+    transition: border-color 0.25s, box-shadow 0.25s;
+}
+.card:hover, .card:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32); }
+.card.current { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 18px 44px rgba(0, 0, 0, 0.3); }
+/* The page, drawn at its real size (1400 x 848) and scaled down to the card */
+.card .page-layer { position: absolute; left: 0; top: 0; width: 1400px; height: 848px; transform-origin: 0 0; pointer-events: none; }
+.card .shot { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+:root[data-theme="dark"] .card .shot.light, :root[data-theme="light"] .card .shot.dark { display: none; }
+.card iframe.live { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+/* Dim the page so its enlarged heading reads clearly */
+.card .shade { position: absolute; inset: 0; background: var(--shade); transition: opacity 0.2s ease-out; }
+/* The page's own heading, enlarged from its corner (position, size and style set from the page) */
+.card .card-title { position: absolute; margin: 0; box-sizing: border-box; transform-origin: 0 0; transition: opacity 0.15s; }
+.card .meta {
+    position: absolute; left: 12px; bottom: 10px; padding: 3px 8px; border-radius: 2px;
+    background: var(--chrome); color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase;
+    transition: opacity 0.3s;
+}
+/* While its heading is moving between page and card, the card's copy stays hidden */
+.card.handoff .card-title { visibility: hidden; }
+/* Once its page is open, the card underneath drops its title, shade and label */
+.card.arrived .card-title, .card.arrived .shade, .card.arrived .meta { opacity: 0; }
+.card.arrived .card-title { visibility: hidden; }
+
+/* The open page sits on top of its card */
+#page { position: fixed; inset: 0 0 52px 0; background: var(--bg); opacity: 0; transition: opacity 0.18s ease-out; }
+#page.shown { opacity: 1; }
+#page-frame { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+
+/* The gliding title sits above the page */
+#morph { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+/* Bottom bar */
+#chrome {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 52px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px;
+    background: var(--chrome); border-top: 1px solid var(--card-line); backdrop-filter: blur(6px); z-index: 10;
+}
+#where { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+#where-region { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+#where-title { font-family: 'Oswald', sans-serif; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#controls { display: flex; gap: 10px; }
+#controls button {
+    background: none; color: var(--text); border: 1px solid var(--card-line); border-radius: 3px;
+    padding: 7px 14px; font: 600 12px 'Inter', sans-serif; letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+}
+#controls button:hover, #controls button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#board-hint {
+    position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); margin: 0;
+    background: var(--chrome); border: 1px solid var(--card-line); border-radius: 3px; padding: 8px 14px;
+    font-size: 13px; color: var(--muted); z-index: 10;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #page, .card, #strings path { transition: none; }
+}
