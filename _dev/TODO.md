@@ -27,6 +27,11 @@
 - [ ] Planet Earth, Band of Brothers, Spellbound still have N/A fields (TMDB lacks the data).
 
 ## Site
+- Note: elenchus.mac-wall.com is a Cloudflare Pages build of this repo. Its build command
+      (Cloudflare dashboard, not the repo) is `rm -f ratings_full.parquet ratings.parquet` to
+      stay under Cloudflare's 25 MB file limit; update it if the data files are renamed.
+- [x] Elenchus didn't follow the site theme (separate subdomain, separate localStorage).
+      Theme now lives in /theme.js with a cookie shared across mac-wall.com.
 - [ ] `mac-wall.com/elenchus/` is a broken copy (chat calls 405 on GitHub Pages); the
       real app is elenchus.mac-wall.com. Exclude `elenchus/` and `functions/` from the
       Pages build via `_config.yml`.

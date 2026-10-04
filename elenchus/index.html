@@ -12,10 +12,7 @@
     <meta property="og:url" content="https://elenchus.mac-wall.com/elenchus/">
     <meta property="og:image" content="https://mac-wall.com/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <script>
-        // Apply the saved theme before first paint to avoid a dark flash
-        try { document.documentElement.setAttribute('data-theme', localStorage.getItem('portfolio-theme') || 'dark'); } catch (e) {}
-    </script>
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -57,6 +54,6 @@
         </section>
     </main>
 
-    <script src="main.js"></script>
+    <script src="main.js?v=2"></script>
 </body>
 </html>
