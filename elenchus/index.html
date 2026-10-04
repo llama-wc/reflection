@@ -29,8 +29,8 @@
             </div>
         </div>
         <div class="status-bar">
-            <span id="loading-status">Status: Online. Elenchus Learning Protocol Active.</span>
-            <button id="reset-btn">Reset Engine</button>
+            <span id="loading-status">Ready. State an idea and I'll question it.</span>
+            <button id="reset-btn">Start over</button>
         </div>
     </header>
 
@@ -42,17 +42,17 @@
                 </div>
             </div>
             <div class="input-area">
-                <input type="text" id="user-input" placeholder="State a premise or ask a question..." maxlength="1000" disabled>
+                <input type="text" id="user-input" placeholder="State an idea or ask a question…" maxlength="1000" disabled>
                 <button id="send-btn" disabled>SEND</button>
             </div>
         </section>
 
         <section class="logic-router">
-            <h2>LOGIC LEDGER</h2>
+            <h2>ARGUMENT SO FAR</h2>
             
             <div class="router-card highlight-card" style="height: 85%; display: flex; flex-direction: column;">
-                <div class="card-header">LIVE ARGUMENT STATE</div>
-                <div id="track-updated" class="card-content monospace" style="flex: 1; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;">Awaiting premise...</div>
+                <div class="card-header">UPDATES AS YOU CONVERSE</div>
+                <div id="track-updated" class="card-content monospace" style="flex: 1; overflow-y: auto; white-space: pre-wrap; line-height: 1.6;">Your argument will appear here.</div>
             </div>
         </section>
     </main>
