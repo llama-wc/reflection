@@ -30,8 +30,9 @@
 - Standing rule: when Home, Portfolio, the dashboard, Virtue Ledger or Elenchus change how
       they look, re-run `python3 _dev/garden-thumbs.py` and commit the new screenshots and
       `_data/garden_titles.json`. Full checklist: `_dev/UPDATING.md`.
-- [ ] `mac-wall.com/elenchus/` is a broken copy (chat calls 405 on GitHub Pages); the
-      real app is elenchus.mac-wall.com. Exclude `elenchus/` and `functions/` from the
-      Pages build via `_config.yml`.
+- [x] `mac-wall.com/elenchus/` (the copy the garden embeds) got 405s from GitHub Pages; it
+      now calls elenchus.mac-wall.com/api/chat directly (CORS allowed for mac-wall.com).
+- Elenchus runs on Groq's `openai/gpt-oss-120b` (`functions/api/chat.js`, MODEL). Groq
+      retires models; if chat breaks, check console.groq.com/docs/deprecations first.
 - [ ] Add a "blog feature" that allows me to write up what I learned etc. I can link specific projects, but also just post regular entries 
 - [x] Clean up the language. Less technical-sounding, more business casual

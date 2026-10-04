@@ -1,3 +1,9 @@
+// The API runs on Cloudflare (elenchus.mac-wall.com). The copy of this page on
+// mac-wall.com, which GitHub Pages serves with no API, calls it there.
+const API_URL = location.hostname === "elenchus.mac-wall.com"
+    ? "/api/chat"
+    : "https://elenchus.mac-wall.com/api/chat";
+
 // ==========================================
 // 1. DOM ELEMENTS & STATE
 // ==========================================
@@ -72,7 +78,7 @@ async function updateLogicLedger() {
     setLedgerNote("Updating logic state...");
 
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode: "ledger", messages: state.chatHistory })
@@ -135,7 +141,7 @@ async function handleSend() {
     }
 
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
