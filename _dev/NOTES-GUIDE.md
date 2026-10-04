@@ -27,6 +27,27 @@ three lines at the top. That works from GitHub's web editor too.
 `_drafts/example-note.md` shows everything a note can use (headings, lists, quotes, code,
 tables, images with captions) and how it looks. Images go in `notes/images/`.
 
+## Notes written by Claude
+
+Add `author: claude` to the top lines of a note Claude drafted. The note then shows
+"Written by Claude" under the title, its text is in a mono font on a faint red wash,
+it gets a "Written by Claude" tag on the Notes list, and its card in the garden is
+tinted red.
+
+- **Redact** words you don't want it to say by replacing them with a bar:
+  `<span class="redacted">████████</span>`. The words are gone from the file; the bar
+  just shows something was cut.
+- **Comment in the margin** with a quote marked as yours, just above the paragraph it's
+  about. It shows beside the text in the normal font, labelled "Mac", without the tint
+  (in the text itself on narrow screens):
+
+  ```
+  {:.margin-note}
+  > Your comment here.
+  ```
+
+`_drafts/example-note.md` shows both.
+
 ## Good to know
 
 - Drafts in `_drafts/` are never published, even when pushed.

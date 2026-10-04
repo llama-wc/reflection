@@ -4,12 +4,18 @@ layout: base
 {%- assign project = site.data.projects[page.project] -%}
 {%- assign words = content | number_of_words -%}
 {%- assign minutes = words | plus: 199 | divided_by: 200 -%}
-<article class="note">
+<article class="note{% if page.author == "claude" %} by-claude{% endif %}">
     <header class="note-header">
+        {%- if page.author == "claude" %}
+        <p class="ai-stamp">AI-generated text<span>Claude</span></p>
+        {%- endif %}
         <h1>{{ page.title }}</h1>
         <p class="note-meta">
             <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: "%B %-d, %Y" }}</time>
             <span>{{ minutes }} min read</span>
+            {%- if page.author == "claude" %}
+            <span class="byline">Written by Claude<span class="byline-mac">, with notes from Mac in the margin</span></span>
+            {%- endif %}
             {%- if project %}
             <span>Related project: <a href="{{ project.url }}">{{ project.name }}</a></span>
             {%- endif %}

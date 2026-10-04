@@ -110,6 +110,52 @@ a:hover { color: var(--accent-color); }
 .highlight .s, .highlight .s1, .highlight .s2 { color: #3fa37a; }
 .highlight .m, .highlight .mi, .highlight .mf { color: #c7860c; }
 
+/* Notes written by Claude: a mono font on a faint red wash, with a byline. Mac's own
+   words on them are margin notes, in the site's normal font and without the tint. */
+.byline { color: var(--accent-color); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.byline-mac { display: none; color: var(--muted-color); }
+.note:has(.margin-note) .byline-mac { display: inline; }
+.note.by-claude .note-body {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.98rem;
+    background: color-mix(in srgb, var(--accent-color) 7%, transparent);
+    border-left: 3px solid var(--accent-color); padding: 1.5rem 1.5rem 0.5rem;
+}
+/* "AI GENERATED TEXT" across the background at 45°, faint enough to read through */
+:root[data-theme="dark"] .note.by-claude .note-body { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ctext x='150' y='150' transform='rotate%28-45 150 150%29' text-anchor='middle' dominant-baseline='middle' font-family='IBM Plex Mono, monospace' font-size='22' font-weight='600' letter-spacing='4' fill='%23ff4b4b' fill-opacity='0.17'%3EAI GENERATED TEXT%3C/text%3E%3C/svg%3E"); }
+:root[data-theme="light"] .note.by-claude .note-body { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ctext x='150' y='150' transform='rotate%28-45 150 150%29' text-anchor='middle' dominant-baseline='middle' font-family='IBM Plex Mono, monospace' font-size='22' font-weight='600' letter-spacing='4' fill='%23d32f2f' fill-opacity='0.15'%3EAI GENERATED TEXT%3C/text%3E%3C/svg%3E"); }
+.ai-stamp {
+    display: inline-flex; align-items: center; gap: 0.6rem; margin: 0 0 1rem;
+    border: 2px solid var(--accent-color); color: var(--accent-color); padding: 0.3rem 0.7rem;
+    font: 600 0.8rem 'IBM Plex Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 2px;
+    transform: rotate(-1.5deg);
+}
+.ai-stamp span { border-left: 1px solid var(--accent-color); padding-left: 0.6rem; letter-spacing: 1px; text-transform: none; }
+.note.by-claude .note-body h2, .note.by-claude .note-body h3 { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-weight: 600; }
+.note.by-claude .note-body code, .note.by-claude .note-body pre { background: color-mix(in srgb, var(--accent-color) 10%, var(--code-bg)); }
+.author-chip { color: var(--accent-color); font-family: 'IBM Plex Mono', ui-monospace, monospace; text-transform: none; letter-spacing: 0; margin-left: 0.4rem; }
+
+/* Redacted: the words are gone from the file; a bar of the same length stands in */
+.redacted {
+    background: #000; color: transparent; border-radius: 1px; box-shadow: 0 0 0 1px var(--line-color);
+    user-select: none; -webkit-user-select: none; text-decoration: none;
+}
+
+/* Margin notes: Mac's comments beside the text (or in it, on narrow screens) */
+.note-body blockquote.margin-note {
+    font-family: 'Inter', sans-serif; font-size: 0.95rem; line-height: 1.6; color: var(--text-color);
+    background: var(--bg-color); border: 1px solid var(--line-color); border-left: 3px solid var(--text-color);
+    padding: 0.75rem 1rem;
+}
+.note-body blockquote.margin-note::before {
+    content: 'Mac'; display: block; margin-bottom: 0.3rem;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted-color);
+}
+.note-body blockquote.margin-note p { margin: 0 0 0.5rem; }
+.note-body blockquote.margin-note p:last-child { margin-bottom: 0; }
+@media (min-width: 1360px) {   /* room beside the 44rem column */
+    .note-body blockquote.margin-note { float: right; clear: right; width: 15rem; margin: 0 -18.5rem 1rem 1.5rem; }
+}
+
 .note-nav {
     display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
     margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line-color);
