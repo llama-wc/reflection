@@ -11,7 +11,7 @@ title: Garden
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <script src="/theme.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/garden/garden.css?v=5">
+    <link rel="stylesheet" href="/garden/garden.css?v=8">
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="booting">
@@ -69,12 +69,15 @@ title: Garden
                 "date": "{{ post.date | date: '%Y-%m-%d' }}",
                 "description": {{ post.description | jsonify }},
                 "project": {{ post.project | jsonify }},
+                "author": {{ post.author | jsonify }},
                 "html": {{ post.content | jsonify }}
             }{% unless forloop.last %},{% endunless %}
             {%- endfor %}
         ]
     }
     </script>
-    <script src="/garden/garden.js?v=5"></script>
+    <!-- Draws pages into snapshots for their cards (MIT, garden/vendor/modern-screenshot.LICENSE) -->
+    <script src="/garden/vendor/modern-screenshot.js"></script>
+    <script src="/garden/garden.js?v=8"></script>
 </body>
 </html>

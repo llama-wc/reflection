@@ -24,6 +24,12 @@ Then commit `garden/thumbs/*.jpg` and `_data/garden_titles.json` with the page c
 Stale screenshots show the old page on its card, and a stale heading record makes the
 title glide land in the wrong place. Notes need nothing: their cards are live.
 
+Those stock screenshots are 1400 x 848, so they're only exact in a window that size.
+Each visitor's browser also takes its own small snapshot of a page about a second after
+it opens (at that window's size, kept in that browser's storage only, overwritten each
+visit), and a card uses it whenever the window is the same size again. The snapshot code
+is in `garden/garden.js` (search "snapshots"); it uses `garden/vendor/modern-screenshot.js`.
+
 ## 2. Cache versions
 
 If you change `dashboard.js`, `elenchus/main.js` or `garden/garden.js`/`garden.css`, bump

@@ -9,9 +9,13 @@
 (function () {
     const data = JSON.parse(document.getElementById('garden-data').textContent);
 
-    // Cards share the shape of the page area (the screenshots are 1400 x 848).
-    const PAGE_W = 1400, PAGE_H = 848;
-    const CARD_W = 400, CARD_H = Math.round(CARD_W * PAGE_H / PAGE_W);
+    // Cards have the shape of the page area in this window (everything above the
+    // bottom bar), so a card lines up exactly with its page when the camera is on it.
+    // PAGE_W x PAGE_H is that area; the board is laid out again when it changes.
+    // The stock screenshots (garden/thumbs) and their heading data are 1400 x 848.
+    const STOCK_W = 1400, STOCK_H = 848;
+    const CARD_W = 400;
+    let PAGE_W = STOCK_W, PAGE_H = STOCK_H, CARD_H = Math.round(CARD_W * PAGE_H / PAGE_W);
     const COL_GAP = 170, ROW_GAP = 120, REGION_PAD = 34;
     const TITLE_SCALE = 2.5;   // how much larger a page's heading is drawn on its card
     const BAR = 52;      // bottom bar height; the page area is everything above it
@@ -30,6 +34,15 @@
     const navBack = document.getElementById('nav-back');
     const navMenu = document.getElementById('nav-menu');
     const directory = document.getElementById('nav-directory');
+
+    // Read the page area's size; true if it changed
+    function measurePage() {
+        const w = Math.max(320, board.clientWidth), h = Math.max(240, board.clientHeight - BAR);
+        if (w === PAGE_W && h === PAGE_H) return false;
+        PAGE_W = w; PAGE_H = h; CARD_H = Math.round(CARD_W * PAGE_H / PAGE_W);
+        return true;
+    }
+    measurePage();
 
     // ---------- nodes ----------
     const regionKeys = new Set(data.regions.map(r => r.key));
@@ -67,30 +80,34 @@
         })
         .filter(row => row.project || row.notes.length);
     const rowY = i => i * (CARD_H + ROW_GAP);
-    rows.forEach((row, i) => {
-        if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
-        row.notes.forEach((n, j) => { n.x = colX(3 + j); n.y = rowY(i); });
-    });
-    const midY = (rowY(rows.length - 1)) / 2;
-    const place = (id, col, y) => { const n = nodes.get(id); if (n) { n.x = colX(col); n.y = y; } };
-    place('home', 0, midY);
-    place('portfolio', 1, midY - (CARD_H + ROW_GAP) / 2);
-    place('notes', 1, midY + (CARD_H + ROW_GAP) / 2);
-
-    const box = (name, cards) => {
-        const xs = cards.map(n => n.x), ys = cards.map(n => n.y);
-        return {
-            name,
-            x: Math.min(...xs) - REGION_PAD, y: Math.min(...ys) - REGION_PAD,
-            w: Math.max(...xs) - Math.min(...xs) + CARD_W + REGION_PAD * 2,
-            h: Math.max(...ys) - Math.min(...ys) + CARD_H + REGION_PAD * 2,
-        };
-    };
+    let regionBoxes = [];
     const hubName = (data.regions.find(r => r.key === 'hub') || {}).name || '';
-    const regionBoxes = [
-        box(hubName, ['home', 'portfolio', 'notes'].map(id => nodes.get(id)).filter(Boolean)),
-        ...rows.map(row => box(row.region.name, [row.project, ...row.notes].filter(Boolean))),
-    ];
+    function computeLayout() {
+        rows.forEach((row, i) => {
+            if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
+            row.notes.forEach((n, j) => { n.x = colX(3 + j); n.y = rowY(i); });
+        });
+        const midY = (rowY(rows.length - 1)) / 2;
+        const place = (id, col, y) => { const n = nodes.get(id); if (n) { n.x = colX(col); n.y = y; } };
+        place('home', 0, midY);
+        place('portfolio', 1, midY - (CARD_H + ROW_GAP) / 2);
+        place('notes', 1, midY + (CARD_H + ROW_GAP) / 2);
+
+        const box = (name, cards) => {
+            const xs = cards.map(n => n.x), ys = cards.map(n => n.y);
+            return {
+                name,
+                x: Math.min(...xs) - REGION_PAD, y: Math.min(...ys) - REGION_PAD,
+                w: Math.max(...xs) - Math.min(...xs) + CARD_W + REGION_PAD * 2,
+                h: Math.max(...ys) - Math.min(...ys) + CARD_H + REGION_PAD * 2,
+            };
+        };
+        regionBoxes = [
+            box(hubName, ['home', 'portfolio', 'notes'].map(id => nodes.get(id)).filter(Boolean)),
+            ...rows.map(row => box(row.region.name, [row.project, ...row.notes].filter(Boolean))),
+        ];
+    }
+    computeLayout();
 
     // ---------- strings ----------
     const edges = new Map();
@@ -121,15 +138,19 @@
     }
 
     // ---------- draw ----------
-    for (const b of regionBoxes) {
+    const regionEls = regionBoxes.map(b => {
         const el = document.createElement('div');
         el.className = 'region';
-        Object.assign(el.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
         const label = el.appendChild(document.createElement('div'));
         label.className = 'region-label';
         label.textContent = b.name;
         world.insertBefore(el, world.firstChild);
+        return el;
+    });
+    function placeRegions() {
+        regionBoxes.forEach((b, i) => Object.assign(regionEls[i].style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` }));
     }
+    placeRegions();
     const paths = strings.selectAll('path').data([...edges.values()]).join('path')
         .attr('d', e => stringPath(e.a, e.b))
         .attr('class', e => e.kind);
@@ -140,9 +161,11 @@
         if (text) el.textContent = text;
         return el;
     };
-    // Each card is the page itself at 1400 x 848, scaled down. The page's heading
-    // is drawn once, in its own font and spot, scaled up from its top-left corner
-    // to fill the card. There is never a second title.
+    // Each card is the page itself at the window's size, scaled down: a snapshot this
+    // browser took (see snapshots below), else the stock screenshot scaled to fit, or
+    // for notes a live copy. The page's heading is drawn once, in its own font and
+    // spot, scaled up from its top-left corner to fill the card. There is never a
+    // second title.
     const SIDES = ['top', 'right', 'bottom', 'left'];
     const TITLE_PROPS = ['font-family', 'font-size', 'font-weight', 'letter-spacing', 'text-transform', 'line-height', 'color',
         'white-space', 'text-align', 'text-wrap', 'word-spacing', ...SIDES.map(s => `padding-${s}`), ...SIDES.flatMap(s => [`border-${s}-width`, `border-${s}-style`, `border-${s}-color`])];
@@ -158,8 +181,10 @@
             style: Object.fromEntries(TITLE_PROPS.map(p => [p, cs.getPropertyValue(p)])),
         };
     }
-    function drawTitle(n, info) {
+    // info comes from a page laid out at srcW x srcH (the stock 1400 x 848, or this window)
+    function drawTitle(n, info, srcW, srcH) {
         if (!info) return;
+        Object.assign(n.titleFrame.style, { width: `${srcW}px`, height: `${srcH}px`, transform: `scale(${PAGE_W / srcW})` });
         const el = n.titleEl, r = info.rect;
         el.replaceChildren();
         info.lines.forEach((line, i) => { if (i) el.appendChild(document.createElement('br')); el.appendChild(document.createTextNode(line)); });
@@ -167,39 +192,167 @@
         // Every heading grows by the same factor from its own corner; only a title
         // that would run off the card is capped to fit.
         const textWidth = info.textWidth || r.width;
-        const scale = Math.max(1, Math.min(TITLE_SCALE, (PAGE_W - r.left - 60) / textWidth, (PAGE_H - r.top - 90) / r.height));
+        const scale = Math.max(1, Math.min(TITLE_SCALE, (srcW - r.left - 60) / textWidth, (srcH - r.top - 90) / r.height));
         Object.assign(el.style, {
             left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`,
             transform: `scale(${scale})`,
         });
     }
-    function refreshTitle(n) {
-        if (n.thumb) return drawTitle(n, (data.titles[n.id] || {})[theme()]);
+    function refreshCard(n) {
+        if (n.thumb) {
+            const snap = snapFor(n);
+            n.el.classList.toggle('has-snap', !!snap);
+            if (snap) {
+                if (n.snapImg.getAttribute('src') !== snap.url) n.snapImg.src = snap.url;
+                return drawTitle(n, snap.heading, PAGE_W, PAGE_H);
+            }
+            return drawTitle(n, (data.titles[n.id] || {})[theme()], STOCK_W, STOCK_H);
+        }
         try {
             const h = n.live.contentDocument && n.live.contentDocument.querySelector('h1');
             if (!h) return;
             h.style.visibility = '';
             const info = readHeading(h);
             h.style.visibility = 'hidden';      // the card shows its own, larger copy
-            drawTitle(n, info);
+            drawTitle(n, info, PAGE_W, PAGE_H);
         } catch (e) { /* not loaded yet */ }
+    }
+
+    // ---------- snapshots ----------
+    // The stock screenshots are 1400 x 848; in a window of any other size a page lays
+    // out differently from its card, so the two don't line up. So once a page has
+    // been open a moment, the garden redraws it into a small picture at this
+    // window's size (it can, since the pages are on this site) and keeps it in this
+    // browser only (IndexedDB): one per page and theme, overwritten on every visit,
+    // never sent anywhere. A card shows it while the window is that size, and the
+    // stock screenshot otherwise.
+    const snaps = new Map();       // "id|theme" -> { url, w, h, heading }
+    const snapKey = (n, t = theme()) => `${n.id}|${t}`;
+    function snapFor(n) {
+        const snap = snaps.get(snapKey(n));
+        return snap && snap.w === PAGE_W && snap.h === PAGE_H ? snap : null;
+    }
+    function remember(key, rec) {
+        const old = snaps.get(key);
+        if (old) URL.revokeObjectURL(old.url);
+        snaps.set(key, { w: rec.w, h: rec.h, heading: rec.heading, url: URL.createObjectURL(rec.blob) });
+    }
+    // Storage can be missing or refuse (private windows, blocked site data): then
+    // there are just no snapshots, and the stock screenshots are used.
+    const snapStore = new Promise(resolve => {
+        try {
+            const req = indexedDB.open('garden', 1);
+            req.onupgradeneeded = () => req.result.createObjectStore('snapshots');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch (e) { resolve(null); }
+    });
+    const withStore = (mode, fn) => snapStore.then(db => {
+        if (!db) return;
+        try { fn(db.transaction('snapshots', mode).objectStore('snapshots')); } catch (e) { /* storage unavailable */ }
+    });
+    withStore('readonly', store => {
+        const req = store.openCursor();
+        req.onsuccess = () => {
+            const cursor = req.result;
+            if (!cursor) { nodes.forEach(n => n.thumb && refreshCard(n)); return; }
+            if (cursor.value && cursor.value.blob) remember(cursor.key, cursor.value);
+            cursor.continue();
+        };
+    });
+
+    // The pages' fonts come from Google Fonts, whose stylesheet the snapshot library
+    // isn't allowed to read. So fetch it directly (Latin characters only) and inline
+    // the font files, once per visit, for the library to draw with.
+    const fontFiles = new Map(), fontSheets = new Map();
+    const asDataUrl = blob => new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+    });
+    function inlineFont(url) {
+        if (!fontFiles.has(url)) fontFiles.set(url, fetch(url).then(r => r.blob()).then(asDataUrl));
+        return fontFiles.get(url);
+    }
+    function pageFonts(doc) {
+        const hrefs = [...doc.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')].map(l => l.href);
+        return Promise.all(hrefs.map(href => {
+            if (!fontSheets.has(href)) {
+                fontSheets.set(href, fetch(href).then(r => r.text()).then(css => Promise.all(
+                    css.split(/(?=\/\* [\w-]+ \*\/)/).filter(block => block.startsWith('/* latin */')).map(async block => {
+                        const m = block.match(/url\((https:[^)]+)\)/);
+                        return m ? block.replace(m[1], await inlineFont(m[1])) : '';
+                    }))).then(blocks => blocks.join('\n')).catch(() => ''));
+            }
+            return fontSheets.get(href);
+        })).then(sheets => sheets.join('\n'));
+    }
+
+    let snapTimer = null;
+    function scheduleSnapshot(n) {
+        clearTimeout(snapTimer);
+        if (!n || !n.thumb || reduceMotion || !window.modernScreenshot) return;
+        // A moment after the page settles, when the browser is idle, so it never slows a move
+        snapTimer = setTimeout(() => {
+            const run = () => takeSnapshot(n).catch(() => {});
+            if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2000 }); else run();
+        }, 1200);
+    }
+    async function takeSnapshot(n) {
+        if (current !== n || free || !page.classList.contains('shown')) return;
+        const doc = frame.contentDocument, win = frame.contentWindow, h = pageHeading();
+        if (!doc || !h || frame.dataset.src !== new URL(n.url, location.origin).href) return;
+        const w = PAGE_W, ht = PAGE_H, t = theme();
+        if (win.innerWidth !== w || win.innerHeight !== ht) return;
+        if (doc.fonts) await doc.fonts.ready;
+        // The heading as it sits at the top of the page (the card draws it itself)
+        const heading = readHeading(h);
+        heading.rect.top += win.scrollY;
+        heading.rect.left += win.scrollX;
+        const fonts = await pageFonts(doc);
+        if (current !== n || !page.classList.contains('shown')) return;
+        h.setAttribute('data-garden-hide', '');
+        let blob;
+        try {
+            blob = await modernScreenshot.domToBlob(doc.documentElement, {
+                width: w, height: ht, scale: 0.75, type: 'image/jpeg', quality: 0.75, timeout: 4000,
+                font: fonts ? { cssText: fonts } : false,
+                backgroundColor: win.getComputedStyle(doc.body).backgroundColor,
+                // Only what shows in the window at the top of the page. A dropdown only
+                // shows its chosen option (the dashboard's filters hold thousands).
+                filter: el => !(el instanceof win.Element)
+                    || (el.tagName === 'OPTION' ? el.selected : el.getBoundingClientRect().top + win.scrollY < ht + 40),
+                onCloneEachNode: el => {
+                    if (el.nodeType === 1 && el.hasAttribute('data-garden-hide')) el.style.visibility = 'hidden';
+                },
+            });
+        } finally {
+            h.removeAttribute('data-garden-hide');
+        }
+        if (!blob || PAGE_W !== w || PAGE_H !== ht || theme() !== t) return;   // the window or theme changed meanwhile
+        const rec = { blob, w, h: ht, heading, at: Date.now() };
+        const key = snapKey(n, t);
+        remember(key, rec);
+        withStore('readwrite', store => store.put(rec, key));
+        refreshCard(n);
     }
 
     for (const n of nodes.values()) {
         const card = document.createElement('button');
-        card.className = `card kind-${n.kind.toLowerCase()}`;
+        card.className = `card kind-${n.kind.toLowerCase()}${n.author === 'claude' ? ' by-claude' : ''}`;
         card.setAttribute('aria-label', `${n.kind}: ${n.title}`);
-        Object.assign(card.style, { left: `${n.x}px`, top: `${n.y}px`, width: `${CARD_W}px`, height: `${CARD_H}px` });
 
-        const layer = add(card, 'div', 'page-layer');
-        layer.style.transform = `scale(${CARD_W / PAGE_W})`;
+        const layer = n.layer = add(card, 'div', 'page-layer');
         if (n.thumb) {
+            n.stock = add(layer, 'div', 'stock');
             for (const t of ['dark', 'light']) {
-                const img = add(layer, 'img', `shot ${t}`);
+                const img = add(n.stock, 'img', `shot ${t}`);
                 img.src = `/garden/thumbs/${n.id}-${t}.jpg`;
                 img.alt = '';
                 img.decoding = 'async';
             }
+            n.snapImg = add(layer, 'img', 'snap');
+            n.snapImg.alt = '';
         } else {
             n.live = add(layer, 'iframe', 'live');
             n.live.src = n.url;
@@ -208,21 +361,41 @@
             // Measure the heading only once the page's fonts have arrived (a fallback font is narrower)
             n.live.addEventListener('load', () => {
                 const d = n.live.contentDocument;
-                ((d && d.fonts) ? d.fonts.ready : Promise.resolve()).then(() => refreshTitle(n));
+                ((d && d.fonts) ? d.fonts.ready : Promise.resolve()).then(() => refreshCard(n));
             });
         }
         add(layer, 'div', 'shade');
-        n.titleEl = add(layer, 'div', 'card-title');
-        const meta = add(card, 'span', 'meta', n.date ? `${n.kind} · ${n.date}` : n.kind);
+        n.titleFrame = add(layer, 'div', 'title-frame');
+        n.titleEl = add(n.titleFrame, 'div', 'card-title');
+        const kindLabel = n.author === 'claude' ? `${n.kind} by Claude` : n.kind;
+        const meta = add(card, 'span', 'meta', n.date ? `${kindLabel} · ${n.date}` : kindLabel);
         meta.setAttribute('aria-hidden', 'true');
 
         card.addEventListener('click', () => go(n));
         world.appendChild(card);
         n.el = card;
-        refreshTitle(n);
     }
+    function placeCard(n) {
+        Object.assign(n.el.style, { left: `${n.x}px`, top: `${n.y}px`, width: `${CARD_W}px`, height: `${CARD_H}px` });
+        Object.assign(n.layer.style, { width: `${PAGE_W}px`, height: `${PAGE_H}px`, transform: `scale(${CARD_W / PAGE_W})` });
+        if (n.stock) n.stock.style.transform = `scale(${PAGE_W / STOCK_W})`;
+        refreshCard(n);
+    }
+    // The window's page area changed shape: lay the board out again to match
+    function relayout() {
+        if (!measurePage()) return false;
+        computeLayout();
+        placeRegions();
+        paths.attr('d', e => stringPath(e.a, e.b));
+        nodes.forEach(placeCard);
+        return true;
+    }
+    nodes.forEach(placeCard);
     // Headings change colour with the theme
-    new MutationObserver(() => setTimeout(() => nodes.forEach(refreshTitle), 60))
+    new MutationObserver(() => setTimeout(() => {
+        nodes.forEach(refreshCard);
+        if (current && page.classList.contains('shown')) scheduleSnapshot(current);   // a picture in the new theme
+    }, 60))
         .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     // ---------- camera ----------
@@ -265,6 +438,41 @@
                 const t = Math.min(1, elapsed / duration);
                 apply(interp(d3.easeCubicInOut(t)));
                 if (onFrame) onFrame(t);
+                if (t === 1) { flight.stop(); flight = null; resolve(); }
+            });
+        });
+    }
+
+    // Between pages: pull back just until the card's edges show, cross over to the new
+    // card, then close in on it. The three overlap, so it reads as one motion. If the
+    // new page hasn't loaded once the camera is over its card, the camera waits there,
+    // still pulled back, until it has (at most 4 s).
+    const PULL_BACK = [0, 0.3], CROSS = [0.2, 0.75], CLOSE_IN = [0.7, 1];
+    const PULL_BACK_BY = 1.35;   // the card fills about three quarters of the screen
+    function travel(target, ready, onFrame) {
+        return new Promise(resolve => {
+            if (flight) flight.stop();
+            if (reduceMotion) { apply(target); return resolve(); }
+            const from = view.slice();
+            const wide = Math.max(from[2], target[2] * PULL_BACK_BY);
+            const out = Math.log(wide / from[2]), back = Math.log(wide / target[2]);
+            // Longer trips across the board take a little longer, never over 1.5 s
+            const screens = Math.hypot(target[0] - from[0], target[1] - from[1]) / wide;
+            const duration = Math.min(Math.max(650 + 220 * screens, 800), 1500) * FLY_SPEED;
+            const phase = (t, [a, b]) => d3.easeCubicInOut(clamp01((t - a) / (b - a)));
+            let t = 0, last = null, waited = 0;
+            flight = d3.timer(now => {
+                const dt = last === null ? 0 : now - last;
+                last = now;
+                if (t >= CLOSE_IN[0] && !ready() && waited < 4000) waited += dt;   // hover until the page is ready
+                else t = Math.min(1, t + dt / duration);
+                const across = phase(t, CROSS);
+                apply([
+                    from[0] + (target[0] - from[0]) * across,
+                    from[1] + (target[1] - from[1]) * across,
+                    from[2] * Math.exp(out * phase(t, PULL_BACK) - back * phase(t, CLOSE_IN)),
+                ]);
+                onFrame(t);
                 if (t === 1) { flight.stop(); flight = null; resolve(); }
             });
         });
@@ -340,8 +548,8 @@
     // Moving between pages is one motion: while the camera pulls out, the page's
     // heading grows into its card's title; as it settles on the next card, that
     // card's title shrinks into the new page's heading.
-    const LEAVE_SPAN = 0.5;      // the old title grows over the first half of the flight
-    const LAND_START = 0.5;      // the new one shrinks over the second half
+    const LEAVE_SPAN = 0.4;      // the old title grows while the camera pulls back
+    const LAND_START = 0.6;      // the new one shrinks while it closes in
     const clamp01 = x => Math.min(1, Math.max(0, x));
     // A ghost heading `g` (from ghostOf) drawn part way between two screen rects.
     // Either end can be a function, re-read every frame, to follow a moving card.
@@ -403,6 +611,7 @@
                 n.el.classList.remove('handoff');
                 h.style.visibility = '';
                 g.ghost.remove();
+                scheduleSnapshot(n);
             },
         };
     }
@@ -459,6 +668,7 @@
         clearTimeout(hidePage);
         page.hidden = false;
         const h = pageHeading();
+        scheduleSnapshot(n);
         if (!animate || !h || h.getClientRects().length === 0) {
             page.classList.add('shown');
             n.el.classList.add('arrived');
@@ -483,8 +693,9 @@
         n.el.classList.add('current');
         paths.classed('lit', e => e.a === n || e.b === n);
         const region = data.regions.find(r => r.key === n.region);
-        document.getElementById('where-region').textContent = region ? region.name : '';
-        document.getElementById('where-title').textContent = n.title;
+        const home = n.id === 'home';                 // Home shows the name already
+        document.getElementById('where-region').textContent = region && !home ? region.name : '';
+        document.getElementById('where-title').textContent = home ? '' : n.title;
         document.title = n.id === 'home' ? 'Mac Wall' : `${n.title} | Mac Wall`;
         updateNav();
     }
@@ -511,7 +722,7 @@
         // so its heading can be measured in time to land in it.
         let loaded = false, landing = null, landFrom = 0;
         const loading = wait(leaving ? 190 : 0).then(() => id === openId && loadFrame(n)).then(() => { loaded = true; });
-        await fly(focusView(n), t => {
+        await travel(focusView(n), () => loaded, t => {
             if (leaving) leaving.step(t / LEAVE_SPAN);
             if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
                 landing = beginLanding(n);
@@ -641,7 +852,16 @@
         if (!directory.hidden) { closeDirectory(); navMenu.focus(); }
         else if (free) open(current);
     });
+    let resizeTimer = null;
     window.addEventListener('resize', () => {
+        clearTimeout(snapTimer);
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            relayout();
+            if (free) syncZoom();
+            else if (current) apply(focusView(current));
+            if (current && page.classList.contains('shown')) scheduleSnapshot(current);
+        }, 150);
         if (free) syncZoom();
         else if (current) apply(focusView(current));
     });
