@@ -267,7 +267,7 @@ function syncVisualsToData() {
 
 document.getElementById('prev-week').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() - 7); renderGrid(); });
 document.getElementById('next-week').addEventListener('click', () => { currentMonday.setDate(currentMonday.getDate() + 7); renderGrid(); });
-document.getElementById('view-toggle').addEventListener('click', (e) => { viewMode = viewMode === 'weekly' ? 'aggregate' : 'weekly'; e.target.textContent = viewMode === 'weekly' ? 'VIEW: ALL-TIME STACK' : 'VIEW: RETURN TO WEEKLY'; renderGrid(); });
+document.getElementById('view-toggle').addEventListener('click', (e) => { viewMode = viewMode === 'weekly' ? 'aggregate' : 'weekly'; e.target.textContent = viewMode === 'weekly' ? 'VIEW: ALL TIME' : 'VIEW: RETURN TO WEEKLY'; renderGrid(); });
 
 const modal = document.getElementById('data-modal');
 function switchTab(activeId, panelId) {

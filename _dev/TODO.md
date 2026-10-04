@@ -31,3 +31,4 @@
       real app is elenchus.mac-wall.com. Exclude `elenchus/` and `functions/` from the
       Pages build via `_config.yml`.
 - [ ] Add a "blog feature" that allows me to write up what I learned etc. I can link specific projects, but also just post regular entries 
+- [x] Clean up the language. Less technical-sounding, more business casual (2026-10-04, per the Site Language Review doc)
