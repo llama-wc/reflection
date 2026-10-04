@@ -74,13 +74,24 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
     opacity: 0; transition: opacity 0.35s ease-out;
 }
 .card.current::after { opacity: 1; }
-/* The page, drawn at its real size (1400 x 848) and scaled down to the card */
-.card .page-layer { position: absolute; left: 0; top: 0; width: 1400px; height: 848px; transform-origin: 0 0; pointer-events: none; }
+/* The page, drawn at the window's page-area size (set from garden.js) and scaled down to the card */
+/* It covers the card's whole box, border included (-1px), so it matches the page edge to edge */
+.card .page-layer { position: absolute; left: -1px; top: -1px; transform-origin: 0 0; pointer-events: none; overflow: hidden; }
+/* The stock screenshot is 1400 x 848, scaled to the page's width */
+.card .stock { position: absolute; left: 0; top: 0; width: 1400px; height: 848px; transform-origin: 0 0; }
 .card .shot { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* A snapshot this browser took at this window size, when there is one */
+.card .snap { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+.card.has-snap .snap { display: block; }
+.card.has-snap .stock { display: none; }
+.card .title-frame { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 :root[data-theme="dark"] .card .shot.light, :root[data-theme="light"] .card .shot.dark { display: none; }
 .card iframe.live { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 /* Dim the page so its enlarged heading reads clearly */
 .card .shade { position: absolute; inset: 0; background: var(--shade); transition: opacity 0.2s ease-out; }
+/* Notes written by Claude carry a red tint */
+.card.by-claude .shade { background: color-mix(in srgb, var(--shade), var(--accent) 22%); }
+.card.by-claude .meta { color: var(--accent); }
 /* The page's own heading, enlarged from its corner (position, size and style set from the page) */
 .card .card-title { position: absolute; margin: 0; box-sizing: border-box; transform-origin: 0 0; transition: opacity 0.15s; }
 .card .meta {
