@@ -1,0 +1,14 @@
+# Projects a note can point to with `project: <key>` in its front matter.
+# The note page shows "Related project: <name>" linking to <url>.
+
+movie-dashboard:
+  name: Movie Ratings Dashboard
+  url: /movie-reviews.html
+
+virtue-ledger:
+  name: Virtue Ledger
+  url: /ledger/
+
+elenchus:
+  name: Elenchus Engine
+  url: https://elenchus.mac-wall.com/elenchus/

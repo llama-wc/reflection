@@ -1,0 +1,66 @@
+# The garden (board) prototype: every page is a card in a region.
+# Pages marked thumb: true show a screenshot; notes show a live copy of the page.
+# Notes are added automatically from _posts / _drafts; a note with
+# `project: <key>` is pinned under that project's region.
+
+regions:
+  - key: hub
+    name: Mac Wall
+  - key: movie-dashboard
+    name: Movie Ratings Dashboard
+  - key: virtue-ledger
+    name: Virtue Ledger
+  - key: elenchus
+    name: Elenchus Engine
+  - key: thinking
+    name: Thinking out loud      # notes with no project land here
+
+pages:
+  - id: home
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Mac Wall
+    kind: Home
+    url: /
+    region: hub
+    description: Data analyst. Tools that turn messy data into clear answers.
+  - id: portfolio
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Portfolio
+    kind: Page
+    url: /portfolio.html
+    region: hub
+    description: Three projects in data and AI.
+    links: [movie-dashboard, virtue-ledger, elenchus]
+  - id: notes
+    title: Notes
+    kind: Timeline
+    url: /notes/
+    region: hub
+    description: Every note, newest first.
+  - id: movie-dashboard
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Movie Ratings Dashboard
+    kind: Project
+    url: /movie-reviews.html
+    region: movie-dashboard
+    description: 33.8 million ratings, explored in the browser.
+  - id: virtue-ledger
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Virtue Ledger
+    kind: Project
+    url: /ledger/
+    region: virtue-ledger
+    description: Benjamin Franklin's 13 virtues as a habit tracker.
+  - id: elenchus
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Elenchus Engine
+    kind: Project
+    url: /elenchus/
+    aliases: [https://elenchus.mac-wall.com/elenchus/]
+    region: elenchus
+    description: An AI tutor that questions your reasoning.
+
+# Strings between the central pages
+hub_links:
+  - [home, portfolio]
+  - [home, notes]
