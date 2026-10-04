@@ -12,10 +12,7 @@
     <meta property="og:url" content="https://mac-wall.com/">
     <meta property="og:image" content="https://mac-wall.com/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <script>
-        // Apply the saved theme before first paint to avoid a dark flash
-        try { document.documentElement.setAttribute('data-theme', localStorage.getItem('portfolio-theme') || 'dark'); } catch (e) {}
-    </script>
+    <script src="/theme.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
@@ -261,24 +258,5 @@
         </section>
     </main>
 
-    <!-- Theme Persistance Script -->
-    <script>
-        const themeToggle = document.getElementById('theme-toggle');
-        
-        function initTheme() {
-            // Uses the exact same key as the portfolio page
-            const savedTheme = localStorage.getItem('portfolio-theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-        
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('portfolio-theme', newTheme);
-        });
-
-        initTheme();
-    </script>
 </body>
 </html>
