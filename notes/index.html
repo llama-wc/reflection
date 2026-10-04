@@ -1,0 +1,33 @@
+---
+layout: base
+title: Notes
+description: Notes by Mac Wall on data projects, the decisions behind them, and what I'm learning along the way.
+---
+<section class="notes-intro">
+    <h1>Notes</h1>
+    <p>Write-ups on projects, the decisions behind them, and what I'm learning along the way.</p>
+</section>
+
+{%- if site.posts.size == 0 %}
+<p class="empty">No notes yet. The first one is on its way.</p>
+{%- else %}
+{%- assign by_year = site.posts | group_by_exp: "post", "post.date | date: '%Y'" -%}
+{%- for year in by_year %}
+<section class="notes-year" aria-labelledby="year-{{ year.name }}">
+    <h2 id="year-{{ year.name }}">{{ year.name }}</h2>
+    <ol class="notes-list">
+        {%- for post in year.items %}
+        {%- assign project = site.data.projects[post.project] %}
+        <li>
+            <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%b %-d" }}</time>
+            <div>
+                <a class="note-link" href="{{ post.url }}">{{ post.title }}</a>
+                {%- if post.description %}<p>{{ post.description }}</p>{% endif %}
+                {%- if project %}<span class="project-chip">{{ project.name }}</span>{% endif %}
+            </div>
+        </li>
+        {%- endfor %}
+    </ol>
+</section>
+{%- endfor %}
+{%- endif %}

@@ -1,0 +1,31 @@
+# Jekyll settings for mac-wall.com (built by GitHub Pages).
+# Plain .html pages without front matter (the portfolio, dashboard, ledger…)
+# are copied through untouched; only the Notes section uses Jekyll.
+
+title: Mac Wall
+description: Data analyst. Notes on projects, data and what I'm learning.
+url: https://mac-wall.com
+author: Mac Wall
+
+# Each note lives at /notes/<file-name-without-date>/
+permalink: /notes/:title/
+
+markdown: kramdown
+kramdown:
+  input: GFM
+highlighter: rouge
+
+plugins:
+  - jekyll-feed      # /notes/feed.xml for anyone following in a feed reader
+  - jekyll-seo-tag   # page titles and link previews for each note
+
+feed:
+  path: notes/feed.xml
+
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: note
+      image: /og-image.png

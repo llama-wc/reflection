@@ -1,0 +1,404 @@
+{
+  "home": {
+    "dark": {
+      "rect": {
+        "left": 105,
+        "top": 151.85000610351562,
+        "width": 1190,
+        "height": 252
+      },
+      "textWidth": 329.95001220703125,
+      "lines": [
+        "MAC",
+        "WALL"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "140px",
+        "font-weight": "700",
+        "letter-spacing": "-2px",
+        "text-transform": "uppercase",
+        "line-height": "126px",
+        "color": "rgb(224, 224, 224)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "32px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(224, 224, 224)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(224, 224, 224)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(224, 224, 224)",
+        "border-left-width": "10px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(255, 42, 42)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 105,
+        "top": 151.85000610351562,
+        "width": 1190,
+        "height": 252
+      },
+      "textWidth": 329.95001220703125,
+      "lines": [
+        "MAC",
+        "WALL"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "140px",
+        "font-weight": "700",
+        "letter-spacing": "-2px",
+        "text-transform": "uppercase",
+        "line-height": "126px",
+        "color": "rgb(18, 18, 18)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "32px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(18, 18, 18)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(18, 18, 18)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(18, 18, 18)",
+        "border-left-width": "10px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    }
+  },
+  "portfolio": {
+    "dark": {
+      "rect": {
+        "left": 169,
+        "top": 64,
+        "width": 290.6333312988281,
+        "height": 64
+      },
+      "textWidth": 290.6333312988281,
+      "lines": [
+        "PORTFOLIO"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "64px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "64px",
+        "color": "rgb(224, 224, 224)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "0px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(224, 224, 224)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(224, 224, 224)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(224, 224, 224)",
+        "border-left-width": "0px",
+        "border-left-style": "none",
+        "border-left-color": "rgb(224, 224, 224)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 169,
+        "top": 64,
+        "width": 290.6333312988281,
+        "height": 64
+      },
+      "textWidth": 290.6333312988281,
+      "lines": [
+        "PORTFOLIO"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "64px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "64px",
+        "color": "rgb(18, 18, 18)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "0px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(18, 18, 18)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(18, 18, 18)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(18, 18, 18)",
+        "border-left-width": "0px",
+        "border-left-style": "none",
+        "border-left-color": "rgb(18, 18, 18)"
+      }
+    }
+  },
+  "movie-dashboard": {
+    "dark": {
+      "rect": {
+        "left": 40,
+        "top": 23.5,
+        "width": 295.1499938964844,
+        "height": 36
+      },
+      "textWidth": 295.1499938964844,
+      "lines": [
+        "MOVIE RATINGS DASHBOARD"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "none",
+        "line-height": "normal",
+        "color": "rgb(255, 255, 255)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(255, 255, 255)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(255, 255, 255)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(255, 255, 255)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(255, 75, 75)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 40,
+        "top": 23.5,
+        "width": 295.1499938964844,
+        "height": 36
+      },
+      "textWidth": 295.1499938964844,
+      "lines": [
+        "MOVIE RATINGS DASHBOARD"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "none",
+        "line-height": "normal",
+        "color": "rgb(18, 18, 18)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(18, 18, 18)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(18, 18, 18)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(18, 18, 18)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    }
+  },
+  "virtue-ledger": {
+    "dark": {
+      "rect": {
+        "left": 40,
+        "top": 20,
+        "width": 164.18333435058594,
+        "height": 36
+      },
+      "textWidth": 164.18333435058594,
+      "lines": [
+        "VIRTUE LEDGER"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "normal",
+        "color": "rgb(255, 255, 255)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(255, 255, 255)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(255, 255, 255)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(255, 255, 255)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(255, 75, 75)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 40,
+        "top": 20,
+        "width": 164.18333435058594,
+        "height": 36
+      },
+      "textWidth": 164.18333435058594,
+      "lines": [
+        "VIRTUE LEDGER"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "normal",
+        "color": "rgb(34, 34, 34)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(34, 34, 34)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(34, 34, 34)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(34, 34, 34)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    }
+  },
+  "elenchus": {
+    "dark": {
+      "rect": {
+        "left": 32,
+        "top": 27.5,
+        "width": 189.89999389648438,
+        "height": 36
+      },
+      "textWidth": 189.89999389648438,
+      "lines": [
+        "ELENCHUS ENGINE"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "normal",
+        "color": "rgb(245, 245, 245)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(245, 245, 245)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(245, 245, 245)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(245, 245, 245)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 32,
+        "top": 27.5,
+        "width": 189.89999389648438,
+        "height": 36
+      },
+      "textWidth": 189.89999389648438,
+      "lines": [
+        "ELENCHUS ENGINE"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "24px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "normal",
+        "color": "rgb(18, 18, 18)",
+        "white-space": "normal",
+        "text-align": "start",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "10px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(18, 18, 18)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(18, 18, 18)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(18, 18, 18)",
+        "border-left-width": "4px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    }
+  }
+}

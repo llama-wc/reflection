@@ -1,0 +1,46 @@
+# Site update checklist
+
+Run through this before pushing changes to mac-wall.com.
+
+## 1. Board screenshots (garden)
+
+The board shows a screenshot of five pages, with each page's heading drawn on top
+from recorded data. If any of these pages change how they look (layout, heading,
+colours, copy near the top), the screenshots and heading data must be refreshed:
+
+| Page | File |
+|---|---|
+| Home | `index.html` |
+| Portfolio | `portfolio.html` |
+| Movie Ratings Dashboard | `movie-reviews.html`, `dashboard.js` |
+| Virtue Ledger | `ledger/` |
+| Elenchus Engine | `elenchus/` |
+
+```bash
+python3 _dev/garden-thumbs.py
+```
+
+Then commit `garden/thumbs/*.jpg` and `_data/garden_titles.json` with the page change.
+Stale screenshots show the old page on its card, and a stale heading record makes the
+title glide land in the wrong place. Notes need nothing: their cards are live.
+
+## 2. Cache versions
+
+If you change `dashboard.js` or `elenchus/main.js`, bump the `?v=` number where the
+page loads it (`movie-reviews.html`, `elenchus/index.html`) so returning visitors get
+the new script.
+
+## 3. Cloudflare (elenchus.mac-wall.com)
+
+The Elenchus subdomain is a Cloudflare Pages build of this repo. Its build command
+(set in the Cloudflare dashboard, not the repo) deletes files too big or not needed
+there. If you rename or add large data files, update it:
+
+```
+rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _config.yml
+```
+
+## 4. Check it
+
+Preview locally (`_dev/note.sh preview`), and after pushing, open the live page in
+Firefox (the main browser this site is tested in).
