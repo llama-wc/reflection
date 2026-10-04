@@ -55,13 +55,16 @@ header {
     align-items: center;
 }
 
+/* Same heading as the dashboard and Virtue Ledger */
 h1 {
-    font-size: 1.8rem;
-    font-weight: 800;
-    letter-spacing: 2px;
-    border-left: 6px solid var(--accent-red);
-    padding-left: 15px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    border-left: 4px solid var(--accent-red);
+    padding-left: 10px;
     text-transform: uppercase;
+    color: var(--text-main);
 }
 
 #theme-toggle {
