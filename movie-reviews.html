@@ -70,12 +70,6 @@
             background: none; border: none; color: var(--text-main);
             font-size: 1.5rem; cursor: pointer; padding: 5px;
         }
-        .back-btn {
-            color: var(--text-muted); text-decoration: none;
-            font-family: 'Inter', sans-serif; font-size: 14px;
-            font-weight: 500; letter-spacing: 1px; transition: color 0.2s ease;
-        }
-        .back-btn:hover { color: var(--text-main); }
 
         .filter-group {
             display: flex; gap: 15px; padding: 20px 40px;
@@ -244,14 +238,17 @@
             .score-text { font-size: 7rem; }
         }
     </style>
+    <link rel="stylesheet" href="/crumbs.css">
 </head>
 <body>
 
     <div class="header">
-        <h1>MOVIE RATINGS DASHBOARD</h1>
+        <div class="title-row">
+            <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><a href="/portfolio.html">Portfolio</a></nav>
+            <h1>MOVIE RATINGS DASHBOARD</h1>
+        </div>
         <div class="header-controls">
             <button id="global-theme-toggle" aria-label="Toggle Theme">◐</button>
-            <a href="portfolio.html" class="back-btn">← BACK TO PORTFOLIO</a>
         </div>
     </div>
 
