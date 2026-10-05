@@ -132,7 +132,17 @@ a:hover { color: var(--accent-color); }
 .ai-stamp span { border-left: 1px solid var(--accent-color); padding-left: 0.6rem; letter-spacing: 1px; text-transform: none; }
 .note.by-claude .note-body h2, .note.by-claude .note-body h3 { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-weight: 600; }
 .note.by-claude .note-body code, .note.by-claude .note-body pre { background: color-mix(in srgb, var(--accent-color) 10%, var(--code-bg)); }
-.author-chip { color: var(--accent-color); font-family: 'IBM Plex Mono', ui-monospace, monospace; text-transform: none; letter-spacing: 0; margin-left: 0.4rem; }
+/* Claude's notes on the Notes list carry the same marks as the notes themselves */
+.notes-list li.by-claude {
+    background: color-mix(in srgb, var(--accent-color) 7%, transparent);
+    border-left: 3px solid var(--accent-color); padding: 1.1rem 1rem; margin: 0.5rem 0;
+}
+:root[data-theme="dark"] .notes-list li.by-claude { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Ctext x='110' y='110' transform='rotate%28-45 110 110%29' text-anchor='middle' dominant-baseline='middle' font-family='IBM Plex Mono, monospace' font-size='15' font-weight='600' letter-spacing='3' fill='%23ff4b4b' fill-opacity='0.15'%3EAI GENERATED TEXT%3C/text%3E%3C/svg%3E"); }
+:root[data-theme="light"] .notes-list li.by-claude { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Ctext x='110' y='110' transform='rotate%28-45 110 110%29' text-anchor='middle' dominant-baseline='middle' font-family='IBM Plex Mono, monospace' font-size='15' font-weight='600' letter-spacing='3' fill='%23d32f2f' fill-opacity='0.13'%3EAI GENERATED TEXT%3C/text%3E%3C/svg%3E"); }
+.notes-list li.by-claude .note-link { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 1.15rem; font-weight: 600; }
+.notes-list li.by-claude p { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.9rem; }
+.notes-list li.by-claude .ai-stamp { display: flex; width: fit-content; margin: 0 0 0.7rem; color: var(--accent-color); }
+.ai-stamp-small { font-size: 0.65rem; padding: 0.15rem 0.5rem; border-width: 1.5px; }
 
 /* Redacted: the words are gone from the file; a bar of the same length stands in */
 .redacted {
