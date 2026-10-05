@@ -18,13 +18,15 @@ description: Notes by Mac Wall on data projects, the decisions behind them, and 
     <ol class="notes-list">
         {%- for post in year.items %}
         {%- assign project = site.data.projects[post.project] %}
-        <li>
+        <li{% if post.author == "claude" %} class="by-claude"{% endif %}>
             <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%b %-d" }}</time>
             <div>
+                {%- if post.author == "claude" %}
+                <p class="ai-stamp ai-stamp-small">AI-generated text<span>Claude</span></p>
+                {%- endif %}
                 <a class="note-link" href="{{ post.url }}">{{ post.title }}</a>
                 {%- if post.description %}<p>{{ post.description }}</p>{% endif %}
                 {%- if project %}<span class="project-chip">{{ project.name }}</span>{% endif %}
-                {%- if post.author == "claude" %}<span class="project-chip author-chip">Written by Claude</span>{% endif %}
             </div>
         </li>
         {%- endfor %}
