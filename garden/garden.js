@@ -31,10 +31,6 @@
     const morphLayer = document.getElementById('morph');
     const toggle = document.getElementById('board-toggle');
     const hint = document.getElementById('board-hint');
-    const nav = document.getElementById('page-nav');
-    const navBack = document.getElementById('nav-back');
-    const navMenu = document.getElementById('nav-menu');
-    const directory = document.getElementById('nav-directory');
 
     // Read the page area's size; true if it changed
     function measurePage() {
@@ -321,7 +317,7 @@
         const doc = frame.contentDocument, win = frame.contentWindow, h = pageHeading();
         if (!doc || !h || frame.dataset.src !== new URL(n.url, location.origin).href) return;
         const w = PAGE_W, ht = PAGE_H, t = theme();
-        if (win.innerWidth !== w || win.innerHeight !== ht) return;
+        if (win.innerWidth !== w || win.innerHeight < ht) return;   // Home's page is taller (no bar): keep the top
         if (doc.fonts) await doc.fonts.ready;
         // The heading as it sits at the top of the page (the card draws it itself)
         const heading = readHeading(h);
@@ -515,7 +511,6 @@
         toggle.setAttribute('aria-pressed', 'true');
         board.classList.add('free');
         board.setAttribute('aria-hidden', 'false');
-        updateNav();
         beginLeave();
         await fly(overviewView());
         if (!free) return;
@@ -530,7 +525,6 @@
         board.setAttribute('aria-hidden', 'true');
         d3.select(board).on('.zoom', null);
         hint.hidden = true;
-        updateNav();
     }
 
     // ---------- pages ----------
@@ -640,6 +634,7 @@
         const want = new URL(n.url, location.origin).href;
         if (frame.dataset.src === want) return Promise.resolve();
         frame.dataset.src = want;
+        page.classList.toggle('full', n.id === 'home');   // Home fills the space the bar leaves
         return new Promise(resolve => {
             const done = () => { frame.removeEventListener('load', done); resolve(); };
             frame.addEventListener('load', done);
@@ -681,12 +676,9 @@
         current = n;
         n.el.classList.add('current');
         paths.classed('lit', e => e.a === n || e.b === n);
-        const region = data.regions.find(r => r.key === n.region);
-        const home = n.id === 'home';                 // Home shows the name already
-        document.getElementById('where-region').textContent = region && !home ? region.name : '';
-        document.getElementById('where-title').textContent = home ? '' : n.title;
-        document.title = n.id === 'home' ? 'Mac Wall' : `${n.title} | Mac Wall`;
-        updateNav();
+        const home = n.id === 'home';
+        document.body.classList.toggle('at-home', home);   // Home has no bottom bar
+        document.title = home ? 'Mac Wall' : `${n.title} | Mac Wall`;
     }
 
     let openId = 0;
@@ -726,12 +718,9 @@
     }
 
     // Every page has its own address (#/path), so back/forward and sharing work.
-    // Each step records how many garden pages lie behind it, so Back knows whether
-    // there is a garden page to return to.
     const hashFor = n => `#${new URL(n.url, location.origin).pathname}`;
-    const depth = () => (history.state && history.state.gardenDepth) || 0;
     function go(n) {
-        if (location.hash !== hashFor(n)) history.pushState({ gardenDepth: depth() + 1 }, '', hashFor(n));
+        if (location.hash !== hashFor(n)) history.pushState(null, '', hashFor(n));
         open(n);
     }
     function fromHash() {
@@ -740,88 +729,20 @@
     }
     window.addEventListener('popstate', () => open(fromHash()));   // also fires when the address is edited
 
-    // ---------- Back and the directory (every page but Home) ----------
-    // Without a garden page behind it (someone arrived here directly), Back goes
-    // up a level instead: to the page that links to this one, or Home.
-    function parentOf(n) {
-        if (n.kind === 'Note') return nodes.get(n.region) || nodes.get('notes') || nodes.get('home');
-        return [...nodes.values()].find(p => (p.links || []).includes(n.id)) || nodes.get('home');
-    }
-    navBack.addEventListener('click', () => {
-        closeDirectory();
-        if (depth() > 0) history.back();
-        else if (current) {
-            // Replace rather than add, so pressing Back again keeps climbing instead of looping.
-            const up = parentOf(current);
-            history.replaceState({ gardenDepth: 0 }, '', hashFor(up));
-            open(up);
-        }
-    });
-
-    // The directory: the main pages, then each project with its notes beneath it,
-    // then notes that belong to no project.
-    function addHeading(text) {
-        const h = document.createElement('h2');
-        h.textContent = text;
-        directory.append(h);
-    }
-    function addLink(n, title = n.title) {
-        const a = document.createElement('a');
-        a.href = hashFor(n);
-        a.textContent = title;
-        a.dataset.id = n.id;
-        if (n.kind === 'Note') a.className = 'note';
-        a.addEventListener('click', e => { e.preventDefault(); closeDirectory(); go(n); });
-        directory.append(a);
-    }
-    const inRegion = key => [...nodes.values()].filter(n => n.region === key);
-    addHeading('Pages');
-    for (const n of inRegion('hub')) addLink(n, n.id === 'home' ? 'Home' : n.title);
-    addHeading('Projects');
-    for (const r of data.regions) {
-        const project = nodes.get(r.key);
-        if (!project || r.key === 'hub') continue;
-        addLink(project);
-        for (const n of inRegion(r.key)) if (n !== project) addLink(n);
-    }
-    const loose = inRegion('thinking');
-    if (loose.length) {
-        addHeading((data.regions.find(r => r.key === 'thinking') || {}).name || 'Notes');
-        for (const n of loose) addLink(n);
-    }
-    function openDirectory() {
-        for (const a of directory.querySelectorAll('a')) {
-            if (current && a.dataset.id === current.id) a.setAttribute('aria-current', 'page');
-            else a.removeAttribute('aria-current');
-        }
-        directory.hidden = false;
-        navMenu.setAttribute('aria-expanded', 'true');
-        (directory.querySelector('[aria-current]') || directory.querySelector('a')).focus();
-    }
-    function closeDirectory() {
-        if (directory.hidden) return;
-        directory.hidden = true;
-        navMenu.setAttribute('aria-expanded', 'false');
-    }
-    navMenu.addEventListener('click', () => (directory.hidden ? openDirectory() : closeDirectory()));
-    document.addEventListener('click', e => { if (!nav.contains(e.target)) closeDirectory(); });
-    function updateNav() {
-        nav.hidden = free || !current || current.id === 'home';
-        if (nav.hidden) closeDirectory();
-    }
-
     // Links inside the open page fly to their card instead of loading normally.
     frame.addEventListener('load', () => {
         let doc;
         try { doc = frame.contentDocument; } catch (e) { return; }
         if (!doc) return;
-        // The garden's Back and theme buttons replace each page's own; hidden, not removed, so nothing shifts.
-        const style = doc.createElement('style');
-        style.textContent = '.back-btn, .back-link, #theme-toggle, #global-theme-toggle { visibility: hidden !important; }';
-        (doc.head || doc.documentElement).append(style);
-        doc.addEventListener('keydown', e => { if (e.key === 'Escape') closeDirectory(); });
+        // The bar's theme button replaces each page's own (hidden, not removed, so nothing shifts),
+        // except on Home, which has no bar.
+        const n = nodeFor(doc.location.href);
+        if (!n || n.id !== 'home') {
+            const style = doc.createElement('style');
+            style.textContent = '#theme-toggle, #global-theme-toggle { visibility: hidden !important; }';
+            (doc.head || doc.documentElement).append(style);
+        }
         doc.addEventListener('click', e => {
-            closeDirectory();
             const a = e.target.closest && e.target.closest('a[href]');
             if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
             const url = new URL(a.getAttribute('href'), doc.baseURI);
@@ -834,11 +755,7 @@
     });
 
     toggle.addEventListener('click', () => (free ? open(current) : enterBoard()));
-    document.addEventListener('keydown', e => {
-        if (e.key !== 'Escape') return;
-        if (!directory.hidden) { closeDirectory(); navMenu.focus(); }
-        else if (free) open(current);
-    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && free) open(current); });
     let resizeTimer = null;
     window.addEventListener('resize', () => {
         clearTimeout(snapTimer);
@@ -854,7 +771,6 @@
     });
 
     // First load: the page appears on its own, without its card showing first.
-    if (!history.state) history.replaceState({ gardenDepth: 0 }, '', location.href);
     open(fromHash(), { instant: true }).then(() => {
         document.body.classList.remove('booting');
         // From here on the visitor is moving around the site: Home skips its intro slide

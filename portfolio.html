@@ -50,8 +50,6 @@
 
         header {
             margin-bottom: 4rem;
-            border-left: 5px solid var(--accent-color);
-            padding-left: 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center; 
@@ -63,6 +61,8 @@
             text-transform: uppercase;
             margin: 0;
             line-height: 1;
+            border-left: 5px solid var(--accent-color);
+            padding-left: 1.5rem;
         }
 
         .header-controls {
@@ -83,16 +83,6 @@
         #theme-toggle:hover {
             color: var(--accent-color);
         }
-
-        .back-link {
-            color: var(--text-color);
-            text-decoration: none;
-            font-size: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .back-link:hover { color: var(--accent-color); }
 
         /* The Project Grid */
         .project-grid {
@@ -138,14 +128,17 @@
             letter-spacing: 1px;
         }
     </style>
+    <link rel="stylesheet" href="/crumbs.css">
 </head>
 <body>
 
     <header>
-        <h1>Portfolio</h1>
+        <div class="title-row">
+            <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a></nav>
+            <h1>Portfolio</h1>
+        </div>
         <div class="header-controls">
             <button id="theme-toggle" aria-label="Toggle Theme">◐</button>
-            <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Home</a>
         </div>
     </header>
 
