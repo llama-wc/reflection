@@ -45,13 +45,6 @@ body {
     text-transform: uppercase; color: var(--text-main);
 }
 
-.back-btn {
-    color: var(--text-muted); text-decoration: none;
-    font-family: 'Inter', sans-serif; font-size: 14px;
-    font-weight: 500; letter-spacing: 1px; transition: color 0.2s ease;
-}
-.back-btn:hover { color: var(--text-main); }
-
 #virtue-ledger-app { width: 100%; max-width: 1000px; margin: 40px auto; padding: 0 20px; box-sizing: border-box;}
 #virtue-ledger-app .vl-container { 
     background: var(--panel-bg); border-radius: 12px; padding: 30px;

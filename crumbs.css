@@ -1,0 +1,11 @@
+/* The path to a page, just left of its heading's red bar: HOME | PORTFOLIO ▌PAGE
+   Each separator is a smaller copy of that bar. Used by Portfolio and the projects. */
+.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.crumbs {
+    --crumb-accent: var(--accent-color, var(--accent-red, #d32f2f));
+    display: flex; align-items: center; gap: 10px;
+    font: 600 12px/1.2 'Inter', sans-serif; letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap;
+}
+.crumbs a { color: inherit; opacity: 0.65; text-decoration: none; transition: opacity 0.2s, color 0.2s; }
+.crumbs a:hover, .crumbs a:focus-visible { opacity: 1; color: var(--crumb-accent); outline: none; }
+.crumbs a + a { border-left: 2px solid var(--crumb-accent); padding-left: 10px; }

@@ -14,16 +14,17 @@
     <meta name="twitter:card" content="summary_large_image">
     <script src="/theme.js"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/crumbs.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
         <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>ELENCHUS ENGINE</h1>
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <button id="theme-toggle" aria-label="Toggle Theme" style="background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">◐</button>
-                <a href="https://mac-wall.com/portfolio.html" class="back-btn" style="color: var(--text-main); text-decoration: none; font-weight: bold; font-family: 'Inter', sans-serif; letter-spacing: 1px;">← BACK TO PORTFOLIO</a>
+            <div class="title-row">
+                <nav class="crumbs" aria-label="Breadcrumb"><a href="https://mac-wall.com/">Home</a><a href="https://mac-wall.com/portfolio.html">Portfolio</a></nav>
+                <h1>ELENCHUS ENGINE</h1>
             </div>
+            <button id="theme-toggle" aria-label="Toggle Theme" style="background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">◐</button>
         </div>
         <div class="status-bar">
             <span id="loading-status">Ready. State an idea and I'll question it.</span>
