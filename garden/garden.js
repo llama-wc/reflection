@@ -17,7 +17,8 @@
     const CARD_W = 400;
     let PAGE_W = STOCK_W, PAGE_H = STOCK_H, CARD_H = Math.round(CARD_W * PAGE_H / PAGE_W);
     const COL_GAP = 170, ROW_GAP = 120, REGION_PAD = 34;
-    const TITLE_SCALE = 2.5;   // how much larger a page's heading is drawn on its card
+    const TITLE_SCALE = 4;     // the most a page's heading is ever enlarged on its card
+    const TITLE_MIN_PX = 32;   // ...which happens only to keep it at least this big on screen
     const BAR = 52;      // bottom bar height; the page area is everything above it
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const FLY_SPEED = Math.min(Math.max(Number(new URLSearchParams(location.search).get('fly')) || 1, 0.25), 4);
@@ -164,8 +165,8 @@
     // Each card is the page itself at the window's size, scaled down: a snapshot this
     // browser took (see snapshots below), else the stock screenshot scaled to fit, or
     // for notes a live copy. The page's heading is drawn once, in its own font and
-    // spot, scaled up from its top-left corner to fill the card. There is never a
-    // second title.
+    // spot, enlarged from its top-left corner as far as the zoom needs (see
+    // scaleTitle). There is never a second title.
     const SIDES = ['top', 'right', 'bottom', 'left'];
     const TITLE_PROPS = ['font-family', 'font-size', 'font-weight', 'letter-spacing', 'text-transform', 'line-height', 'color',
         'white-space', 'text-align', 'text-wrap', 'word-spacing', ...SIDES.map(s => `padding-${s}`), ...SIDES.flatMap(s => [`border-${s}-width`, `border-${s}-style`, `border-${s}-color`])];
@@ -189,14 +190,31 @@
         el.replaceChildren();
         info.lines.forEach((line, i) => { if (i) el.appendChild(document.createElement('br')); el.appendChild(document.createTextNode(line)); });
         for (const [prop, value] of Object.entries(info.style)) el.style.setProperty(prop, value);
-        // Every heading grows by the same factor from its own corner; only a title
-        // that would run off the card is capped to fit.
+        // The most it may grow: TITLE_SCALE, or less if it would run off the card
         const textWidth = info.textWidth || r.width;
-        const scale = Math.max(1, Math.min(TITLE_SCALE, (srcW - r.left - 60) / textWidth, (srcH - r.top - 90) / r.height));
+        const cap = Math.max(1, Math.min(TITLE_SCALE, (srcW - r.left - 60) / textWidth, (srcH - r.top - 90) / r.height));
         Object.assign(el.style, {
             left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`,
-            transform: `scale(${scale})`,
         });
+        n.titleCap = cap;
+        n.titleFont = parseFloat(info.style['font-size']) || r.height;
+        n.titleSrcW = srcW;
+        scaleTitle(n);
+    }
+    // A card's title follows the camera: at the page's own size when the card fills
+    // the screen, and growing only as far as it takes to stay readable (TITLE_MIN_PX
+    // on screen) as the board zooms out, never past the card's edge (titleCap).
+    let zoomK = 1;                 // screen pixels per board unit, set with the camera
+    function scaleTitle(n) {
+        if (!n.titleFont) return;
+        const perPx = zoomK * CARD_W / n.titleSrcW;                    // screen px per page px
+        const want = Math.min(TITLE_MIN_PX, n.titleFont * PAGE_W / n.titleSrcW);   // never bigger than at full size
+        const scale = Math.min(n.titleCap, Math.max(1, want / (n.titleFont * perPx)));
+        n.titleEl.style.transform = `scale(${scale})`;
+    }
+    function scaleTitles(k) {
+        zoomK = k;
+        for (const n of nodes.values()) if (n.titleEl) scaleTitle(n);
     }
     function refreshCard(n) {
         if (n.thumb) {
@@ -410,6 +428,7 @@
         const t = transformFor(v);
         world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
         world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
+        scaleTitles(t.k);
     }
     // On a card, it fills the page area exactly: full width, top edge at the top of the window.
     function focusView(n) {
@@ -485,6 +504,7 @@
         view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
         world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
         world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
+        scaleTitles(t.k);
     });
     function syncZoom() {
         const t = transformFor(view);
@@ -496,8 +516,8 @@
         board.classList.add('free');
         board.setAttribute('aria-hidden', 'false');
         updateNav();
-        const leaving = beginLeave();
-        await fly(overviewView(), t => leaving && leaving.step(t / LEAVE_SPAN));
+        beginLeave();
+        await fly(overviewView());
         if (!free) return;
         syncZoom();
         d3.select(board).call(zoom).on('dblclick.zoom', null);
@@ -545,11 +565,10 @@
     const settle = anim => Promise.race([anim.finished.catch(() => {}), wait(GLIDE.duration + 100)]);
 
     // ---------- titles that move with the camera ----------
-    // Moving between pages is one motion: while the camera pulls out, the page's
-    // heading grows into its card's title; as it settles on the next card, that
-    // card's title shrinks into the new page's heading.
-    const LEAVE_SPAN = 0.4;      // the old title grows while the camera pulls back
-    const LAND_START = 0.6;      // the new one shrinks while it closes in
+    // Moving between pages is one motion: the page fades into its card as the camera
+    // pulls out; as it settles on the next card, that card's title glides into the
+    // new page's heading.
+    const LAND_START = 0.6;      // the new card's title shrinks into the page's heading as the camera closes in
     const clamp01 = x => Math.min(1, Math.max(0, x));
     // A ghost heading `g` (from ghostOf) drawn part way between two screen rects.
     // Either end can be a function, re-read every frame, to follow a moving card.
@@ -562,32 +581,17 @@
     }
     const titleRect = n => n.titleEl.getBoundingClientRect();
 
-    // Start leaving the open page: it fades into its card, and its heading becomes a
-    // ghost that step(f) carries into the card's title. Null if there's no page, or
-    // nothing to animate (then the page just fades).
+    // Leaving the open page: it fades into its card (whose title, with the camera on
+    // it, is the heading's own size). True if there was a page to fade.
     let hidePage = null;
     function beginLeave() {
-        if (page.hidden) return null;
-        const n = current, h = pageHeading();
+        if (page.hidden) return false;
+        const n = current;
         if (n) n.el.classList.remove('arrived');
         page.classList.remove('shown');
         clearTimeout(hidePage);
         hidePage = setTimeout(() => { page.hidden = true; }, 180);
-        if (!n || !h || reduceMotion || h.getClientRects().length === 0) return null;
-        const g = ghostOf(h);
-        h.style.visibility = 'hidden';
-        n.el.classList.add('handoff');          // card title stays hidden until the ghost lands
-        let done = false;
-        const finish = () => {
-            if (done) return;
-            done = true;
-            n.el.classList.remove('handoff');
-            g.ghost.remove();
-        };
-        return {
-            step: f => (f >= 1 ? finish() : placeGhost(g, g.rect, () => titleRect(n), f)),   // landed: the card shows it again
-            finish,
-        };
+        return true;
     }
 
     // Start landing on card n while the camera is still moving: the card's title
@@ -627,23 +631,8 @@
     // glides into the card title while the page fades into its (matching) card.
     async function leavePage() {
         if (page.hidden) return;
-        const n = current, h = pageHeading();
-        if (!n || !h || reduceMotion || !page.classList.contains('shown')) {
-            page.classList.remove('shown');
-            if (n) n.el.classList.remove('arrived');
-            await wait(150);
-            page.hidden = true;
-            return;
-        }
-        const { ghost, rect } = ghostOf(h);
-        h.style.visibility = 'hidden';
-        n.el.classList.add('handoff');           // card title stays hidden until the ghost lands
-        n.el.classList.remove('arrived');
-        page.classList.remove('shown');
-        await settle(ghost.animate([{ transform: 'none' }, { transform: cardTitleTransform(n, rect) }], GLIDE));
-        n.el.classList.remove('handoff');
-        ghost.remove();
-        h.style.visibility = '';
+        beginLeave();
+        await wait(150);
         page.hidden = true;
     }
 
@@ -706,7 +695,7 @@
         clearGhosts();
         if (free) leaveBoard();
         if (instant || reduceMotion) await leavePage();
-        const leaving = instant || reduceMotion ? null : beginLeave();
+        const leaving = instant || reduceMotion ? false : beginLeave();
         markCurrent(n);
         if (instant) {
             apply(focusView(n));
@@ -723,7 +712,6 @@
         let loaded = false, landing = null, landFrom = 0;
         const loading = wait(leaving ? 190 : 0).then(() => id === openId && loadFrame(n)).then(() => { loaded = true; });
         await travel(focusView(n), () => loaded, t => {
-            if (leaving) leaving.step(t / LEAVE_SPAN);
             if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
                 landing = beginLanding(n);
                 landFrom = t;
@@ -731,7 +719,6 @@
             if (landing) landing.step((t - landFrom) / (1 - landFrom));
         });
         if (id !== openId || free) return;     // a newer click took over
-        if (leaving) leaving.finish();
         if (landing) return landing.finish();
         await loading;                          // a slow page: glide in once it's ready
         if (id !== openId || free) return;
@@ -868,5 +855,9 @@
 
     // First load: the page appears on its own, without its card showing first.
     if (!history.state) history.replaceState({ gardenDepth: 0 }, '', location.href);
-    open(fromHash(), { instant: true }).then(() => document.body.classList.remove('booting'));
+    open(fromHash(), { instant: true }).then(() => {
+        document.body.classList.remove('booting');
+        // From here on the visitor is moving around the site: Home skips its intro slide
+        try { sessionStorage.setItem('intro-seen', '1'); } catch (e) { /* storage blocked */ }
+    });
 })();
