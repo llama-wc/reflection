@@ -31,6 +31,13 @@ pages:
     region: hub
     description: Three projects in data and AI.
     links: [movie-dashboard, virtue-ledger, elenchus]
+  - id: contact
+    thumb: true          # screenshot in garden/thumbs (made by _dev/garden-thumbs.py)
+    title: Contact
+    kind: Page
+    url: /contact.html
+    region: hub
+    description: Send a message.
   - id: notes
     title: Notes
     kind: Timeline
@@ -63,4 +70,5 @@ pages:
 # Strings between the central pages
 hub_links:
   - [home, portfolio]
+  - [home, contact]
   - [home, notes]

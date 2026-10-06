@@ -64,7 +64,7 @@
     const nodeFor = href => byKey.get(keyFor(href)) || null;
 
     // ---------- layout: left to right, Home first ----------
-    // Column 0: Home. Column 1: Portfolio and Notes. Column 2: one project per row.
+    // Column 0: Home. Column 1: Portfolio, Contact and Notes. Column 2: one project per row.
     // Columns 3+: that project's notes, oldest to newest.
     const colX = c => c * (CARD_W + COL_GAP);
     const rows = data.regions
@@ -79,6 +79,7 @@
     const rowY = i => i * (CARD_H + ROW_GAP);
     let regionBoxes = [];
     const hubName = (data.regions.find(r => r.key === 'hub') || {}).name || '';
+    const HUB_COLUMN = ['portfolio', 'contact', 'notes'].filter(id => nodes.has(id));
     function computeLayout() {
         rows.forEach((row, i) => {
             if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
@@ -87,8 +88,7 @@
         const midY = (rowY(rows.length - 1)) / 2;
         const place = (id, col, y) => { const n = nodes.get(id); if (n) { n.x = colX(col); n.y = y; } };
         place('home', 0, midY);
-        place('portfolio', 1, midY - (CARD_H + ROW_GAP) / 2);
-        place('notes', 1, midY + (CARD_H + ROW_GAP) / 2);
+        HUB_COLUMN.forEach((id, i) => place(id, 1, midY + (i - (HUB_COLUMN.length - 1) / 2) * (CARD_H + ROW_GAP)));
 
         const box = (name, cards) => {
             const xs = cards.map(n => n.x), ys = cards.map(n => n.y);
@@ -100,7 +100,7 @@
             };
         };
         regionBoxes = [
-            box(hubName, ['home', 'portfolio', 'notes'].map(id => nodes.get(id)).filter(Boolean)),
+            box(hubName, ['home', ...HUB_COLUMN].map(id => nodes.get(id)).filter(Boolean)),
             ...rows.map(row => box(row.region.name, [row.project, ...row.notes].filter(Boolean))),
         ];
     }

@@ -1,6 +1,6 @@
 """Capture the board's page pictures (garden/thumbs/<id>-<theme>.jpg).
 
-The five app pages show a screenshot on their card (with the heading hidden, since
+The six main pages show a screenshot on their card (with the heading hidden, since
 the card draws the heading itself); notes show a live copy
 instead, so they never need one. Re-run this after changing one of these pages:
 
@@ -24,6 +24,7 @@ WIDTH, HEIGHT = 1400, 848          # the visible page area on the board (16:9.7)
 PAGES = {
     "home": "/",
     "portfolio": "/portfolio.html",
+    "contact": "/contact.html",
     "movie-dashboard": "/movie-reviews.html",
     "virtue-ledger": "/ledger/",
     "elenchus": "/elenchus/",
