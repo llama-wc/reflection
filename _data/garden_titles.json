@@ -169,6 +169,90 @@
       }
     }
   },
+  "contact": {
+    "dark": {
+      "rect": {
+        "left": 194.5,
+        "top": 64,
+        "width": 262.98333740234375,
+        "height": 64
+      },
+      "textWidth": 262.98333740234375,
+      "lines": [
+        "CONTACT"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "64px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "64px",
+        "color": "rgb(224, 224, 224)",
+        "white-space": "normal",
+        "text-align": "start",
+        "text-wrap": "wrap",
+        "word-spacing": "0px",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "24px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(224, 224, 224)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(224, 224, 224)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(224, 224, 224)",
+        "border-left-width": "5px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(255, 42, 42)"
+      }
+    },
+    "light": {
+      "rect": {
+        "left": 194.5,
+        "top": 64,
+        "width": 262.98333740234375,
+        "height": 64
+      },
+      "textWidth": 262.98333740234375,
+      "lines": [
+        "CONTACT"
+      ],
+      "style": {
+        "font-family": "\"Oswald\", sans-serif",
+        "font-size": "64px",
+        "font-weight": "700",
+        "letter-spacing": "normal",
+        "text-transform": "uppercase",
+        "line-height": "64px",
+        "color": "rgb(18, 18, 18)",
+        "white-space": "normal",
+        "text-align": "start",
+        "text-wrap": "wrap",
+        "word-spacing": "0px",
+        "padding-top": "0px",
+        "padding-right": "0px",
+        "padding-bottom": "0px",
+        "padding-left": "24px",
+        "border-top-width": "0px",
+        "border-top-style": "none",
+        "border-top-color": "rgb(18, 18, 18)",
+        "border-right-width": "0px",
+        "border-right-style": "none",
+        "border-right-color": "rgb(18, 18, 18)",
+        "border-bottom-width": "0px",
+        "border-bottom-style": "none",
+        "border-bottom-color": "rgb(18, 18, 18)",
+        "border-left-width": "5px",
+        "border-left-style": "solid",
+        "border-left-color": "rgb(211, 47, 47)"
+      }
+    }
+  },
   "movie-dashboard": {
     "dark": {
       "rect": {

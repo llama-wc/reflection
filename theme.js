@@ -15,7 +15,7 @@
     if (window.top !== window.self || !/^(www\.)?mac-wall\.com$/.test(location.hostname)) return;
     if (location.search || location.hash) return;
     const path = location.pathname.replace(/index\.html$/, '');
-    if (/^\/(portfolio\.html|movie-reviews\.html|ledger\/|elenchus\/|notes\/.*)?$/.test(path)) {
+    if (/^\/(portfolio\.html|contact\.html|movie-reviews\.html|ledger\/|elenchus\/|notes\/.*)?$/.test(path)) {
         location.replace(path === '/' ? '/garden/' : `/garden/#${path}`);
     }
 })();

@@ -4,7 +4,7 @@ Run through this before pushing changes to mac-wall.com.
 
 ## 1. Board screenshots (garden)
 
-The board shows a screenshot of five pages, with each page's heading drawn on top
+The board shows a screenshot of six pages, with each page's heading drawn on top
 from recorded data. If any of these pages change how they look (layout, heading,
 colours, copy near the top), the screenshots and heading data must be refreshed:
 
@@ -12,6 +12,7 @@ colours, copy near the top), the screenshots and heading data must be refreshed:
 |---|---|
 | Home | `index.html` |
 | Portfolio | `portfolio.html` |
+| Contact | `contact.html` |
 | Movie Ratings Dashboard | `movie-reviews.html`, `dashboard.js` |
 | Virtue Ledger | `ledger/` |
 | Elenchus Engine | `elenchus/` |
