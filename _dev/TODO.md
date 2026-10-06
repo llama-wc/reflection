@@ -36,3 +36,28 @@
       retires models; if chat breaks, check console.groq.com/docs/deprecations first.
 - [ ] Add a "blog feature" that allows me to write up what I learned etc. I can link specific projects, but also just post regular entries 
 - [x] Clean up the language. Less technical-sounding, more business casual
+
+## Parking lot
+Ideas that are started or researched but on hold. Each says where the work is and what's left.
+When one is picked up again, move it into its section above.
+
+- [ ] **Contact page with a message form** (parked 2026-10-05).
+      Code: branch `parked/contact-page` (`git switch parked/contact-page`). It has
+      `contact.html` (name / email / message, spam-bot field, sent and error states), Home's
+      Email button renamed to Contact (no email address anywhere on the site), a garden
+      card between Portfolio and Notes, the theme.js redirect and fresh board screenshots.
+      Tested locally in Firefox and Chromium with the sender faked.
+      Left to do: the form needs something to receive and deliver messages
+      (`FORM_ENDPOINT` in contact.html is a placeholder). Options:
+      - Preferred: a small Cloudflare Worker of our own (like `virtue-api`) that checks the
+        message, only accepts mac-wall.com, and emails it to Gmail with Reply-To set to the
+        sender, using Email Routing's send_email binding. Email Routing is already on for
+        mac-wall.com, so no third party and no new account. Needs ~10 min in the Cloudflare
+        dashboard (create the Worker, add the binding), then put its URL in FORM_ENDPOINT.
+      - Quickest: Formspree (free signup, 50 messages/month; messages pass through them).
+      Before merging: re-run `_dev/garden-thumbs.py` if any page changed since, and rebase
+      on main (garden.js / garden.yml may have moved on).
+- [ ] **Comments on notes** (idea, 2026-10-05). Same pattern as the contact form plus
+      storage: the contact Worker could grow a Cloudflare D1/KV database. Alternatives:
+      giscus (stored in GitHub Discussions, commenters need a GitHub account) or Disqus
+      (hosted, but ads and tracking).
