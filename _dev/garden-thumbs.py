@@ -71,7 +71,7 @@ async def main():
         browser = await p.firefox.launch()
         for theme in ("dark", "light"):
             ctx = await browser.new_context(viewport={"width": WIDTH, "height": HEIGHT})
-            await ctx.add_init_script(f"try {{ localStorage.setItem('portfolio-theme', '{theme}'); }} catch (e) {{}}")
+            await ctx.add_init_script(f"window.siteBar = false; try {{ localStorage.setItem('portfolio-theme', '{theme}'); localStorage.setItem('site-animations', 'off'); }} catch (e) {{}}")
             page = await ctx.new_page()
             for key, path in PAGES.items():
                 await page.goto(base + path, wait_until="load")

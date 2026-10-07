@@ -10,8 +10,27 @@ title: Garden
     <title>Mac Wall</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <script src="/theme.js"></script>
+    <script>
+        // If the garden can't start (a script fails to load or throws, or it still isn't
+        // up after 10 s), show the page on its own instead; see gardenFallback in theme.js.
+        // garden.js removes body.booting once the first page is showing.
+        (function () {
+            const starting = () => !document.body || document.body.classList.contains('booting');
+            let gone = false;
+            const fallBack = () => {
+                if (gone || !starting() || !window.gardenFallback) return;
+                gone = true;
+                window.gardenFallback();
+            };
+            addEventListener('error', e => {
+                if (e instanceof ErrorEvent || (e.target && e.target.tagName === 'SCRIPT')) fallBack();
+            }, true);
+            addEventListener('unhandledrejection', fallBack);
+            setTimeout(fallBack, 10000);
+        })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/garden/garden.css?v=10">
+    <link rel="stylesheet" href="/garden/garden.css?v=11">
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="booting">
@@ -30,12 +49,13 @@ title: Garden
     <!-- The title that glides from a card into its page's heading -->
     <div id="morph" aria-hidden="true"></div>
 
-    <!-- Controls (hidden on Home, which uses its own theme button). Each page shows its own path above it. -->
+    <!-- Controls, on every page including Home. Static pages get the same bar from theme.js. -->
     <div id="chrome">
         <div id="controls">
-            <!-- theme.js handles this button; pages shown here hide their own -->
-            <button id="theme-toggle" type="button" aria-label="Toggle theme">&#9680;</button>
             <button id="board-toggle" aria-pressed="false">Board view</button>
+            <!-- theme.js handles these two; they sit in the same spot as on pages shown on their own -->
+            <button class="motion-toggle" type="button" aria-label="Animations" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="12" r="5"/><path class="trail" d="M2 8h5M1 12h6M2 16h5"/><path class="slash" d="M4 21 21 3"/></svg></button>
+            <button id="theme-toggle" type="button" aria-label="Toggle theme">&#9680;</button>
         </div>
     </div>
     <p id="board-hint" hidden>Drag to move, scroll to zoom, click a card to open it.</p>
@@ -65,6 +85,6 @@ title: Garden
     </script>
     <!-- Draws pages into snapshots for their cards (MIT, garden/vendor/modern-screenshot.LICENSE) -->
     <script src="/garden/vendor/modern-screenshot.js"></script>
-    <script src="/garden/garden.js?v=14"></script>
+    <script src="/garden/garden.js?v=15"></script>
 </body>
 </html>

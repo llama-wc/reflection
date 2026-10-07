@@ -35,7 +35,7 @@ body {
     color: var(--text-main);
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - var(--site-bar, 0px));   /* room for the bottom bar (theme.js) */
 }
 
 .monospace {
@@ -65,15 +65,6 @@ h1 {
     padding-left: 10px;
     text-transform: uppercase;
     color: var(--text-main);
-}
-
-#theme-toggle {
-    background: none;
-    border: none;
-    color: var(--text-main);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 5px;
 }
 
 .status-bar {
