@@ -63,13 +63,6 @@
             font-family: 'Oswald', sans-serif; margin: 0; font-size: 24px;
             border-left: 4px solid var(--accent-color); padding-left: 10px;
         }
-        .header-controls {
-            display: flex; align-items: center; gap: 20px;
-        }
-        #global-theme-toggle {
-            background: none; border: none; color: var(--text-main);
-            font-size: 1.5rem; cursor: pointer; padding: 5px;
-        }
 
         .filter-group {
             display: flex; gap: 15px; padding: 20px 40px;
@@ -247,9 +240,6 @@
             <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><a href="/portfolio.html">Portfolio</a></nav>
             <h1>MOVIE RATINGS DASHBOARD</h1>
         </div>
-        <div class="header-controls">
-            <button id="global-theme-toggle" aria-label="Toggle Theme">◐</button>
-        </div>
     </div>
 
     <!-- The missing Datalists are back! -->
@@ -321,7 +311,7 @@
                     <p class="records-sub">Every single rating, searched live in your browser. The table follows the filters above; click a user number to see everything that person rated.</p>
                 </div>
                 <div id="records-status">
-                    <span id="records-status-text">Loads once the charts are ready…</span>
+                    <span id="records-status-text">The full set is 33.8 million ratings.</span>
                     <div class="records-progress" id="records-progress" hidden><div></div></div>
                     <button id="records-load-btn" hidden>Load all 33.8 million ratings (81 MB)</button>
                 </div>
@@ -372,7 +362,7 @@
 
     </div>
 
-    <script type="module" src="dashboard.js?v=9"></script>
+    <script type="module" src="dashboard.js?v=10"></script>
 
 </body>
 </html>

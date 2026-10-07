@@ -61,29 +61,11 @@
             color: var(--text-color);
             font-family: 'Inter', sans-serif;
             margin: 0;
-            min-height: 100vh;
+            min-height: calc(100vh - var(--site-bar, 0px));   /* room for the bottom bar */
             display: flex;
             flex-direction: column;
             justify-content: center;
             position: relative;
-        }
-
-        /* THEME TOGGLE BUTTON */
-        #theme-toggle {
-            position: absolute;
-            top: 2rem;
-            right: 3rem;
-            background: none;
-            border: none;
-            color: var(--text-color);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 5px;
-            z-index: 10;
-        }
-
-        #theme-toggle:hover {
-            color: var(--accent-color);
         }
 
         .container {
@@ -206,11 +188,6 @@
                 justify-content: flex-start;
             }
 
-            #theme-toggle {
-                top: 1rem;
-                right: 1.5rem;
-            }
-
             .nav-grid {
                 grid-template-columns: 1fr; 
                 gap: 15px;
@@ -225,8 +202,6 @@
     </style>
 </head>
 <body>
-
-    <button id="theme-toggle" aria-label="Toggle Theme">◐</button>
 
     <!-- Watermark updated to use RGB CSS variables for dynamic opacity -->
     <svg class="watermark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" preserveAspectRatio="none">

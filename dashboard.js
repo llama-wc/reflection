@@ -911,8 +911,8 @@ function applyCrossFilters() {
 
 // --- RAW RECORDS TABLE ---
 // The dashboard above runs on the small pre-aggregated summary. This table
-// queries every individual rating in ratings_full.parquet, which is fetched in
-// the background once the dashboard is usable (or on request on phones).
+// queries every individual rating in ratings_full.parquet, which is fetched
+// when the visitor asks for it.
 const RECORDS_PAGE_SIZE = 25;
 const FULL_FILE = 'ratings_full.parquet';
 const FULL_FILE_MB = 81;
@@ -959,17 +959,12 @@ function initRecords() {
         refreshRecords(true);
     });
 
-    // Phones and data-saver mode get a button instead of a surprise 81 MB download.
-    const saveData = navigator.connection && navigator.connection.saveData;
-    const smallDevice = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
-    if (saveData || smallDevice) {
-        setRecordsStatus('The full set is 33.8 million ratings.');
-        const btn = document.getElementById('records-load-btn');
-        btn.hidden = false;
-        btn.addEventListener('click', () => { btn.hidden = true; loadFullDataset(); }, { once: true });
-    } else {
-        loadFullDataset();
-    }
+    // Loaded only on request: 81 MB is too much to download for every visitor, and
+    // GitHub Pages serves it again after every deploy (see _dev/TODO.md).
+    setRecordsStatus('The full set is 33.8 million ratings.');
+    const btn = document.getElementById('records-load-btn');
+    btn.hidden = false;
+    btn.addEventListener('click', () => { btn.hidden = true; loadFullDataset(); }, { once: true });
 }
 
 async function fetchWithProgress(url, onProgress) {

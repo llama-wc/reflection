@@ -36,13 +36,26 @@ If you change `dashboard.js`, `elenchus/main.js` or `garden/garden.js`/`garden.c
 the `?v=` number where the page loads it (`movie-reviews.html`, `elenchus/index.html`,
 `garden/index.html`) so returning visitors get the new files.
 
-## 2b. The garden is the default view
+## 2b. The garden is the default view (the animations setting)
 
 `theme.js` sends anyone opening a page directly on mac-wall.com to that page's card
 in the garden (`/portfolio.html` → `/garden/#/portfolio.html`). A new page only gets
-this once its path is added to the list in `theme.js` (and it has a card in
+this once its path is added to `GARDEN_PAGE` in `theme.js` (and it has a card in
 `_data/garden.yml`). Addresses with `?` or `#` are never redirected, so Virtue Ledger
-private links keep working; local previews aren't redirected either.
+private links keep working; local previews (localhost:4000) behave like the live site.
+
+Visitors can turn this off with the animations button beside ◐ in the bottom bar. It's
+remembered like the theme (cookie `site-animations`, shared with the subdomain), and
+starts off for devices set to reduce motion. Both buttons live only in the bottom bar: the
+garden's own (`garden/index.html`) and, on pages shown on their own, one `theme.js` adds
+to every page that loads it. Pages need no buttons of their own. A page that fills
+exactly one screen height should use `calc(100vh - var(--site-bar, 0px))`, as Home and
+Elenchus do, so the bar doesn't cover its bottom edge.
+
+If the garden can't start (a script fails to load or throws, or it isn't up after 10 s),
+the watchdog at the top of `garden/index.html` shows the page on its own and that tab
+stays out of the garden until it's closed. So a garden bug never blanks the site, but it
+also won't announce itself: open the live site after each change to the garden.
 
 ## 3. Cloudflare (elenchus.mac-wall.com)
 

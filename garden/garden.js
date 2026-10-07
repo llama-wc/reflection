@@ -634,7 +634,6 @@
         const want = new URL(n.url, location.origin).href;
         if (frame.dataset.src === want) return Promise.resolve();
         frame.dataset.src = want;
-        page.classList.toggle('full', n.id === 'home');   // Home fills the space the bar leaves
         return new Promise(resolve => {
             const done = () => { frame.removeEventListener('load', done); resolve(); };
             frame.addEventListener('load', done);
@@ -677,7 +676,6 @@
         n.el.classList.add('current');
         paths.classed('lit', e => e.a === n || e.b === n);
         const home = n.id === 'home';
-        document.body.classList.toggle('at-home', home);   // Home has no bottom bar
         document.title = home ? 'Mac Wall' : `${n.title} | Mac Wall`;
     }
 
@@ -734,14 +732,6 @@
         let doc;
         try { doc = frame.contentDocument; } catch (e) { return; }
         if (!doc) return;
-        // The bar's theme button replaces each page's own (hidden, not removed, so nothing shifts),
-        // except on Home, which has no bar.
-        const n = nodeFor(doc.location.href);
-        if (!n || n.id !== 'home') {
-            const style = doc.createElement('style');
-            style.textContent = '#theme-toggle, #global-theme-toggle { visibility: hidden !important; }';
-            (doc.head || doc.documentElement).append(style);
-        }
         doc.addEventListener('click', e => {
             const a = e.target.closest && e.target.closest('a[href]');
             if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
