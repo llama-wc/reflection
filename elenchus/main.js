@@ -12,7 +12,6 @@ const DOM = {
     userInput: document.getElementById("user-input"),
     sendBtn: document.getElementById("send-btn"),
     resetBtn: document.getElementById("reset-btn"),
-    themeToggle: document.getElementById("theme-toggle"),
     statusText: document.getElementById("loading-status"),
     loadingIndicator: document.getElementById("loading-indicator"),
     trackUpdated: document.getElementById("track-updated")

@@ -42,8 +42,6 @@ a:hover { color: var(--accent-color); }
 }
 .site-nav { display: flex; align-items: center; gap: 1.25rem; }
 .site-nav a { text-decoration: none; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem; }
-#theme-toggle { background: none; border: none; color: var(--text-color); font-size: 1.4rem; cursor: pointer; padding: 0; }
-#theme-toggle:hover { color: var(--accent-color); }
 .site-footer {
     display: flex; justify-content: space-between; gap: 1rem; margin-top: 4rem; padding-top: 1.25rem;
     border-top: 1px solid var(--line-color); color: var(--muted-color); font-size: 0.85rem;
