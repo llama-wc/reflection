@@ -528,10 +528,33 @@
 
     // ---------- free board view ----------
     let free = false;
-    // Zooming in until a card fills most of the screen (OPEN_AT of its width) opens
-    // that card once the gesture ends.
-    const OPEN_AT = 0.8;
-    let gestureK = 1;
+    // A drag that's let go of while moving glides on and slows to a stop (GLIDE_MS sets
+    // how quickly: gentler than a phone's flick). Zooming in until a card fills most of
+    // the screen (OPEN_AT of its width) opens that card once the gesture ends.
+    const GLIDE_MS = 220, OPEN_AT = 0.8;
+    let glide = null, gestureK = 1, trail = [];
+    const stopGlide = () => { if (glide) { glide.stop(); glide = null; } };
+    function startGlide() {
+        const recent = trail.filter(p => trail[trail.length - 1].time - p.time < 100);
+        if (recent.length < 2) return;
+        const a = recent[0], b = recent[recent.length - 1], dt = b.time - a.time;
+        if (dt <= 0 || performance.now() - b.time > 60) return;            // held still before letting go
+        let vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt;                   // screen px per ms
+        const speed = Math.hypot(vx, vy), cap = 2.5;
+        if (speed < 0.15) return;
+        if (speed > cap) { vx *= cap / speed; vy *= cap / speed; }
+        let last = null;
+        glide = d3.timer(now => {
+            const dt = last === null ? 16 : now - last;
+            last = now;
+            const decay = Math.exp(-dt / GLIDE_MS);
+            const k = d3.zoomTransform(board).k;
+            // the distance this frame is what the velocity covers while decaying over dt
+            d3.select(board).call(zoom.translateBy, vx * GLIDE_MS * (1 - decay) / k, vy * GLIDE_MS * (1 - decay) / k);
+            vx *= decay; vy *= decay;
+            if (Math.hypot(vx, vy) < 0.02) stopGlide();
+        });
+    }
     // The card under the middle of the page area, if it fills enough of the screen
     function zoomedInCard() {
         if (CARD_W / view[2] < OPEN_AT) return null;
@@ -539,21 +562,29 @@
     }
     const zoom = d3.zoom().scaleExtent([0.04, 4]).clickDistance(5)
         .on('start', ({ sourceEvent }) => {
-            if (sourceEvent) gestureK = d3.zoomTransform(board).k;
+            if (!sourceEvent) return;                                       // our own glide
+            stopGlide();
+            gestureK = d3.zoomTransform(board).k;
+            trail = [];
         })
-        .on('zoom', ({ transform: t }) => {
+        .on('zoom', ({ transform: t, sourceEvent }) => {
             const vw = board.clientWidth, vh = board.clientHeight;
             view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
             world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
             world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
             scaleTitles(t.k);
+            if (sourceEvent && sourceEvent.type !== 'wheel') {
+                trail.push({ time: performance.now(), x: t.x, y: t.y });
+                if (trail.length > 8) trail.shift();
+            }
         })
         .on('end', ({ transform: t, sourceEvent }) => {
             if (!sourceEvent || !free) return;
             if (t.k > gestureK * 1.001) {                                   // zoomed in
                 const n = zoomedInCard();
-                if (n) go(n);
+                if (n) return go(n);
             }
+            if (Math.abs(t.k - gestureK) < 1e-6 && sourceEvent.type !== 'wheel') startGlide();   // a plain drag
         });
     function syncZoom() {
         const t = transformFor(view);
@@ -573,6 +604,7 @@
     }
     function leaveBoard() {
         free = false;
+        stopGlide();
         toggle.setAttribute('aria-pressed', 'false');
         board.classList.remove('free');
         board.setAttribute('aria-hidden', 'true');
