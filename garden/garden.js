@@ -31,6 +31,7 @@
     const morphLayer = document.getElementById('morph');
     const toggle = document.getElementById('board-toggle');
     const hint = document.getElementById('board-hint');
+    if (window.matchMedia('(pointer: coarse)').matches) hint.textContent = 'Drag to move, pinch to zoom, tap a card to open it.';
 
     // Read the page area's size; true if it changed
     function measurePage() {
