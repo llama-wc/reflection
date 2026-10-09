@@ -470,6 +470,9 @@
     }
 
     let flight = null;
+    // Moves leave quickly and spend longer settling, like a hand placing something,
+    // rather than speeding up and slowing down evenly
+    const easeSettle = t => d3.easeCubicInOut(Math.pow(t, 0.72));
     // onFrame(t) is called every frame with the flight's progress (0 to 1, linear time).
     function fly(target, onFrame) {
         return new Promise(resolve => {
@@ -482,7 +485,7 @@
             const duration = Math.min(Math.max(interp.duration * 0.55, 500), 1100) * FLY_SPEED;
             flight = d3.timer(elapsed => {
                 const t = Math.min(1, elapsed / duration);
-                apply(interp(d3.easeCubicInOut(t)));
+                apply(interp(easeSettle(t)));
                 if (onFrame) onFrame(t);
                 if (t === 1) { flight.stop(); flight = null; resolve(); }
             });
@@ -490,11 +493,13 @@
     }
 
     // Between pages: pull back just until the card's edges show, cross over to the new
-    // card, then close in on it. The three overlap, so it reads as one motion. If the
-    // new page hasn't loaded once the camera is over its card, the camera waits there,
-    // still pulled back, until it has (at most 4 s).
-    const PULL_BACK = [0, 0.3], CROSS = [0.2, 0.75], CLOSE_IN = [0.7, 1];
+    // card along a slight arc, then close in on it. The three overlap well, so it reads
+    // as one motion. If the new page hasn't loaded once the camera is over its card,
+    // the camera slows to a hover there, still pulled back, until it has (at most 4 s).
+    const PULL_BACK = [0, 0.4], CROSS = [0.08, 0.82], CLOSE_IN = [0.5, 1];
+    const HOVER_AT = 0.52;       // where a slow page starts slowing the camera (it comes to rest about 0.1 later)
     const PULL_BACK_BY = 1.35;   // the card fills about three quarters of the screen
+    const ARC = 0.06;            // how far the path bows, as a share of the distance
     function travel(target, ready, onFrame) {
         return new Promise(resolve => {
             if (flight) flight.stop();
@@ -507,17 +512,26 @@
             // Longer trips across the board take a little longer, never over 1.5 s
             const screens = Math.hypot(target[0] - from[0], target[1] - from[1]) / wide;
             const duration = Math.min(Math.max(650 + 220 * screens, 800), 1500) * FLY_SPEED;
-            const phase = (t, [a, b]) => d3.easeCubicInOut(clamp01((t - a) / (b - a)));
-            let t = 0, last = null, waited = 0;
+            const phase = (t, [a, b]) => easeSettle(clamp01((t - a) / (b - a)));
+            // The arc bows up the screen (or right, for a move straight up or down)
+            const dx = target[0] - from[0], dy = target[1] - from[1], dist = Math.hypot(dx, dy) || 1;
+            let px = dy / dist, py = -dx / dist;
+            if (py > 0 || (py === 0 && px < 0)) { px = -px; py = -py; }
+            const bow = Math.min(dist * ARC, wide * 0.35);
+            let t = 0, last = null, waited = 0, speed = 1;
             flight = d3.timer(now => {
                 const dt = last === null ? 0 : now - last;
                 last = now;
-                if (t >= CLOSE_IN[0] && !ready() && waited < 4000) waited += dt;   // hover until the page is ready
-                else t = Math.min(1, t + dt / duration);
-                const across = phase(t, CROSS);
+                // Waiting for a slow page eases the camera to a stop and back, rather than freezing it
+                const hold = t >= HOVER_AT && !ready() && waited < 4000;
+                if (hold) waited += dt;
+                speed += ((hold ? 0 : 1) - speed) * (1 - Math.exp(-dt / 110));
+                t = Math.min(1, t + speed * dt / duration);
+                if (!hold && speed > 0.995) speed = 1;
+                const across = phase(t, CROSS), lift = Math.sin(Math.PI * across) * bow;
                 apply([
-                    from[0] + (target[0] - from[0]) * across,
-                    from[1] + (target[1] - from[1]) * across,
+                    from[0] + dx * across + px * lift,
+                    from[1] + dy * across + py * lift,
                     from[2] * Math.exp(out * phase(t, PULL_BACK) - back * phase(t, CLOSE_IN)),
                 ]);
                 onFrame(t);
