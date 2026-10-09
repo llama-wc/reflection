@@ -63,9 +63,13 @@
     }
     const nodeFor = href => byKey.get(keyFor(href)) || null;
 
-    // ---------- layout: left to right, Home first ----------
-    // Column 0: Home. Column 1: Portfolio and Notes. Column 2: one project per row.
-    // Columns 3+: that project's notes, oldest to newest.
+    // ---------- layout: Home first, then outward ----------
+    // In a wide window, left to right. Column 0: Home. Column 1: Portfolio and Notes.
+    // Column 2: one project per row. Columns 3+: that project's notes, oldest to newest.
+    // In a tall window (a phone upright) the same board runs top to bottom, so it stays
+    // three projects wide however many notes there are: Home, then Portfolio and Notes,
+    // then the projects side by side with their notes stacked below.
+    const vertical = () => PAGE_H > PAGE_W;
     const colX = c => c * (CARD_W + COL_GAP);
     const rows = data.regions
         .filter(r => r.key !== 'hub')
@@ -77,18 +81,33 @@
         })
         .filter(row => row.project || row.notes.length);
     const rowY = i => i * (CARD_H + ROW_GAP);
+    // The tall board: levels go down (strings run between them, so they get the wider
+    // gap) and the projects sit side by side
+    const levelY = l => l * (CARD_H + COL_GAP);
+    const laneX = i => i * (CARD_W + ROW_GAP);
     let regionBoxes = [];
     const hubName = (data.regions.find(r => r.key === 'hub') || {}).name || '';
     function computeLayout() {
-        rows.forEach((row, i) => {
-            if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
-            row.notes.forEach((n, j) => { n.x = colX(3 + j); n.y = rowY(i); });
-        });
-        const midY = (rowY(rows.length - 1)) / 2;
-        const place = (id, col, y) => { const n = nodes.get(id); if (n) { n.x = colX(col); n.y = y; } };
-        place('home', 0, midY);
-        place('portfolio', 1, midY - (CARD_H + ROW_GAP) / 2);
-        place('notes', 1, midY + (CARD_H + ROW_GAP) / 2);
+        const place = (id, x, y) => { const n = nodes.get(id); if (n) { n.x = x; n.y = y; } };
+        if (vertical()) {
+            rows.forEach((row, i) => {
+                if (row.project) { row.project.x = laneX(i); row.project.y = levelY(2); }
+                row.notes.forEach((n, j) => { n.x = laneX(i); n.y = levelY(3 + j); });
+            });
+            const midX = laneX(rows.length - 1) / 2;
+            place('home', midX, levelY(0));
+            place('portfolio', midX - (CARD_W + ROW_GAP) / 2, levelY(1));
+            place('notes', midX + (CARD_W + ROW_GAP) / 2, levelY(1));
+        } else {
+            rows.forEach((row, i) => {
+                if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
+                row.notes.forEach((n, j) => { n.x = colX(3 + j); n.y = rowY(i); });
+            });
+            const midY = (rowY(rows.length - 1)) / 2;
+            place('home', colX(0), midY);
+            place('portfolio', colX(1), midY - (CARD_H + ROW_GAP) / 2);
+            place('notes', colX(1), midY + (CARD_H + ROW_GAP) / 2);
+        }
 
         const box = (name, cards) => {
             const xs = cards.map(n => n.x), ys = cards.map(n => n.y);
@@ -123,6 +142,17 @@
         for (const a of doc.querySelectorAll('a[href]')) addEdge(n, nodeFor(a.getAttribute('href')), 'relation');
     }
     function stringPath(a, b) {
+        if (vertical()) {
+            const [t, btm] = a.y <= b.y ? [a, b] : [b, a];
+            if (t.y === btm.y) {                 // same level: side to side
+                const [l, r] = a.x <= b.x ? [a, b] : [b, a];
+                const y = l.y + CARD_H / 2, x1 = l.x + CARD_W, x2 = r.x;
+                return `M${x1},${y} L${x2},${y}`;
+            }
+            const x1 = t.x + CARD_W / 2, y1 = t.y + CARD_H, x2 = btm.x + CARD_W / 2, y2 = btm.y;
+            const k = Math.max(60, (y2 - y1) / 2);
+            return `M${x1},${y1} C${x1},${y1 + k} ${x2},${y2 - k} ${x2},${y2}`;
+        }
         const [l, r] = a.x <= b.x ? [a, b] : [b, a];
         if (l.x === r.x) {                       // same column: top to bottom
             const [t, btm] = a.y <= b.y ? [a, b] : [b, a];
@@ -751,7 +781,9 @@
         clearTimeout(snapTimer);
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
+            const wasVertical = vertical();
             relayout();
+            if (free && vertical() !== wasVertical) apply(overviewView());   // the board turned: show all of it
             if (free) syncZoom();
             else if (current) apply(focusView(current));
             if (current && page.classList.contains('shown')) scheduleSnapshot(current);
