@@ -500,7 +500,9 @@
             if (flight) flight.stop();
             if (reduceMotion) { apply(target); return resolve(); }
             const from = view.slice();
-            const wide = Math.max(from[2], target[2] * PULL_BACK_BY);
+            // Already over the card (zoomed in on it in board view): just settle onto it
+            const near = Math.hypot(target[0] - from[0], target[1] - from[1]) < from[2] * 0.3;
+            const wide = Math.max(from[2], near ? target[2] : target[2] * PULL_BACK_BY);
             const out = Math.log(wide / from[2]), back = Math.log(wide / target[2]);
             // Longer trips across the board take a little longer, never over 1.5 s
             const screens = Math.hypot(target[0] - from[0], target[1] - from[1]) / wide;
@@ -526,13 +528,33 @@
 
     // ---------- free board view ----------
     let free = false;
-    const zoom = d3.zoom().scaleExtent([0.04, 4]).clickDistance(5).on('zoom', ({ transform: t }) => {
-        const vw = board.clientWidth, vh = board.clientHeight;
-        view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
-        world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
-        world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
-        scaleTitles(t.k);
-    });
+    // Zooming in until a card fills most of the screen (OPEN_AT of its width) opens
+    // that card once the gesture ends.
+    const OPEN_AT = 0.8;
+    let gestureK = 1;
+    // The card under the middle of the page area, if it fills enough of the screen
+    function zoomedInCard() {
+        if (CARD_W / view[2] < OPEN_AT) return null;
+        return [...nodes.values()].find(n => view[0] >= n.x && view[0] <= n.x + CARD_W && view[1] >= n.y && view[1] <= n.y + CARD_H) || null;
+    }
+    const zoom = d3.zoom().scaleExtent([0.04, 4]).clickDistance(5)
+        .on('start', ({ sourceEvent }) => {
+            if (sourceEvent) gestureK = d3.zoomTransform(board).k;
+        })
+        .on('zoom', ({ transform: t }) => {
+            const vw = board.clientWidth, vh = board.clientHeight;
+            view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
+            world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+            world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
+            scaleTitles(t.k);
+        })
+        .on('end', ({ transform: t, sourceEvent }) => {
+            if (!sourceEvent || !free) return;
+            if (t.k > gestureK * 1.001) {                                   // zoomed in
+                const n = zoomedInCard();
+                if (n) go(n);
+            }
+        });
     function syncZoom() {
         const t = transformFor(view);
         d3.select(board).call(zoom.transform, d3.zoomIdentity.translate(t.x, t.y).scale(t.k));
