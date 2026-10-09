@@ -36,6 +36,7 @@ body {
     display: flex;
     flex-direction: column;
     height: calc(100vh - var(--site-bar, 0px));   /* room for the bottom bar (theme.js) */
+    height: calc(100dvh - var(--site-bar, 0px));  /* phones: the visible area, not behind the browser's toolbar */
 }
 
 .monospace {
@@ -100,6 +101,7 @@ h1 {
 /* Chat Section */
 .chat-section {
     flex: 6;
+    min-width: 0;   /* a long reply wraps instead of widening the column */
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-color);
@@ -107,6 +109,7 @@ h1 {
 
 #chat-box {
     flex: 1;
+    min-height: 0;
     padding: 2rem;
     overflow-y: auto;
     display: flex;
@@ -119,6 +122,8 @@ h1 {
     padding: 1rem 1.2rem;
     line-height: 1.5;
     font-size: 1rem;
+    overflow-wrap: break-word; /* Safari before 15.4 */
+    overflow-wrap: anywhere;   /* long URLs and symbol runs break rather than overflow */
 }
 
 .user-msg {
@@ -137,6 +142,7 @@ h1 {
 }
 
 .input-area {
+    flex-shrink: 0;   /* the chat gives way first, never the input */
     display: flex;
     padding: 1.5rem;
     background-color: var(--surface-color);
@@ -183,6 +189,7 @@ input[type="text"]:focus {
 /* Logic Router */
 .logic-router {
     flex: 4;
+    min-width: 0;
     padding: 2rem;
     background-color: var(--surface-color);
     overflow-y: auto;
@@ -217,6 +224,18 @@ input[type="text"]:focus {
 
 .highlight-card {
     border-color: var(--accent-red);
+    height: 85%;
+    display: flex;
+    flex-direction: column;
+}
+
+#track-updated {
+    flex: 1;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
 }
 
 .highlight-card .card-header {
@@ -239,4 +258,55 @@ input[type="text"]:focus {
 @keyframes blink {
     0%, 80%, 100% { opacity: 0; }
     40% { opacity: 1; }
+}
+
+/* Phones upright: the argument sits under the chat in a short panel of its own, so
+   the conversation keeps most of the screen. Sideways, the two columns fit. */
+@media (max-width: 700px) and (orientation: portrait) {
+    header { padding: 1rem; }
+    .status-bar { margin-top: 0.6rem; gap: 10px; font-size: 0.8rem; }
+    #reset-btn { flex-shrink: 0; }
+
+    .container { flex-direction: column; }
+    .chat-section { flex: 1; min-height: 0; border-right: none; }
+    #chat-box { padding: 1rem; gap: 1rem; }
+    .message { max-width: 92%; padding: 0.75rem 0.9rem; }
+    .input-area { padding: 0.75rem 1rem; }
+    input[type="text"] { padding: 0.75rem; min-width: 0; }
+    #send-btn { padding: 0 1.1rem; }
+
+    .logic-router {
+        flex: none;
+        max-height: 28dvh;
+        padding: 0;
+        border-top: 2px solid var(--accent-red);
+        display: flex;
+        flex-direction: column;
+    }
+    .logic-router h2 { display: none; }
+    .highlight-card { height: auto; min-height: 0; flex: 1; margin: 0; border: none; }
+    .card-header { font-size: 0; }   /* just the panel's name, on one line */
+    .card-header::before { content: "ARGUMENT SO FAR"; font-size: 0.8rem; }
+    .card-content { padding: 0.75rem 1rem; }
+}
+
+/* Short screens (a phone sideways): the heading and status share one line, and
+   the argument panel drops its titles, to leave the chat room. */
+@media (max-height: 500px) {
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; padding: 0.5rem 1rem; }
+    .header-content { min-width: 0; }
+    h1 { font-size: 20px; }
+    .status-bar { flex: 1 1 160px; min-width: 0; margin-top: 0; gap: 10px; font-size: 0.8rem; }
+    #loading-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #reset-btn { flex-shrink: 0; }
+    #chat-box { padding: 1rem; gap: 1rem; }
+    .input-area { padding: 0.5rem 1rem; }
+    input[type="text"] { padding: 0.6rem; min-width: 0; }
+    #send-btn { padding: 0 1.1rem; }
+    .logic-router { padding: 0.75rem; display: flex; flex-direction: column; }
+    .logic-router h2 { display: none; }
+    .highlight-card { height: auto; min-height: 0; flex: 1; margin: 0; }
+    .card-header { font-size: 0; }   /* just the panel's name, on one line */
+    .card-header::before { content: "ARGUMENT SO FAR"; font-size: 0.8rem; }
+    .card-content { padding: 0.75rem; }
 }

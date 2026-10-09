@@ -21,7 +21,21 @@ let state = {
     isFirstMessage: true,
     originalPremise: "",
     chatHistory: [], // Memory for better conversational flow
+    transcript: [],  // Every message shown, so a reload can redraw them
+    ledger: null,    // The last ledger reply, likewise
 };
+
+// Bumped by Start over, so a reply still on its way to the old conversation is dropped
+let conversationId = 0;
+
+// Saved for this tab only, so reloading (say, to fix a layout) keeps the conversation
+const SAVE_KEY = "elenchus-conversation";
+function saveConversation() {
+    try { sessionStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+}
+function clearConversation() {
+    try { sessionStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ }
+}
 
 // ==========================================
 // 2. INITIALIZATION & THEME
@@ -29,6 +43,7 @@ let state = {
 // Theme is handled site-wide by /theme.js (shared with mac-wall.com).
 
 function initializeEngine() {
+    restoreConversation();
     DOM.statusText.innerText = "Ready. State an idea and I'll question it.";
     DOM.userInput.disabled = false;
     DOM.sendBtn.disabled = false;
@@ -39,6 +54,11 @@ function initializeEngine() {
 // 3. UI HELPERS
 // ==========================================
 function appendMessage(role, text) {
+    state.transcript.push({ role, text });
+    showMessage(role, text);
+}
+
+function showMessage(role, text) {
     const msgDiv = document.createElement("div");
     msgDiv.className = `message ${role === "user" ? "user-msg" : "ai-msg"}`;
     msgDiv.innerText = text;
@@ -73,7 +93,39 @@ function setLedgerNote(text) {
     DOM.trackUpdated.replaceChildren(note);
 }
 
+function renderLedger(ledgerData) {
+    const fragment = document.createDocumentFragment();
+
+    // Model output is rendered as text only, never as HTML
+    const fallacy = ledgerData.fallacy_detected;
+    if (fallacy && fallacy !== "null") {
+        const warning = document.createElement("strong");
+        warning.style.cssText = "color: var(--accent-red); display: block; margin-bottom: 10px;";
+        warning.textContent = `Possible fallacy: ${fallacy}`;
+        fragment.appendChild(warning);
+    }
+
+    // Render the AI's current state (Questioning vs Informing)
+    const posture = document.createElement("div");
+    posture.style.cssText = "margin-bottom: 8px; font-size: 0.9em; color: var(--text-muted);";
+    const label = document.createElement("strong");
+    label.textContent = "Tutor's stance:";
+    posture.append(label, ` [${String(ledgerData.ai_state || "Unknown").toUpperCase()}]`);
+    fragment.appendChild(posture);
+
+    // Render the user's logic state bullets
+    const bullets = Array.isArray(ledgerData.state_bullets) ? ledgerData.state_bullets : [];
+    bullets.forEach(point => {
+        const line = document.createElement("div");
+        line.textContent = `- ${point}`;
+        fragment.appendChild(line);
+    });
+
+    DOM.trackUpdated.replaceChildren(fragment);
+}
+
 async function updateLogicLedger() {
+    const id = conversationId;
     setLedgerNote("Updating logic state...");
 
     try {
@@ -87,36 +139,13 @@ async function updateLogicLedger() {
 
         const data = await response.json();
         const ledgerData = JSON.parse(data.response);
-        const fragment = document.createDocumentFragment();
-
-        // Model output is rendered as text only, never as HTML
-        const fallacy = ledgerData.fallacy_detected;
-        if (fallacy && fallacy !== "null") {
-            const warning = document.createElement("strong");
-            warning.style.cssText = "color: var(--accent-red); display: block; margin-bottom: 10px;";
-            warning.textContent = `Possible fallacy: ${fallacy}`;
-            fragment.appendChild(warning);
-        }
-
-        // Render the AI's current state (Questioning vs Informing)
-        const posture = document.createElement("div");
-        posture.style.cssText = "margin-bottom: 8px; font-size: 0.9em; color: var(--text-muted);";
-        const label = document.createElement("strong");
-        label.textContent = "Tutor's stance:";
-        posture.append(label, ` [${String(ledgerData.ai_state || "Unknown").toUpperCase()}]`);
-        fragment.appendChild(posture);
-
-        // Render the user's logic state bullets
-        const bullets = Array.isArray(ledgerData.state_bullets) ? ledgerData.state_bullets : [];
-        bullets.forEach(point => {
-            const line = document.createElement("div");
-            line.textContent = `- ${point}`;
-            fragment.appendChild(line);
-        });
-
-        DOM.trackUpdated.replaceChildren(fragment);
+        if (id !== conversationId) return;
+        renderLedger(ledgerData);
+        state.ledger = ledgerData;
+        saveConversation();
     } catch (error) {
         console.error("Ledger update failed:", error);
+        if (id !== conversationId) return;
         setLedgerNote("[Ledger temporarily offline]");
     }
 }
@@ -125,6 +154,7 @@ async function updateLogicLedger() {
 async function handleSend() {
     const text = DOM.userInput.value.trim();
     if (!text) return;
+    const id = conversationId;
 
     appendMessage("user", text);
     
@@ -154,9 +184,11 @@ async function handleSend() {
 
         const data = await response.json();
         let finalResponse = data.response.trim();
+        if (id !== conversationId) return;
 
         addToHistory("assistant", finalResponse);
         appendMessage("ai", finalResponse);
+        saveConversation();
 
         if (!finalResponse.includes("?")) {
             DOM.userInput.placeholder = "Nice work. Ask a follow-up or start a new topic…";
@@ -168,10 +200,11 @@ async function handleSend() {
         updateLogicLedger();
 
     } catch (error) {
+        if (id !== conversationId) return;
         appendMessage("ai", `SYSTEM ERROR: ${error.message}`);
         console.error(error);
     } finally {
-        toggleLoading(false);
+        if (id === conversationId) toggleLoading(false);
     }
 }
 
@@ -179,9 +212,14 @@ async function handleSend() {
 // 5. EVENT LISTENERS
 // ==========================================
 DOM.resetBtn.addEventListener("click", () => {
+    conversationId++;
+    toggleLoading(false);
     state.isFirstMessage = true;
     state.originalPremise = "";
     state.chatHistory = []; 
+    state.transcript = [];
+    state.ledger = null;
+    clearConversation();
     DOM.trackUpdated.textContent = "Your argument will appear here.";
     DOM.userInput.placeholder = "State an idea or ask a question…";
 
@@ -189,6 +227,19 @@ DOM.resetBtn.addEventListener("click", () => {
         if (child.id !== "loading-indicator") child.remove();
     });
 });
+
+function restoreConversation() {
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem(SAVE_KEY)); } catch (e) { return; }
+    if (!saved || !Array.isArray(saved.transcript) || !saved.transcript.length) return;
+
+    state = { ...state, ...saved };
+    state.transcript.forEach(m => showMessage(m.role, m.text));
+    if (state.ledger) {
+        try { renderLedger(state.ledger); } catch (e) { console.error("Saved ledger unreadable:", e); }
+    }
+    DOM.userInput.placeholder = "Ask a follow-up…";
+}
 
 DOM.sendBtn.addEventListener("click", handleSend);
 DOM.userInput.addEventListener("keypress", (e) => { 
