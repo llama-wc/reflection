@@ -9,8 +9,7 @@
     --text: #e6e6e6;
     --muted: #9a9a9e;
     --accent: #ff4b4b;
-    --string: rgba(255, 75, 75, 0.55);
-    --string-faint: rgba(255, 255, 255, 0.10);
+    --yarn-shadow: rgba(0, 0, 0, 0.6);
     --chrome: #0e0e0f;
     --shade: rgba(14, 14, 15, 0.62);
 }
@@ -24,8 +23,7 @@
     --text: #141414;
     --muted: #5c5c5c;
     --accent: #d32f2f;
-    --string: rgba(211, 47, 47, 0.6);
-    --string-faint: rgba(0, 0, 0, 0.12);
+    --yarn-shadow: rgba(40, 20, 10, 0.3);
     --chrome: #ecebe7;
     --shade: rgba(236, 235, 231, 0.66);
 }
@@ -43,9 +41,49 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 #board.free:active { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 #strings { position: absolute; overflow: visible; left: 0; top: 0; pointer-events: none; }
-#strings path { fill: none; stroke: var(--string-faint); stroke-width: 1.5; transition: stroke 0.3s, stroke-width 0.3s; }
-#strings path.relation { stroke: var(--string); }
-#strings path.lit { stroke: var(--accent); stroke-width: 2.5; }
+/* Yarn, a muted oxblood (pictures drawn by _dev/yarn-texture.py). The Notes card's thread to every note
+   is a fine grey one, and a string that has to run under other cards is faint; both come
+   up to full strength while one of their cards is lit or pointed at.
+   How strong a string shows (--a), whether it's lit (--lit) and its shadow (--sh) are set
+   on the string and used as the fill and stroke opacity of its parts, rather than as the
+   string's own opacity: that would make the browser draw each string apart and blend it
+   in, every frame the camera moves. */
+@property --a { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --lit { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --sh { syntax: '<number>'; inherits: true; initial-value: 1; }
+.strand { --a: 0.9; --lit: 0; --sh: 1; transition: --a 0.5s ease-in-out, --sh 0.5s ease-in-out, --lit 0.3s, display 0.5s; transition-behavior: allow-discrete; }
+.strand .lay > rect { transform: scaleY(0.8); transition: transform 0.5s ease-in-out; }
+:root[data-theme="light"] .strand .lay > rect { transform: scaleY(0.6); }   /* the dark yarn reads stronger on the light board */
+.strand .shadow {
+    fill: none; stroke: var(--yarn-shadow); stroke-width: 1.2; stroke-linecap: round; stroke-opacity: calc(var(--a) * var(--sh) * 0.7);
+    transition: display 0.5s; transition-behavior: allow-discrete;   /* see #board.flying */
+}
+.strand .shadow.soft { stroke-width: 4.5; stroke-opacity: calc(var(--a) * var(--sh) * 0.25); }   /* together, a soft-edged shadow */
+.strand .yarn { fill: url(#yarn-red); fill-opacity: var(--a); }
+.strand .glow { fill: url(#yarn-lit); fill-opacity: calc(var(--a) * var(--lit)); }
+.strand.chrono { --a: 0.55; --sh: 0.45; }
+.strand.chrono .lay > rect { transform: scaleY(0.5); }
+:root[data-theme="light"] .strand.chrono .lay > rect { transform: scaleY(0.4); }
+.strand.chrono .yarn { fill: url(#yarn-grey); }
+.strand.chrono .shadow.soft { display: none; }
+.strand.buried { --a: 0.3; }
+.strand.lit, .strand.hover { --a: 1; --lit: 1; }
+
+/* In flight the board recedes behind the move: the cards other than the two being
+   travelled between fade back, and the strings fade out (all but the new page's own,
+   which thin to a fine thread), easing out as the camera leaves and back as it lands.
+   Once faded, a string and its shadow stop being drawn until the camera lands: drawn
+   invisibly they'd cost as much as visible ones, and with a few hundred strings the
+   flight stutters. They're dropped only at the end of the fade and come back at its
+   start (allow-discrete), so nothing pops in or out. */
+#board.flying .card:not(.current):not(.origin) { opacity: 0.45; }
+#board.flying .strand { --a: 0; --sh: 0; }
+#board.flying .strand.lit { --a: 0.4; }
+#board.flying .strand .lay > rect { transform: scaleY(0.35); }
+#board.flying .strand:not(.lit), #board.flying .strand .shadow { display: none; }
+/* While a page still covers the board (leaving it, and arriving: see open in garden.js),
+   the strings change at once, out of sight, which spares the fade's cost mid-flight */
+#board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect { transition: none; }
 
 /* Regions ("cases") */
 .region {
@@ -63,7 +101,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
     background: var(--card); border: 1px solid var(--card-line); border-radius: 3px; color: var(--text);
     font: inherit; text-align: left; cursor: pointer;
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.22);
-    transition: border-color 0.25s, box-shadow 0.25s;
+    transition: border-color 0.25s, box-shadow 0.25s, opacity 0.5s ease-in-out;
 }
 .card:hover, .card:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32); }
 /* The current card's ring: drawn over the card, the same thin width on screen at any
@@ -141,5 +179,5 @@ body.booting #page { transition: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #page, #chrome, .card, .card::after, #strings path { transition: none; }
+    #page, #chrome, .card, .card::after, .strand, .strand .shadow, .strand .lay > rect { transition: none; }
 }

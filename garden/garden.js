@@ -65,13 +65,13 @@
     const nodeFor = href => byKey.get(keyFor(href)) || null;
 
     // ---------- layout: Home first, then outward ----------
-    // In a wide window, left to right. Column 0: Home. Column 1: Portfolio and Notes.
-    // Column 2: one project per row. Columns 3+: that project's notes, oldest to newest.
-    // In a tall window (a phone upright) the same board runs top to bottom, so it stays
-    // three projects wide however many notes there are: Home, then Portfolio and Notes,
-    // then the projects side by side with their notes stacked below.
+    // The board runs along one direction: left to right in a wide window, top to bottom
+    // in a tall one (a phone upright), the same graph turned with the cards kept upright.
+    // Step 0: Home. Step 1: Portfolio and Notes. Step 2: one project per lane, side by
+    // side across the board. Steps 3+: that project's notes, oldest to newest, zigzagging
+    // either side of a channel in line with the project, so each note's string back to
+    // the project runs along the channel instead of under the other notes.
     const vertical = () => PAGE_H > PAGE_W;
-    const colX = c => c * (CARD_W + COL_GAP);
     const rows = data.regions
         .filter(r => r.key !== 'hub')
         .map(r => {
@@ -81,34 +81,36 @@
             return { region: r, project: project && project.region === r.key ? project : null, notes };
         })
         .filter(row => row.project || row.notes.length);
-    const rowY = i => i * (CARD_H + ROW_GAP);
-    // The tall board: levels go down (strings run between them, so they get the wider
-    // gap) and the projects sit side by side
-    const levelY = l => l * (CARD_H + COL_GAP);
-    const laneX = i => i * (CARD_W + ROW_GAP);
+    const CHANNEL = 110;     // the gap between a project's two lanes of notes
+    // Every card sits a few px off its spot, the same few each time, as if pinned by hand
+    const seeded = (key, salt) => {
+        let h = 2166136261;
+        for (const c of key + salt) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+        return ((h >>> 0) % 10000) / 10000;
+    };
+    const JITTER = 4;
+    const nudge = n => { n.x += (seeded(n.id, 'x') - 0.5) * 2 * JITTER; n.y += (seeded(n.id, 'y') - 0.5) * 2 * JITTER; };
     let regionBoxes = [];
     const hubName = (data.regions.find(r => r.key === 'hub') || {}).name || '';
     function computeLayout() {
-        const place = (id, x, y) => { const n = nodes.get(id); if (n) { n.x = x; n.y = y; } };
-        if (vertical()) {
-            rows.forEach((row, i) => {
-                if (row.project) { row.project.x = laneX(i); row.project.y = levelY(2); }
-                row.notes.forEach((n, j) => { n.x = laneX(i); n.y = levelY(3 + j); });
-            });
-            const midX = laneX(rows.length - 1) / 2;
-            place('home', midX, levelY(0));
-            place('portfolio', midX - (CARD_W + ROW_GAP) / 2, levelY(1));
-            place('notes', midX + (CARD_W + ROW_GAP) / 2, levelY(1));
-        } else {
-            rows.forEach((row, i) => {
-                if (row.project) { row.project.x = colX(2); row.project.y = rowY(i); }
-                row.notes.forEach((n, j) => { n.x = colX(3 + j); n.y = rowY(i); });
-            });
-            const midY = (rowY(rows.length - 1)) / 2;
-            place('home', colX(0), midY);
-            place('portfolio', colX(1), midY - (CARD_H + ROW_GAP) / 2);
-            place('notes', colX(1), midY + (CARD_H + ROW_GAP) / 2);
-        }
+        // u runs along the board, v across it; a card is lenU along and lenV across
+        const lenU = vertical() ? CARD_H : CARD_W, lenV = vertical() ? CARD_W : CARD_H;
+        const put = (n, u, v) => { if (!n) return; [n.x, n.y] = vertical() ? [v, u] : [u, v]; };
+        const step = lenU + COL_GAP, at = i => i * step;
+        const laneW = row => (row.notes.length > 1 ? 2 * lenV + CHANNEL : lenV);
+        const laneAt = i => rows.slice(0, i).reduce((v, row) => v + laneW(row) + ROW_GAP, 0);
+        rows.forEach((row, i) => {
+            const side = laneAt(i), two = row.notes.length > 1;
+            put(row.project, at(2), side + (laneW(row) - lenV) / 2);
+            row.notes.forEach((n, j) => put(n,
+                at(3) + Math.floor(j / 2) * step + (j % 2) * step / 2,
+                !two ? side : j % 2 ? side + lenV + CHANNEL : side));
+        });
+        const mid = (laneAt(rows.length) - ROW_GAP - lenV) / 2;
+        put(nodes.get('home'), at(0), mid);
+        put(nodes.get('portfolio'), at(1), mid - (lenV + ROW_GAP) / 2);
+        put(nodes.get('notes'), at(1), mid + (lenV + ROW_GAP) / 2);
+        nodes.forEach(n => { if (n.x !== undefined) nudge(n); });
 
         const box = (name, cards) => {
             const xs = cards.map(n => n.x), ys = cards.map(n => n.y);
@@ -142,27 +144,77 @@
         const doc = new DOMParser().parseFromString(n.html || '', 'text/html');
         for (const a of doc.querySelectorAll('a[href]')) addEdge(n, nodeFor(a.getAttribute('href')), 'relation');
     }
-    function stringPath(a, b) {
-        if (vertical()) {
-            const [t, btm] = a.y <= b.y ? [a, b] : [b, a];
-            if (t.y === btm.y) {                 // same level: side to side
-                const [l, r] = a.x <= b.x ? [a, b] : [b, a];
-                const y = l.y + CARD_H / 2, x1 = l.x + CARD_W, x2 = r.x;
-                return `M${x1},${y} L${x2},${y}`;
+    // Strings run taut and straight between the sides of their two cards that face each
+    // other, the way someone would string a board by hand: of the ways that don't cross
+    // another card, the shortest. The ends tuck a few px under the cards. A string that
+    // can't avoid crossing a card is "buried": it runs centre to centre underneath,
+    // drawn faintly until one of its cards is lit (or pointed at).
+    const TUCK = 6;
+    const SIDES4 = ['left', 'right', 'top', 'bottom'];
+    function pinPoint(n, side, t) {
+        if (side === 'left') return [n.x, n.y + t * CARD_H];
+        if (side === 'right') return [n.x + CARD_W, n.y + t * CARD_H];
+        if (side === 'top') return [n.x + t * CARD_W, n.y];
+        return [n.x + t * CARD_W, n.y + CARD_H];
+    }
+    // Does the straight line from p to q pass over any card (its own two included), or
+    // brush past another card's edge? Each card is a box (grown by `clear` for other
+    // cards, shrunk by 1px for the string's own two, whose edges it starts on); the line
+    // crosses it if clipping the line to the box leaves any of it.
+    const CLEAR = 4;
+    // A project's strings to its own notes run down the channel between their lanes; to
+    // far notes they run nearly along it, so they may graze the edges of the notes they
+    // pass (by up to a nudge's worth), where the string slips just under a card's edge
+    const GRAZE = -(JITTER + 1);
+    const ownNote = e => (e.a.kind === 'Note' && e.a.region === e.b.id) || (e.b.kind === 'Note' && e.b.region === e.a.id);
+    function crossesCard([x1, y1], [x2, y2], e) {
+        const dx = x2 - x1, dy = y2 - y1, clear = ownNote(e) ? GRAZE : CLEAR;
+        const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+        for (const n of nodes.values()) {
+            if (n.x === undefined) continue;
+            const m = n === e.a || n === e.b ? -1 : clear;
+            const left = n.x - m, right = n.x + CARD_W + m, top = n.y - m, bottom = n.y + CARD_H + m;
+            if (maxX <= left || minX >= right || maxY <= top || minY >= bottom) continue;   // nowhere near
+            // Clip the line (as t from 0 to 1) to the box, one side at a time
+            let t0 = 0, t1 = 1;
+            for (const [d, lo, hi, at] of [[dx, left, right, x1], [dy, top, bottom, y1]]) {
+                if (d === 0) {
+                    if (at <= lo || at >= hi) { t0 = 1; break; }
+                    continue;
+                }
+                let a = (lo - at) / d, b = (hi - at) / d;
+                if (a > b) [a, b] = [b, a];
+                t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+                if (t0 >= t1) break;
             }
-            const x1 = t.x + CARD_W / 2, y1 = t.y + CARD_H, x2 = btm.x + CARD_W / 2, y2 = btm.y;
-            const k = Math.max(60, (y2 - y1) / 2);
-            return `M${x1},${y1} C${x1},${y1 + k} ${x2},${y2 - k} ${x2},${y2}`;
+            if (t1 - t0 > 1e-6) return true;
         }
-        const [l, r] = a.x <= b.x ? [a, b] : [b, a];
-        if (l.x === r.x) {                       // same column: top to bottom
-            const [t, btm] = a.y <= b.y ? [a, b] : [b, a];
-            const x = t.x + CARD_W / 2, y1 = t.y + CARD_H, y2 = btm.y;
-            return `M${x},${y1} L${x},${y2}`;
+        return false;
+    }
+    function stringRoute(e) {
+        const key = e.a.id + '|' + e.b.id;
+        let best = null;
+        // Where on a side to pin: toward the other card, so strings leaving one card fan
+        // out in order instead of crossing, give or take a little
+        const spot = (n, m, side, salt) => {
+            const dx = m.x - n.x, dy = m.y - n.y, toward = (side === 'left' || side === 'right' ? dy : dx) / (Math.abs(dx) + Math.abs(dy) || 1);
+            return 0.5 + 0.35 * toward + (seeded(key, side + salt) - 0.5) * 0.08;
+        };
+        for (const sa of SIDES4) for (const sb of SIDES4) {
+            const p = pinPoint(e.a, sa, spot(e.a, e.b, sa, 'a'));
+            const q = pinPoint(e.b, sb, spot(e.b, e.a, sb, 'b'));
+            const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+            if ((!best || len < best.len) && !crossesCard(p, q, e)) best = { p, q, len };
         }
-        const x1 = l.x + CARD_W, y1 = l.y + CARD_H / 2, x2 = r.x, y2 = r.y + CARD_H / 2;
-        const k = Math.max(60, (x2 - x1) / 2);
-        return `M${x1},${y1} C${x1 + k},${y1} ${x2 - k},${y2} ${x2},${y2}`;
+        const buried = !best;
+        if (buried) {                             // centre to centre, under whatever's between
+            const c = n => [n.x + CARD_W / 2, n.y + CARD_H / 2];
+            best = { p: c(e.a), q: c(e.b) };
+        }
+        // Tuck the ends under the cards
+        const tuck = buried ? 0 : TUCK, [[x1, y1], [x2, y2]] = [best.p, best.q];
+        const len = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+        return { route: [[x1 - ux * tuck, y1 - uy * tuck], [x2 + ux * tuck, y2 + uy * tuck]], buried };
     }
 
     // ---------- draw ----------
@@ -179,9 +231,30 @@
         regionBoxes.forEach((b, i) => Object.assign(regionEls[i].style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` }));
     }
     placeRegions();
-    const paths = strings.selectAll('path').data([...edges.values()]).join('path')
-        .attr('d', e => stringPath(e.a, e.b))
-        .attr('class', e => e.kind);
+    // Each string is a length of yarn (see the patterns in garden/index.html) lying
+    // along the x axis and turned into place, over a faint shadow on the board. The
+    // yarn starts at a different point on each string so neighbours don't match, and
+    // a brighter copy fades in over it when the string is lit.
+    const strands = strings.selectAll('g.strand').data([...edges.values()]).join(enter => {
+        const g = enter.append('g').attr('class', e => `strand ${e.kind}`);
+        g.append('path').attr('class', 'shadow soft');
+        g.append('path').attr('class', 'shadow');
+        const lay = g.append('g').attr('class', 'lay');
+        lay.append('rect').attr('class', 'yarn');
+        lay.append('rect').attr('class', 'glow');
+        return g;
+    });
+    function drawStrings() {
+        strands.each(function (e) {
+            const { route: [[x1, y1], [x2, y2]], buried } = stringRoute(e), g = d3.select(this);
+            const len = Math.hypot(x2 - x1, y2 - y1), start = Math.floor(seeded(e.a.id + e.b.id, 'yarn') * 180);
+            g.classed('buried', buried);
+            g.selectAll('.shadow').attr('d', `M${x1 + 0.6},${y1 + 1.8} L${x2 + 0.6},${y2 + 1.8}`);
+            g.select('.lay').attr('transform', `translate(${x1},${y1}) rotate(${Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI}) translate(${-start},0)`);
+            g.selectAll('rect').attr('x', start).attr('y', -7).attr('width', len).attr('height', 14);
+        });
+    }
+    drawStrings();
 
     const add = (parent, tag, cls, text) => {
         const el = parent.appendChild(document.createElement(tag));
@@ -417,6 +490,9 @@
         meta.setAttribute('aria-hidden', 'true');
 
         card.addEventListener('click', () => go(n));
+        // On the board, pointing at a card lights its strings, buried ones included
+        card.addEventListener('pointerenter', () => strands.classed('hover', e => e.a === n || e.b === n));
+        card.addEventListener('pointerleave', () => strands.classed('hover', false));
         world.appendChild(card);
         n.el = card;
     }
@@ -431,7 +507,7 @@
         if (!measurePage()) return false;
         computeLayout();
         placeRegions();
-        paths.attr('d', e => stringPath(e.a, e.b));
+        drawStrings();
         nodes.forEach(placeCard);
         return true;
     }
@@ -470,25 +546,38 @@
     }
 
     let flight = null;
+    // While the camera moves, the board recedes: the strings and the cards other than
+    // the ones it's leaving and heading to fade back (see #board.flying). A flight to a
+    // page keeps the board receded until the page has faded in over it (see open), so
+    // the strings come back out of sight rather than redrawing as the camera lands.
+    function startFlight(timer) {
+        if (flight) flight.stop();
+        flight = timer;
+        board.classList.add('flying');
+    }
+    function endFlight({ keepReceded = false } = {}) {
+        flight.stop();
+        flight = null;
+        if (!keepReceded) board.classList.remove('flying', 'covered');
+    }
     // Moves leave quickly and spend longer settling, like a hand placing something,
     // rather than speeding up and slowing down evenly
     const easeSettle = t => d3.easeCubicInOut(Math.pow(t, 0.72));
     // onFrame(t) is called every frame with the flight's progress (0 to 1, linear time).
     function fly(target, onFrame) {
         return new Promise(resolve => {
-            if (flight) flight.stop();
             if (reduceMotion) { apply(target); return resolve(); }
             // A shallow arc that eases out of the start, travels quickly, and settles
             // gently onto the card: about half a second to a neighbour, at most 1.1s
             // across the board. ?fly=1.5 (or 0.7, ...) scales it for trying speeds.
             const interp = d3.interpolateZoom.rho(0.9)(view, target);
             const duration = Math.min(Math.max(interp.duration * 0.55, 500), 1100) * FLY_SPEED;
-            flight = d3.timer(elapsed => {
+            startFlight(d3.timer(elapsed => {
                 const t = Math.min(1, elapsed / duration);
                 apply(interp(easeSettle(t)));
                 if (onFrame) onFrame(t);
-                if (t === 1) { flight.stop(); flight = null; resolve(); }
-            });
+                if (t === 1) { endFlight(); resolve(); }
+            }));
         });
     }
 
@@ -502,7 +591,6 @@
     const ARC = 0.06;            // how far the path bows, as a share of the distance
     function travel(target, ready, onFrame) {
         return new Promise(resolve => {
-            if (flight) flight.stop();
             if (reduceMotion) { apply(target); return resolve(); }
             const from = view.slice();
             // Already over the card (zoomed in on it in board view): just settle onto it
@@ -519,7 +607,7 @@
             if (py > 0 || (py === 0 && px < 0)) { px = -px; py = -py; }
             const bow = Math.min(dist * ARC, wide * 0.35);
             let t = 0, last = null, waited = 0, speed = 1;
-            flight = d3.timer(now => {
+            startFlight(d3.timer(now => {
                 const dt = last === null ? 0 : now - last;
                 last = now;
                 // Waiting for a slow page eases the camera to a stop and back, rather than freezing it
@@ -535,8 +623,8 @@
                     from[2] * Math.exp(out * phase(t, PULL_BACK) - back * phase(t, CLOSE_IN)),
                 ]);
                 onFrame(t);
-                if (t === 1) { flight.stop(); flight = null; resolve(); }
-            });
+                if (t === 1) { endFlight({ keepReceded: true }); resolve(); }
+            }));
         });
     }
 
@@ -773,7 +861,7 @@
         if (current && current.el) current.el.classList.remove('current', 'arrived');
         current = n;
         n.el.classList.add('current');
-        paths.classed('lit', e => e.a === n || e.b === n);
+        strands.classed('lit', e => e.a === n || e.b === n);
         const home = n.id === 'home';
         document.title = home ? 'Mac Wall' : `${n.title} | Mac Wall`;
     }
@@ -785,6 +873,7 @@
         if (free) leaveBoard();
         if (instant || reduceMotion) await leavePage();
         const leaving = instant || reduceMotion ? false : beginLeave();
+        const from = current;
         markCurrent(n);
         if (instant) {
             apply(focusView(n));
@@ -800,6 +889,16 @@
         // so its heading can be measured in time to land in it.
         let loaded = false, landing = null, landFrom = 0;
         const loading = wait(leaving ? 190 : 0).then(() => id === openId && loadFrame(n)).then(() => { loaded = true; });
+        // The card being left stays clear of the receding board until the new page is up
+        nodes.forEach(m => m.el.classList.toggle('origin', m === from && from !== n));
+        // Leaving a page, it still covers the board as the camera sets off, so the strings
+        // can be put away at once instead of fading out on screen (see #board.covered)
+        board.classList.toggle('covered', !!leaving);
+        // Once the new page has faded in over the board, bring the board back behind it
+        const settle = () => wait(220).then(() => {
+            if (from) from.el.classList.remove('origin');
+            if (id === openId && !free) board.classList.remove('flying', 'covered');
+        });
         await travel(focusView(n), () => loaded, t => {
             if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
                 landing = beginLanding(n);
@@ -808,10 +907,11 @@
             if (landing) landing.step((t - landFrom) / (1 - landFrom));
         });
         if (id !== openId || free) return;     // a newer click took over
-        if (landing) return landing.finish();
+        if (landing) { await landing.finish(); return settle(); }
         await loading;                          // a slow page: glide in once it's ready
         if (id !== openId || free) return;
         await arrive(n, true);
+        settle();
     }
 
     // Every page has its own address (#/path), so back/forward and sharing work.
