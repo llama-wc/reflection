@@ -956,10 +956,17 @@
         // Leaving a page, it still covers the board as the camera sets off, so the strings
         // can be put away at once instead of fading out on screen (see #board.covered)
         board.classList.toggle('covered', !!leaving);
-        // Once the new page has faded in over the board, bring the board back behind it
+        // Once the new page has faded in over the board, bring the board back behind it,
+        // at once and out of sight (see #board.covered), rather than fading hundreds of
+        // strings and cards back in where nobody sees them
         const settle = () => wait(220).then(() => {
             if (from) from.el.classList.remove('origin');
-            if (id === openId && !free) board.classList.remove('flying', 'covered');
+            if (id !== openId || free) return;
+            board.classList.add('covered');
+            board.classList.remove('flying');
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                if (id === openId && !free) board.classList.remove('covered');
+            }));
         });
         await travel(focusView(n), () => loaded, t => {
             if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
