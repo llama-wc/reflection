@@ -40,7 +40,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 #board.free { cursor: grab; }
 #board.free:active { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-#strings { position: absolute; overflow: visible; left: 0; top: 0; pointer-events: none; }
+#strings, #lit-strings { position: absolute; overflow: visible; left: 0; top: 0; pointer-events: none; }
 /* Yarn, a muted oxblood (pictures drawn by _dev/yarn-texture.py). The Notes card's thread to every note
    is a fine grey one, and a string that has to run under other cards is faint; both come
    up to full strength while one of their cards is lit or pointed at.
@@ -51,7 +51,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 @property --a { syntax: '<number>'; inherits: true; initial-value: 1; }
 @property --lit { syntax: '<number>'; inherits: true; initial-value: 0; }
 @property --sh { syntax: '<number>'; inherits: true; initial-value: 1; }
-.strand { --a: 0.9; --lit: 0; --sh: 1; transition: --a 0.5s ease-in-out, --sh 0.5s ease-in-out, --lit 0.3s, display 0.5s; transition-behavior: allow-discrete; }
+.strand { --a: 0.9; --lit: 0; --sh: 1; transition: --a 0.5s ease-in-out, --sh 0.5s ease-in-out, --lit 0.3s; }
 .strand .lay > rect { transform: scaleY(0.8); transition: transform 0.5s ease-in-out; }
 :root[data-theme="light"] .strand .lay > rect { transform: scaleY(0.6); }   /* the dark yarn reads stronger on the light board */
 .strand .shadow {
@@ -72,18 +72,18 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 /* In flight the board recedes behind the move: the cards other than the two being
    travelled between fade back, and the strings fade out (all but the new page's own,
    which thin to a fine thread), easing out as the camera leaves and back as it lands.
-   Once faded, a string and its shadow stop being drawn until the camera lands: drawn
-   invisibly they'd cost as much as visible ones, and with a few hundred strings the
-   flight stutters. They're dropped only at the end of the fade and come back at its
-   start (allow-discrete), so nothing pops in or out. */
+   The strings that go fade together, as one sheet (#strings: the new page's own are on
+   #lit-strings), so the browser fades a single picture of them instead of redrawing
+   every string each frame: the cost is the same with ten strings or a thousand. */
 #board.flying .card:not(.current):not(.origin) { opacity: 0.45; }
-#board.flying .strand { --a: 0; --sh: 0; }
-#board.flying .strand.lit { --a: 0.4; }
-#board.flying .strand .lay > rect { transform: scaleY(0.35); }
-#board.flying .strand:not(.lit), #board.flying .strand .shadow { display: none; }
+#strings { transition: opacity 0.5s ease-in-out; }
+#board.flying #strings { opacity: 0; }
+#board.flying .strand.lit { --a: 0.4; --sh: 0; }
+#board.flying .strand.lit .lay > rect { transform: scaleY(0.35); }
+#board.flying .strand.lit .shadow { display: none; }
 /* While a page still covers the board (leaving it, and arriving: see open in garden.js),
    the strings and cards change at once, out of sight, which spares the fade's cost mid-flight */
-#board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect { transition: none; }
+#board.covered #strings, #board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect { transition: none; }
 #board.covered .card { transition: border-color 0.25s, box-shadow 0.25s; }   /* fading hundreds of cards costs every frame */
 
 /* Regions ("cases") */
@@ -180,5 +180,5 @@ body.booting #page { transition: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #page, #chrome, .card, .card::after, .strand, .strand .shadow, .strand .lay > rect { transition: none; }
+    #page, #chrome, .card, .card::after, #strings, .strand, .strand .shadow, .strand .lay > rect { transition: none; }
 }
