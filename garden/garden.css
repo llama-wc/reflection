@@ -82,8 +82,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 #board.flying .strand .lay > rect { transform: scaleY(0.35); }
 #board.flying .strand:not(.lit), #board.flying .strand .shadow { display: none; }
 /* While a page still covers the board (leaving it, and arriving: see open in garden.js),
-   the strings change at once, out of sight, which spares the fade's cost mid-flight */
+   the strings and cards change at once, out of sight, which spares the fade's cost mid-flight */
 #board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect { transition: none; }
+#board.covered .card { transition: border-color 0.25s, box-shadow 0.25s; }   /* fading hundreds of cards costs every frame */
 
 /* Regions ("cases") */
 .region {

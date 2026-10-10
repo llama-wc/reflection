@@ -34,8 +34,13 @@
     if (window.matchMedia('(pointer: coarse)').matches) hint.textContent = 'Drag to move, pinch to zoom, tap a card to open it.';
 
     // Read the page area's size; true if it changed
+    // The board's size, read only when the window changes: reading it while the camera
+    // moves would make the browser restyle the whole board mid-frame to answer
+    let boardW = board.clientWidth, boardH = board.clientHeight;
+    const measureBoard = () => { boardW = board.clientWidth; boardH = board.clientHeight; };
     function measurePage() {
-        const w = Math.max(320, board.clientWidth), h = Math.max(240, board.clientHeight - BAR);
+        measureBoard();
+        const w = Math.max(320, boardW), h = Math.max(240, boardH - BAR);
         if (w === PAGE_W && h === PAGE_H) return false;
         PAGE_W = w; PAGE_H = h; CARD_H = Math.round(CARD_W * PAGE_H / PAGE_W);
         return true;
@@ -96,7 +101,9 @@
         // u runs along the board, v across it; a card is lenU along and lenV across
         const lenU = vertical() ? CARD_H : CARD_W, lenV = vertical() ? CARD_W : CARD_H;
         const put = (n, u, v) => { if (!n) return; [n.x, n.y] = vertical() ? [v, u] : [u, v]; };
-        const step = lenU + COL_GAP, at = i => i * step;
+        // Running down, strings drop steeply from one level to the next, so the levels sit
+        // further apart: strings can then come in over the region labels to the cards
+        const step = lenU + COL_GAP * (vertical() ? 1.6 : 1), at = i => i * step;
         const laneW = row => (row.notes.length > 1 ? 2 * lenV + CHANNEL : lenV);
         const laneAt = i => rows.slice(0, i).reduce((v, row) => v + laneW(row) + ROW_GAP, 0);
         rows.forEach((row, i) => {
@@ -157,55 +164,80 @@
         if (side === 'top') return [n.x + t * CARD_W, n.y];
         return [n.x + t * CARD_W, n.y + CARD_H];
     }
-    // Does the straight line from p to q pass over any card (its own two included), or
-    // brush past another card's edge? Each card is a box (grown by `clear` for other
-    // cards, shrunk by 1px for the string's own two, whose edges it starts on); the line
-    // crosses it if clipping the line to the box leaves any of it.
+    // Does the straight line from p to q pass over any card (its own two included) or a
+    // region's label, or brush past their edges? Each is a box (grown by `clear`; the
+    // string's own two cards, whose edges it starts on, shrunk by 1px instead); the line
+    // crosses one if clipping the line to the box leaves any of it.
     const CLEAR = 4;
     // A project's strings to its own notes run down the channel between their lanes; to
     // far notes they run nearly along it, so they may graze the edges of the notes they
     // pass (by up to a nudge's worth), where the string slips just under a card's edge
     const GRAZE = -(JITTER + 1);
     const ownNote = e => (e.a.kind === 'Note' && e.a.region === e.b.id) || (e.b.kind === 'Note' && e.b.region === e.a.id);
+    let labelBoxes = [];        // where the region labels sit, measured in drawStrings
     function crossesCard([x1, y1], [x2, y2], e) {
         const dx = x2 - x1, dy = y2 - y1, clear = ownNote(e) ? GRAZE : CLEAR;
         const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-        for (const n of nodes.values()) {
-            if (n.x === undefined) continue;
-            const m = n === e.a || n === e.b ? -1 : clear;
-            const left = n.x - m, right = n.x + CARD_W + m, top = n.y - m, bottom = n.y + CARD_H + m;
-            if (maxX <= left || minX >= right || maxY <= top || minY >= bottom) continue;   // nowhere near
+        const hits = (left, top, right, bottom) => {
+            if (maxX <= left || minX >= right || maxY <= top || minY >= bottom) return false;   // nowhere near
             // Clip the line (as t from 0 to 1) to the box, one side at a time
             let t0 = 0, t1 = 1;
             for (const [d, lo, hi, at] of [[dx, left, right, x1], [dy, top, bottom, y1]]) {
                 if (d === 0) {
-                    if (at <= lo || at >= hi) { t0 = 1; break; }
+                    if (at <= lo || at >= hi) return false;
                     continue;
                 }
                 let a = (lo - at) / d, b = (hi - at) / d;
                 if (a > b) [a, b] = [b, a];
                 t0 = Math.max(t0, a); t1 = Math.min(t1, b);
-                if (t0 >= t1) break;
+                if (t0 >= t1) return false;
             }
-            if (t1 - t0 > 1e-6) return true;
+            return t1 - t0 > 1e-6;
+        };
+        for (const n of nodes.values()) {
+            if (n.x === undefined) continue;
+            const m = n === e.a || n === e.b ? -1 : clear;
+            if (hits(n.x - m, n.y - m, n.x + CARD_W + m, n.y + CARD_H + m)) return true;
         }
-        return false;
+        return labelBoxes.some(l => hits(l.x - CLEAR, l.y - CLEAR, l.x + l.w + CLEAR, l.y + l.h + CLEAR));
     }
     function stringRoute(e) {
         const key = e.a.id + '|' + e.b.id;
         let best = null;
         // Where on a side to pin: toward the other card, so strings leaving one card fan
-        // out in order instead of crossing, give or take a little
+        // out in order instead of crossing, give or take a little, but clear of the title
+        // and the region's label, which sit at a card's top left: on the left and right
+        // sides, in the middle or lower; along the top, toward the right.
         const spot = (n, m, side, salt) => {
-            const dx = m.x - n.x, dy = m.y - n.y, toward = (side === 'left' || side === 'right' ? dy : dx) / (Math.abs(dx) + Math.abs(dy) || 1);
-            return 0.5 + 0.35 * toward + (seeded(key, side + salt) - 0.5) * 0.08;
+            const dx = m.x - n.x, dy = m.y - n.y, upright = side === 'left' || side === 'right';
+            const toward = (upright ? dy : dx) / (Math.abs(dx) + Math.abs(dy) || 1), jiggle = (seeded(key, side + salt) - 0.5) * 0.06;
+            const clamp = (lo, hi, t) => Math.min(hi, Math.max(lo, t));
+            if (upright) return clamp(0.4, 0.8, 0.6 + 0.2 * toward + jiggle);
+            if (side === 'top') return clamp(0.55, 0.9, 0.72 + 0.15 * toward + jiggle);
+            return 0.5 + 0.2 * toward + jiggle;
         };
-        for (const sa of SIDES4) for (const sb of SIDES4) {
-            const p = pinPoint(e.a, sa, spot(e.a, e.b, sa, 'a'));
-            const q = pinPoint(e.b, sb, spot(e.b, e.a, sb, 'b'));
-            const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-            if ((!best || len < best.len) && !crossesCard(p, q, e)) best = { p, q, len };
-        }
+        // Strings favour the sides facing the way the board runs (left and right when it
+        // runs across, the bottom when it runs down) and keep off the top, where the title
+        // and the region's label are: a string uses another side only when that's much
+        // shorter or the only clear way, as into the channel of notes
+        const along = vertical() ? ['bottom'] : ['left', 'right'];
+        const sideCost = side => (along.includes(side) ? 1 : side === 'top' ? 2 : 1.4);
+        const cost = (sa, sb) => sideCost(sa) * sideCost(sb);
+        const tryPins = (pinsA, pinsB) => {
+            for (const sa of SIDES4) for (const ta of pinsA(sa)) for (const sb of SIDES4) for (const tb of pinsB(sb)) {
+                const p = pinPoint(e.a, sa, ta), q = pinPoint(e.b, sb, tb);
+                const len = Math.hypot(q[0] - p[0], q[1] - p[1]) * cost(sa, sb);
+                if ((!best || len < best.len) && !crossesCard(p, q, e)) best = { p, q, len };
+            }
+        };
+        tryPins(sa => [spot(e.a, e.b, sa, 'a')], sb => [spot(e.b, e.a, sb, 'b')]);
+        // No clear way from those spots: try others along each side (still clear of the
+        // title's corner) before giving up and running the string underneath. Only for the
+        // board's main strings: links between notes and the Notes card's threads mostly run
+        // under other cards on a big board, and searching for each of them adds up.
+        const ALONG = { left: [0.45, 0.65, 0.85, 0.95], right: [0.45, 0.65, 0.85, 0.95], top: [0.6, 0.75, 0.9], bottom: [0.1, 0.3, 0.5, 0.7, 0.9] };
+        const main = e.kind !== 'chrono' && !(e.a.kind === 'Note' && e.b.kind === 'Note');
+        if (!best && main) tryPins(sa => ALONG[sa], sb => ALONG[sb]);
         const buried = !best;
         if (buried) {                             // centre to centre, under whatever's between
             const c = n => [n.x + CARD_W / 2, n.y + CARD_H / 2];
@@ -228,7 +260,12 @@
         return el;
     });
     function placeRegions() {
-        regionBoxes.forEach((b, i) => Object.assign(regionEls[i].style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` }));
+        regionBoxes.forEach((b, i) => {
+            Object.assign(regionEls[i].style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+            // Running across, a label sits in line with the cards rather than out over the
+            // gap before them, where the strings from the step before come down to them
+            regionEls[i].firstChild.style.left = vertical() ? '' : `${REGION_PAD}px`;
+        });
     }
     placeRegions();
     // Each string is a length of yarn (see the patterns in garden/index.html) lying
@@ -245,6 +282,10 @@
         return g;
     });
     function drawStrings() {
+        labelBoxes = regionBoxes.map((b, i) => {
+            const label = regionEls[i].firstChild;
+            return { x: b.x + label.offsetLeft, y: b.y + label.offsetTop, w: label.offsetWidth, h: label.offsetHeight };
+        });
         strands.each(function (e) {
             const { route: [[x1, y1], [x2, y2]], buried } = stringRoute(e), g = d3.select(this);
             const len = Math.hypot(x2 - x1, y2 - y1), start = Math.floor(seeded(e.a.id + e.b.id, 'yarn') * 180);
@@ -255,6 +296,7 @@
         });
     }
     drawStrings();
+    document.fonts.ready.then(drawStrings);    // the labels' width depends on their font
 
     const add = (parent, tag, cls, text) => {
         const el = parent.appendChild(document.createElement(tag));
@@ -299,6 +341,7 @@
         n.titleCap = cap;
         n.titleFont = parseFloat(info.style['font-size']) || r.height;
         n.titleSrcW = srcW;
+        n.titleScale = null;                 // set afresh below
         scaleTitle(n);
     }
     // A card's title follows the camera: at the page's own size when the card fills
@@ -310,11 +353,20 @@
         const perPx = zoomK * CARD_W / n.titleSrcW;                    // screen px per page px
         const want = Math.min(TITLE_MIN_PX, n.titleFont * PAGE_W / n.titleSrcW);   // never bigger than at full size
         const scale = Math.min(n.titleCap, Math.max(1, want / (n.titleFont * perPx)));
+        if (scale === n.titleScale) return;
+        n.titleScale = scale;
         n.titleEl.style.transform = `scale(${scale})`;
     }
-    function scaleTitles(k) {
-        zoomK = k;
-        for (const n of nodes.values()) if (n.titleEl) scaleTitle(n);
+    // Called every frame the camera moves, with the board's transform: only the cards on
+    // screen (or about to be) are rescaled, since a big board has hundreds; the rest
+    // catch up as they come into view
+    function scaleTitles(t) {
+        zoomK = t.k;
+        const pad = CARD_W, x0 = -t.x / t.k - pad, y0 = -t.y / t.k - pad;
+        const x1 = x0 + boardW / t.k + 2 * pad, y1 = y0 + boardH / t.k + 2 * pad;
+        for (const n of nodes.values()) {
+            if (n.titleEl && n.x < x1 && n.x + CARD_W > x0 && n.y < y1 && n.y + CARD_H > y0) scaleTitle(n);
+        }
     }
     function refreshCard(n) {
         if (n.thumb) {
@@ -522,26 +574,34 @@
     // ---------- camera ----------
     // A view is [centre x, centre y, width of world shown across the screen].
     let view = [0, 0, 1000];
+    // The current card's ring keeps the same thin width on screen at any zoom (--zoom).
+    // Only that card gets the zoom: set on the whole board, every frame would restyle
+    // every card and string on it.
+    let ringCard = null, ringK = 1;
+    function setRingZoom(k) {
+        ringK = k;
+        if (ringCard) ringCard.style.setProperty('--zoom', k);
+    }
     function transformFor(v) {
-        const vw = board.clientWidth, vh = board.clientHeight, k = vw / v[2];
+        const vw = boardW, vh = boardH, k = vw / v[2];
         return { k, x: vw / 2 - v[0] * k, y: (vh - BAR) / 2 - v[1] * k };
     }
     function apply(v) {
         view = v;
         const t = transformFor(v);
         world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
-        world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
-        scaleTitles(t.k);
+        setRingZoom(t.k);
+        scaleTitles(t);
     }
     // On a card, it fills the page area exactly: full width, top edge at the top of the window.
     function focusView(n) {
-        const vh = board.clientHeight, k = board.clientWidth / CARD_W;
+        const vh = boardH, k = boardW / CARD_W;
         return [n.x + CARD_W / 2, n.y + (vh - BAR) / (2 * k), CARD_W];
     }
     function overviewView() {
         const xs = regionBoxes.flatMap(b => [b.x, b.x + b.w]), ys = regionBoxes.flatMap(b => [b.y - 40, b.y + b.h]);
         const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
-        const aspect = board.clientWidth / (board.clientHeight - BAR - 70);
+        const aspect = boardW / (boardH - BAR - 70);
         return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2 + 25, Math.max(w, h * aspect) * 1.08];
     }
 
@@ -670,11 +730,11 @@
             trail = [];
         })
         .on('zoom', ({ transform: t, sourceEvent }) => {
-            const vw = board.clientWidth, vh = board.clientHeight;
+            const vw = boardW, vh = boardH;
             view = [(vw / 2 - t.x) / t.k, ((vh - BAR) / 2 - t.y) / t.k, vw / t.k];
             world.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
-            world.style.setProperty('--zoom', t.k);   // keeps the current card's ring thin on screen
-            scaleTitles(t.k);
+            setRingZoom(t.k);
+            scaleTitles(t);
             if (sourceEvent && sourceEvent.type !== 'wheel') {
                 trail.push({ time: performance.now(), x: t.x, y: t.y });
                 if (trail.length > 8) trail.shift();
@@ -861,6 +921,8 @@
         if (current && current.el) current.el.classList.remove('current', 'arrived');
         current = n;
         n.el.classList.add('current');
+        ringCard = n.el;
+        setRingZoom(ringK);
         strands.classed('lit', e => e.a === n || e.b === n);
         const home = n.id === 'home';
         document.title = home ? 'Mac Wall' : `${n.title} | Mac Wall`;
@@ -947,6 +1009,7 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && free) open(current); });
     let resizeTimer = null;
     window.addEventListener('resize', () => {
+        measureBoard();
         clearTimeout(snapTimer);
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
