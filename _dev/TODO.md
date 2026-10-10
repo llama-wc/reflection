@@ -60,9 +60,20 @@
         (~600 KB) and Home/Portfolio load all of Font Awesome (~250 KB) for one arrow.
       - GitHub turns off scheduled workflows in public repos after 60 days without activity;
         if TMDB scores stop changing (no commits), the weekly refresh switches itself off.
-      - Each published note is a live page loaded when the garden starts, and its full text
-        is copied into the garden page. Fine for a handful of notes; rethink around 20+.
       - Not tested in Safari or on an iPhone.
+- [x] Garden strings (2026-10-09/10): straight, muted yarn between facing sides of cards,
+      clear of titles and region labels; a project's notes zigzag either side of a channel;
+      the board recedes while the camera flies. Stress-tested with 20 projects / 400 notes:
+      flights stay smooth (~85 frames per 1.4 s flight, ~90 is the ceiling).
+- [ ] Garden: load a note card's live copy of its page only when the card is near the
+      screen, with a light placeholder (title, date, project) until then. Today every note
+      card loads its full page when the garden starts, and its text is also copied into the
+      garden page. From the 2026-10-10 stress test (headless Chrome):
+      - 150 notes: ~3.8 s until the board is ready, longest freeze ~0.4 s.
+      - 400 notes: ~9.5 s, a ~0.9 s freeze and ~170 MB of memory (420 embedded pages).
+      Worth doing before ~50 published notes. Generator and test scripts for re-running it
+      were in the session scratchpad; rebuild them if needed (a copy of the site with
+      generated `_posts`, served with `jekyll serve`, measured with Playwright).
 - [ ] Add a "blog feature" that allows me to write up what I learned etc. I can link specific projects, but also just post regular entries 
 - [x] Clean up the language. Less technical-sounding, more business casual
 
