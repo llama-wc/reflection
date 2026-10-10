@@ -26,6 +26,7 @@
     const board = document.getElementById('board');
     const world = document.getElementById('world');
     const strings = d3.select('#strings');
+    const litSheet = document.getElementById('lit-strings');
     const page = document.getElementById('page');
     const frame = document.getElementById('page-frame');
     const morphLayer = document.getElementById('morph');
@@ -917,12 +918,40 @@
         ghost.remove();
     }
 
+    // The current page's strings lie on a sheet of their own, over the rest. In flight
+    // the rest fade away together as one sheet (see #board.flying), which costs the
+    // same however many strings there are, while these stay out as a fine thread.
+    // Each sheet keeps its strings in the order they were first laid.
+    function shelve(n) {
+        const els = strands.nodes(), lit = el => el.__data__.a === n || el.__data__.b === n;
+        let moved = null;
+        for (const [sheet, on] of [[strings.node(), false], [litSheet, true]]) {
+            let next = sheet.firstElementChild;
+            const skip = () => { while (next && (next.tagName !== 'g' || lit(next) !== on)) next = next.nextElementSibling; };
+            skip();
+            for (const el of els) {
+                if (lit(el) !== on) continue;
+                if (el === next) {
+                    next = next.nextElementSibling;
+                    skip();
+                } else {
+                    sheet.insertBefore(el, next);
+                    moved = el;
+                }
+            }
+        }
+        // Settle the moved strings' style where they now lie, so they light up (or go
+        // out) from how they looked, rather than starting afresh
+        if (moved) getComputedStyle(moved).getPropertyValue('--a');
+    }
+
     function markCurrent(n) {
         if (current && current.el) current.el.classList.remove('current', 'arrived');
         current = n;
         n.el.classList.add('current');
         ringCard = n.el;
         setRingZoom(ringK);
+        shelve(n);
         strands.classed('lit', e => e.a === n || e.b === n);
         const home = n.id === 'home';
         document.title = home ? 'Mac Wall' : `${n.title} | Mac Wall`;
