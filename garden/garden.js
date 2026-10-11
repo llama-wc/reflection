@@ -406,7 +406,7 @@
     function remember(key, rec) {
         const old = snaps.get(key);
         if (old) URL.revokeObjectURL(old.url);
-        snaps.set(key, { w: rec.w, h: rec.h, heading: rec.heading, url: URL.createObjectURL(rec.blob) });
+        snaps.set(key, { w: rec.w, h: rec.h, heading: rec.heading, look: rec.look, url: URL.createObjectURL(rec.blob) });
     }
     // Storage can be missing or refuse (private windows, blocked site data): then
     // there are just no snapshots, and the stock screenshots are used.
@@ -460,22 +460,66 @@
     }
 
     let snapTimer = null;
-    function scheduleSnapshot(n) {
+    function scheduleSnapshot(n, tries = 0) {
         clearTimeout(snapTimer);
         if (!n || !n.thumb || reduceMotion || !window.modernScreenshot) return;
         // A moment after the page settles, when the browser is idle, so it never slows a move
         snapTimer = setTimeout(() => {
-            const run = () => takeSnapshot(n).catch(() => {});
+            const run = () => takeSnapshot(n, tries).catch(() => {});
             if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2000 }); else run();
         }, 1200);
     }
-    async function takeSnapshot(n) {
+    // A short summary of how the top of a page looks: where each thing in it sits, its
+    // colours and text, what each picture shows, and a tiny copy of each chart. Reading
+    // it takes a few milliseconds; drawing a snapshot takes a second or more. So a page
+    // that looks just as it did last time keeps the snapshot it has.
+    const lookCanvas = document.createElement('canvas');
+    lookCanvas.width = lookCanvas.height = 8;
+    function lookOf(doc, win, bottom) {
+        const parts = [];
+        const tiny = lookCanvas.getContext('2d', { willReadFrequently: true });
+        for (const el of doc.body.querySelectorAll('*')) {
+            if (el.tagName === 'OPTION' || el.tagName === 'SCRIPT') continue;
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height || r.top + win.scrollY >= bottom) continue;
+            const s = win.getComputedStyle(el);
+            if (s.visibility === 'hidden') continue;
+            let own = '';
+            for (const c of el.childNodes) if (c.nodeType === 3) own += c.data.trim();
+            parts.push(el.tagName, Math.round(r.left + win.scrollX), Math.round(r.top + win.scrollY), Math.round(r.width), Math.round(r.height),
+                s.color, s.backgroundColor, own, el.currentSrc || el.getAttribute('d') || '');
+            if (el.tagName === 'CANVAS' && el.width && el.height) {
+                try {
+                    tiny.clearRect(0, 0, 8, 8);
+                    tiny.drawImage(el, 0, 0, 8, 8);
+                    parts.push(tiny.getImageData(0, 0, 8, 8).data.join(','));
+                } catch (e) { parts.push(Math.random()); }   // can't be read: always redraw
+            }
+        }
+        // FNV-1a, 32 bits: enough to tell one look of a page from the next
+        let hash = 0x811c9dc5;
+        const text = parts.join('|');
+        for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+        return `${(hash >>> 0).toString(36)}.${text.length}`;
+    }
+    async function takeSnapshot(n, tries) {
         if (current !== n || free || !page.classList.contains('shown')) return;
         const doc = frame.contentDocument, win = frame.contentWindow, h = pageHeading();
         if (!doc || !h || frame.dataset.src !== new URL(n.url, location.origin).href) return;
         const w = PAGE_W, ht = PAGE_H, t = theme();
         if (win.innerWidth !== w || win.innerHeight < ht) return;   // Home's page is taller (no bar): keep the top
         if (doc.fonts) await doc.fonts.ready;
+        if (current !== n || !page.classList.contains('shown')) return;
+        const look = lookOf(doc, win, ht + 40), had = snapFor(n);
+        if (had && had.look === look) return;   // it looks just as it did: keep the snapshot
+        // A page that's still changing (the dashboard loading its data) is tried again a
+        // little later, so its card never shows it half-drawn
+        await wait(500);
+        if (current !== n || !page.classList.contains('shown')) return;
+        if (lookOf(doc, win, ht + 40) !== look) {
+            if (tries < 5) scheduleSnapshot(n, tries + 1);
+            return;
+        }
         // The heading as it sits at the top of the page (the card draws it itself)
         const heading = readHeading(h);
         heading.rect.top += win.scrollY;
@@ -501,7 +545,7 @@
             h.removeAttribute('data-garden-hide');
         }
         if (!blob || PAGE_W !== w || PAGE_H !== ht || theme() !== t) return;   // the window or theme changed meanwhile
-        const rec = { blob, w, h: ht, heading, at: Date.now() };
+        const rec = { blob, w, h: ht, heading, look, at: Date.now() };
         const key = snapKey(n, t);
         remember(key, rec);
         withStore('readwrite', store => store.put(rec, key));
