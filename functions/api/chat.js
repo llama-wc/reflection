@@ -7,30 +7,9 @@ const MAX_PREMISE_CHARS = 1000;
 // 20 messages of 2,000 characters plus the premise, with room for JSON overhead
 const MAX_BODY_CHARS = 50000;
 
-// The Origin check only stops other websites; a script can fake the header. So each
-// visitor (by IP) also gets a budget: one exchange is two requests (chat + ledger).
-// Counts live in Cloudflare's cache for this data centre, so the limit is approximate.
-const RATE_LIMIT = 60;
-const RATE_WINDOW_SECONDS = 600;
-
-async function overRateLimit(request) {
-    try {
-        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-        const windowId = Math.floor(Date.now() / 1000 / RATE_WINDOW_SECONDS);
-        const key = new Request(`${new URL(request.url).origin}/__rate-limit/${encodeURIComponent(ip)}/${windowId}`);
-        const cache = caches.default;
-        const hit = await cache.match(key);
-        const count = (hit ? parseInt(await hit.text(), 10) || 0 : 0) + 1;
-        await cache.put(key, new Response(String(count), {
-            headers: { "Cache-Control": `max-age=${RATE_WINDOW_SECONDS}` }
-        }));
-        return count > RATE_LIMIT;
-    } catch (error) {
-        // If the cache is unavailable, let the request through rather than break the page
-        console.error("Rate limit check failed:", error);
-        return false;
-    }
-}
+// The Origin check only stops other websites; a script can fake the header. The
+// per-visitor limit is a Cloudflare rate-limiting rule on /api/chat (dashboard),
+// not code here: the Cache API isn't shared reliably enough to count requests.
 
 // System prompts live on the server so callers can't repurpose the API key.
 function chatPrompt(premise) {
@@ -102,10 +81,6 @@ export async function onRequestPost(context) {
     const origin = context.request.headers.get("Origin");
     if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
         return jsonResponse({ error: "Forbidden" }, 403);
-    }
-
-    if (await overRateLimit(context.request)) {
-        return jsonResponse({ error: "Too many requests" }, 429, origin);
     }
 
     let body;
