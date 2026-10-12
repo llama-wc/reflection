@@ -67,6 +67,14 @@ there. If you rename or add large data files, update it:
 rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .github _config.yml build_parquet.py .gitignore CNAME
 ```
 
+### Limits on the Elenchus API (dashboard only)
+
+- Rate limit: mac-wall.com zone → Security → WAF → Rate limiting rules. One rule:
+  URI Path equals `/api/chat`, hostname `elenchus.mac-wall.com`, counted per IP,
+  12 requests per 10 seconds, block for 10 seconds (free plan allows 10-second periods only).
+  One exchange in Elenchus is 2 requests (chat + ledger).
+- Spending cap: console.groq.com → Settings → Billing → limits.
+
 ## 4. Check it
 
 Preview locally (`_dev/note.sh preview`), and after pushing, open the live page in
