@@ -127,8 +127,11 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 .card .title-frame { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 :root[data-theme="dark"] .card .shot.light, :root[data-theme="light"] .card .shot.dark { display: none; }
 .card iframe.live { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-/* Dim the page so its enlarged heading reads clearly */
-.card .shade { position: absolute; inset: 0; background: var(--shade); transition: opacity 0.2s ease-out; }
+/* Dim the page so its enlarged heading reads clearly. Once the heading starts gliding into
+   the page (handoff) the dimming lifts, so the page fades in over a card that already looks
+   like it; leaving, it comes back only after the page has faded out over the bright card. */
+.card .shade { position: absolute; inset: 0; background: var(--shade); transition: opacity 0.35s ease-in 0.12s; }
+.card.handoff .shade { transition: opacity 0.3s ease-out; }
 /* Notes written by Claude carry a red tint */
 .card.by-claude .shade { background: color-mix(in srgb, var(--shade), var(--accent) 22%); }
 .card.by-claude .meta { color: var(--accent); }
@@ -142,12 +145,15 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 /* While its heading is moving between page and card, the card's copy stays hidden */
 .card.handoff .card-title { visibility: hidden; }
 /* Once its page is open, the card underneath drops its title, shade and label */
-.card.arrived .card-title, .card.arrived .shade, .card.arrived .meta { opacity: 0; }
+.card.arrived .card-title, .card.arrived .shade, .card.arrived .meta,
+.card.handoff .shade, .card.handoff .meta { opacity: 0; }
 .card.arrived .card-title { visibility: hidden; }
 
 /* The open page sits on top of its card */
 #page { position: fixed; inset: 0 0 52px 0; background: var(--bg); opacity: 0; transition: opacity 0.18s ease-out; }
 #page.shown { opacity: 1; }
+/* Leaving a page whose card shows it exactly: the card takes over at once (see beginLeave) */
+#page.cut, .card.cut .card-title { transition: none; }
 #page-frame { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
 
 /* First load: show nothing until the page is ready, rather than its card zoomed to fill the screen */
