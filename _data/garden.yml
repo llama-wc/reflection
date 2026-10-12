@@ -42,6 +42,7 @@ pages:
     title: Movie Ratings Dashboard
     kind: Project
     url: /movie-reviews.html
+    predraw: false       # not drawn ahead in the background (it downloads 3 MB of data; see garden.js)
     region: movie-dashboard
     description: 33.8 million ratings, explored in the browser.
   - id: virtue-ledger
