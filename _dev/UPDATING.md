@@ -64,7 +64,7 @@ The Elenchus subdomain is a Cloudflare Pages build of this repo. Its build comma
 there. If you rename or add large data files, update it:
 
 ```
-rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _config.yml
+rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .github _config.yml build_parquet.py .gitignore CNAME
 ```
 
 ## 4. Check it
