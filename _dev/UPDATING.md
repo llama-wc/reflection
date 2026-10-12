@@ -74,7 +74,7 @@ rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .g
   One Elenchus exchange is 2 requests (chat + ledger). A counter in the function using
   Cloudflare's Cache API was tried (2026-10-11) and never fired in live tests, so don't
   rebuild that; a longer window needs the WAF rule or KV/Durable Objects.
-- Spending cap: console.groq.com → Settings → Billing → limits.
+- Groq is a free account: misuse can only exhaust the free quota, never cost money.
 
 ## 4. Check it
 

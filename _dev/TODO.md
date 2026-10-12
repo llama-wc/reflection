@@ -30,11 +30,10 @@
       range requests (`registerFileURL` with the HTTP protocol; GitHub Pages supports
       `Accept-Ranges`), so a query fetches only the row groups it needs and nobody downloads
       81 MB. Sort the file by movieId when building it so a filter touches few row groups.
-- [ ] Start downloading movies.parquet and ratings_summary.parquet at the same time as the
-      DuckDB engine (3.5 MB) instead of after it. On a slow phone the dashboard takes ~40 s
-      to load today, with the two downloads one after the other.
-- [ ] If jsDelivr (where the DuckDB engine comes from) is down, the dashboard says
-      "Loading…" forever. Show an error after a timeout.
+- [x] movies.parquet and ratings_summary.parquet now download while the DuckDB engine boots
+      (2026-10-11), not after it.
+- [x] If jsDelivr (where the DuckDB engine comes from) can't be reached, or a data file
+      fails, the dashboard says so instead of "Loading…" forever (2026-10-11).
 - [ ] "Untitled Spider-Man Reboot" is MovieLens's title; TMDB calls it
       *Spider-Man: Homecoming*.
 - [ ] Planet Earth, Band of Brothers, Spellbound still have N/A fields (TMDB lacks the data).
@@ -49,18 +48,25 @@
       retires models; if chat breaks, check console.groq.com/docs/deprecations first.
 - [x] Animations setting (button beside ◐ on every page): turns the garden off for that
       visitor; the garden also falls back to the plain page if it fails to start.
-- [ ] From the 2026-10-06 stress test, not yet done:
-      - Elenchus API: the mac-wall.com-only check trusts the Origin header, which any script
-        outside a browser can fake, and there's no rate limit. Add a Cloudflare rate-limiting
-        rule on /api/chat (free plan: one rule) and a spending cap in Groq.
-      - Keep a copy of d3 in the repo (like garden/vendor/modern-screenshot.js) instead of
-        loading it from d3js.org. The garden now falls back if it's missing, but the
-        dashboard's charts still need it.
-      - Every page costs ~1.2 MB through the garden: it loads both themes' screenshots
-        (~600 KB) and Home/Portfolio load all of Font Awesome (~250 KB) for one arrow.
-      - GitHub turns off scheduled workflows in public repos after 60 days without activity;
-        if TMDB scores stop changing (no commits), the weekly refresh switches itself off.
-      - Not tested in Safari or on an iPhone.
+- [x] Launch pass (2026-10-11):
+      - Elenchus API: Cloudflare rate-limiting rule on /api/chat is on (error 1015, ~9
+        requests / 10 s per IP). Groq is a free account, so abuse can only use up the free
+        quota (Elenchus stops answering until it resets), never cost money. Request size is
+        capped; _headers adds security headers and a CSP on elenchus.mac-wall.com.
+      - d3 is vendored (garden/vendor/d3.v7.min.js, v7.9.0); Home's arrows are inline SVG
+        and Font Awesome is gone.
+      - Drafts are no longer in the repo (it's public): _drafts/ is ignored and was removed
+        from history. Old commits can still be opened on GitHub by hash until GitHub Support
+        purges them ("Remove data from a repository").
+      - The overnight/transitions garden work (6 commits) is merged into main.
+- [ ] Cloudflare Pages build command for elenchus.mac-wall.com: still only removes the 81 MB
+      file, so the subdomain serves _dev/, .github/, _config.yml, _data/. Paste the command
+      from `_dev/UPDATING.md` section 3 into the dashboard and redeploy.
+- [ ] Every page costs ~1.2 MB through the garden: it loads both themes' screenshots
+      (~600 KB). (Font Awesome, ~250 KB, is gone.)
+- [ ] GitHub turns off scheduled workflows in public repos after 60 days without activity;
+      if TMDB scores stop changing (no commits), the weekly refresh switches itself off.
+- [ ] Not tested in Safari or on an iPhone (Chromium and Firefox pass, 2026-10-11).
 - [x] Garden strings (2026-10-09/10): straight, muted yarn between facing sides of cards,
       clear of titles and region labels; a project's notes zigzag either side of a channel;
       the board recedes while the camera flies. Stress-tested with 20 projects / 400 notes:
