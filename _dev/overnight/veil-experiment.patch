@@ -1,0 +1,69 @@
+diff --git a/garden/garden.css b/garden/garden.css
+index 440b614..7e8206c 100644
+--- a/garden/garden.css
++++ b/garden/garden.css
+@@ -14,2 +14,3 @@
+     --shade: rgba(14, 14, 15, 0.62);
++    --veil: rgba(20, 20, 21, 0.55);    /* the region's colour (--panel over --bg), see #veil */
+ }
+@@ -28,2 +29,3 @@
+     --shade: rgba(236, 235, 231, 0.66);
++    --veil: rgba(230, 229, 225, 0.55);
+ }
+@@ -76,4 +78,10 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
+    #lit-strings), so the browser fades a single picture of them instead of redrawing
+-   every string each frame: the cost is the same with ten strings or a thousand. */
+-#board.flying .card:not(.current):not(.origin) { opacity: 0.45; }
++   every string each frame: the cost is the same with ten strings or a thousand.
++   The cards fade back the same way, under one veil (see garden.js): a patch over each
++   card in the colour of the region beneath at 55%, which looks just as the card would
++   at 45% opacity. */
++#veil { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transition: opacity 0.5s ease-in-out; }
++#veil > div { position: absolute; border-radius: 3px; background: var(--veil); transition: opacity 0.5s ease-in-out; }
++#veil > .clear { opacity: 0; }
++#board.flying #veil { opacity: 1; }
+ #strings { transition: opacity 0.5s ease-in-out; }
+@@ -85,4 +93,4 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
+    the strings and cards change at once, out of sight, which spares the fade's cost mid-flight */
+-#board.covered #strings, #board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect { transition: none; }
+-#board.covered .card { transition: border-color 0.25s, box-shadow 0.25s; }   /* fading hundreds of cards costs every frame */
++#board.covered #strings, #board.covered .strand, #board.covered .strand .shadow, #board.covered .strand .lay > rect,
++#board.covered #veil, #board.covered #veil > div { transition: none; }
+ 
+@@ -104,3 +112,3 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
+     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.22);
+-    transition: border-color 0.25s, box-shadow 0.25s, opacity 0.5s ease-in-out;
++    transition: border-color 0.25s, box-shadow 0.25s;
+ }
+diff --git a/garden/garden.js b/garden/garden.js
+index ef8f36f..9927eeb 100644
+--- a/garden/garden.js
++++ b/garden/garden.js
+@@ -595,4 +670,15 @@
+     }
++    // In flight the cards other than the two being travelled between fade back. Rather
++    // than fade each card (hundreds of them, each redrawn every frame), a veil over the
++    // board, the colour of the board under the cards, fades in over them as one: a patch
++    // over each card, left off the two (see clearVeil).
++    const veil = world.appendChild(document.createElement('div'));
++    veil.id = 'veil';
++    for (const n of nodes.values()) n.patch = veil.appendChild(document.createElement('div'));
++    function clearVeil() {
++        for (const n of nodes.values()) n.patch.classList.toggle('clear', n.el.classList.contains('current') || n.el.classList.contains('origin'));
++    }
+     function placeCard(n) {
+         Object.assign(n.el.style, { left: `${n.x}px`, top: `${n.y}px`, width: `${CARD_W}px`, height: `${CARD_H}px` });
++        Object.assign(n.patch.style, { left: `${n.x}px`, top: `${n.y}px`, width: `${CARD_W}px`, height: `${CARD_H}px` });
+         Object.assign(n.layer.style, { width: `${PAGE_W}px`, height: `${PAGE_H}px`, transform: `scale(${CARD_W / PAGE_W})` });
+@@ -995,2 +1089,3 @@
+         n.el.classList.add('current');
++        clearVeil();
+         ringCard = n.el;
+@@ -1028,2 +1126,3 @@
+         nodes.forEach(m => m.el.classList.toggle('origin', m === from && from !== n));
++        clearVeil();
+         // Leaving a page, it still covers the board as the camera sets off, so the strings
+@@ -1036,2 +1135,3 @@
+             if (from) from.el.classList.remove('origin');
++            clearVeil();
+             if (id !== openId || free) return;

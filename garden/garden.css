@@ -117,7 +117,8 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 /* It covers the card's whole box, border included (-1px), so it matches the page edge to edge */
 .card .page-layer { position: absolute; left: -1px; top: -1px; transform-origin: 0 0; pointer-events: none; overflow: hidden; }
 /* The stock screenshot is 1400 x 848, scaled to the page's width */
-.card .stock { position: absolute; left: 0; top: 0; width: 1400px; height: 848px; transform-origin: 0 0; }
+.card .stock { position: absolute; left: 0; top: 0; width: 1400px; height: 848px; transform-origin: 0 0; transition: opacity 0.3s ease-out; }
+.card.stock-off .stock { opacity: 0; }   /* see stockAstray in garden.js */
 .card .shot { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 /* A snapshot this browser took at this window size, when there is one */
 .card .snap { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
@@ -180,5 +181,5 @@ body.booting #page { transition: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #page, #chrome, .card, .card::after, #strings, .strand, .strand .shadow, .strand .lay > rect { transition: none; }
+    #page, #chrome, .card, .card::after, .card .stock, #strings, .strand, .strand .shadow, .strand .lay > rect { transition: none; }
 }

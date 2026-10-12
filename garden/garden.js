@@ -459,15 +459,27 @@
         })).then(sheets => sheets.join('\n'));
     }
 
+    // Some privacy settings block or scramble what a page reads back from a canvas, which
+    // is how a snapshot is drawn: it would come out blank or noisy. Then none are taken,
+    // and cards keep their stock screenshots (see stock-off below).
+    const canSnap = !reduceMotion && !!window.modernScreenshot && (() => {
+        try {
+            const c = document.createElement('canvas');
+            c.width = c.height = 2;
+            const x = c.getContext('2d', { willReadFrequently: true });
+            x.fillStyle = '#ff0000';
+            x.fillRect(0, 0, 2, 2);
+            return x.getImageData(0, 0, 2, 2).data.join() === '255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255';
+        } catch (e) { return false; }
+    })();
+    const whenIdle = (fn, timeout) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout }) : setTimeout(fn, 0));
+
     let snapTimer = null;
     function scheduleSnapshot(n, tries = 0) {
         clearTimeout(snapTimer);
-        if (!n || !n.thumb || reduceMotion || !window.modernScreenshot) return;
+        if (!n || !n.thumb || !canSnap) return;
         // A moment after the page settles, when the browser is idle, so it never slows a move
-        snapTimer = setTimeout(() => {
-            const run = () => takeSnapshot(n, tries).catch(() => {});
-            if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2000 }); else run();
-        }, 1200);
+        snapTimer = setTimeout(() => whenIdle(() => takeSnapshot(n, tries).catch(() => {}).finally(() => predrawSoon()), 2000), 1200);
     }
     // A short summary of how the top of a page looks: where each thing in it sits, its
     // colours and text, what each picture shows, and a tiny copy of each chart. Reading
@@ -502,30 +514,34 @@
         for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
         return `${(hash >>> 0).toString(36)}.${text.length}`;
     }
+    // The open page's snapshot, taken a moment after it settles (see scheduleSnapshot)
     async function takeSnapshot(n, tries) {
-        if (current !== n || free || !page.classList.contains('shown')) return;
+        const wanted = () => current === n && !free && page.classList.contains('shown');
+        if (!wanted()) return;
         const doc = frame.contentDocument, win = frame.contentWindow, h = pageHeading();
         if (!doc || !h || frame.dataset.src !== new URL(n.url, location.origin).href) return;
+        const settled = await drawSnapshot(n, doc, win, h, wanted);
+        if (settled === false && tries < 5) scheduleSnapshot(n, tries + 1);
+    }
+    // Draws page n, as shown in doc, into its card's snapshot, unless the snapshot it has
+    // still matches. Stops whenever wanted() turns false. False if the page was still
+    // changing (the dashboard loading its data), so its card never shows it half-drawn.
+    async function drawSnapshot(n, doc, win, h, wanted) {
         const w = PAGE_W, ht = PAGE_H, t = theme();
         if (win.innerWidth !== w || win.innerHeight < ht) return;   // Home's page is taller (no bar): keep the top
         if (doc.fonts) await doc.fonts.ready;
-        if (current !== n || !page.classList.contains('shown')) return;
+        if (!wanted()) return;
         const look = lookOf(doc, win, ht + 40), had = snapFor(n);
-        if (had && had.look === look) return;   // it looks just as it did: keep the snapshot
-        // A page that's still changing (the dashboard loading its data) is tried again a
-        // little later, so its card never shows it half-drawn
+        if (had && had.look === look) return true;   // it looks just as it did: keep the snapshot
         await wait(500);
-        if (current !== n || !page.classList.contains('shown')) return;
-        if (lookOf(doc, win, ht + 40) !== look) {
-            if (tries < 5) scheduleSnapshot(n, tries + 1);
-            return;
-        }
+        if (!wanted()) return;
+        if (lookOf(doc, win, ht + 40) !== look) return false;
         // The heading as it sits at the top of the page (the card draws it itself)
         const heading = readHeading(h);
         heading.rect.top += win.scrollY;
         heading.rect.left += win.scrollX;
         const fonts = await pageFonts(doc);
-        if (current !== n || !page.classList.contains('shown')) return;
+        if (!wanted()) return;
         h.setAttribute('data-garden-hide', '');
         let blob;
         try {
@@ -550,6 +566,75 @@
         remember(key, rec);
         withStore('readwrite', store => store.put(rec, key));
         refreshCard(n);
+        return true;
+    }
+
+    // ---------- drawing cards ahead ----------
+    // Until a page has been open at this window's size, its card shows the stock
+    // screenshot, laid out for another size. So while a page is open and nothing is
+    // moving, the garden quietly opens the other pages one at a time in a hidden frame
+    // of this size, and draws their snapshots before they're visited. Pages marked
+    // `predraw: false` (the dashboard, with its 3 MB of data) are left out, and so is
+    // everything on a connection that asks to save data. The frame is inert, so nothing
+    // in it can be clicked or tabbed to.
+    let predrawTimer = null, predrawing = false, aheadFrame = null, focusBefore = null;
+    // A page's own script can still pull the focus in (Elenchus focuses its text box as
+    // it opens): hand it back to wherever it was
+    function giveFocusBack() {
+        if (!aheadFrame || document.activeElement !== aheadFrame) return;
+        aheadFrame.blur();
+        if (focusBefore && focusBefore.isConnected && focusBefore !== aheadFrame) focusBefore.focus({ preventScroll: true });
+    }
+    const saveData = !!(navigator.connection && navigator.connection.saveData);
+    const quiet = () => !flight && !free && page.classList.contains('shown');
+    function predrawSoon(delay = 2500) {
+        clearTimeout(predrawTimer);
+        if (!canSnap || saveData) return;
+        predrawTimer = setTimeout(() => whenIdle(predrawNext, 3000), delay);
+    }
+    async function predrawNext() {
+        if (predrawing) return;
+        if (!quiet()) return predrawSoon();
+        const n = [...nodes.values()].find(m => m.thumb && m.predraw !== false && m !== current && !m.predrawFailed && !snapFor(m));
+        if (!n) return;
+        predrawing = true;
+        const t = theme(), w = PAGE_W, ht = PAGE_H;
+        const wanted = () => quiet() && theme() === t && PAGE_W === w && PAGE_H === ht;
+        try {
+            if (!aheadFrame) {
+                aheadFrame = document.createElement('iframe');
+                aheadFrame.inert = true;
+                aheadFrame.tabIndex = -1;
+                aheadFrame.setAttribute('aria-hidden', 'true');
+                Object.assign(aheadFrame.style, { position: 'fixed', left: '0', top: '0', border: '0', visibility: 'hidden', pointerEvents: 'none', zIndex: '-1' });
+                document.body.append(aheadFrame);
+            }
+            focusBefore = document.activeElement;
+            Object.assign(aheadFrame.style, { width: `${w}px`, height: `${ht}px` });
+            await new Promise(resolve => {
+                const done = () => { aheadFrame.removeEventListener('load', done); resolve(); };
+                aheadFrame.addEventListener('load', done);
+                setTimeout(done, 8000);
+                aheadFrame.src = n.url;
+            });
+            giveFocusBack();
+            const doc = aheadFrame.contentDocument, win = aheadFrame.contentWindow;
+            const h = doc && doc.querySelector('h1');
+            let settled = h ? undefined : null;
+            for (let i = 0; h && i < 4 && wanted(); i++) {
+                settled = await drawSnapshot(n, doc, win, h, wanted);
+                if (settled !== false) break;
+                await wait(1000);
+            }
+            if (settled !== true && wanted()) n.predrawFailed = true;   // can't be drawn: not again this visit
+        } catch (e) {
+            n.predrawFailed = true;
+        } finally {
+            giveFocusBack();
+            if (aheadFrame) aheadFrame.src = 'about:blank';   // let the page go
+            predrawing = false;
+        }
+        predrawSoon(1000);
     }
 
     for (const n of nodes.values()) {
@@ -803,6 +888,7 @@
         board.classList.add('free');
         board.setAttribute('aria-hidden', 'false');
         beginLeave();
+        if (current) restoreStock(current);
         await fly(overviewView());
         if (!free) return;
         syncZoom();
@@ -821,6 +907,13 @@
 
     // ---------- pages ----------
     let current = null;
+    // A stock screenshot laid out for another window size never sits right under its
+    // page, where the two layouts would show side by side: it fades out as the camera
+    // closes in on its card (stock-off), so the page fades in over a plain card, and
+    // fades back once the page has left the card again.
+    const stockAstray = n => !!n.thumb && !snapFor(n) && (PAGE_W !== STOCK_W || PAGE_H !== STOCK_H);
+    const hideStock = n => n.el.classList.toggle('stock-off', stockAstray(n));
+    const restoreStock = n => setTimeout(() => { if (current !== n || free) n.el.classList.remove('stock-off'); }, 200);
     const wait = ms => new Promise(r => setTimeout(r, reduceMotion ? 0 : ms));
 
     // The open page's heading, as an element in the page document
@@ -1010,19 +1103,22 @@
         const leaving = instant || reduceMotion ? false : beginLeave();
         const from = current;
         markCurrent(n);
+        if (from && from !== n) restoreStock(from);
         if (instant) {
+            hideStock(n);
             apply(focusView(n));
             await loadFrame(n);
             return arrive(n, false);
         }
         if (reduceMotion) {
+            hideStock(n);
             await Promise.all([fly(focusView(n)), loadFrame(n)]);
             if (id === openId && !free) await arrive(n, false);
             return;
         }
         // The new page loads while the camera travels (once the old one has faded),
         // so its heading can be measured in time to land in it.
-        let loaded = false, landing = null, landFrom = 0;
+        let loaded = false, landing = null, landFrom = 0, closing = false;
         const loading = wait(leaving ? 190 : 0).then(() => id === openId && loadFrame(n)).then(() => { loaded = true; });
         // The card being left stays clear of the receding board until the new page is up
         nodes.forEach(m => m.el.classList.toggle('origin', m === from && from !== n));
@@ -1042,6 +1138,7 @@
             }));
         });
         await travel(focusView(n), () => loaded, t => {
+            if (!closing && t >= 0.45 && id === openId) { closing = true; hideStock(n); }
             if (!landing && loaded && t >= LAND_START && t < 0.9 && id === openId) {
                 landing = beginLanding(n);
                 landFrom = t;
