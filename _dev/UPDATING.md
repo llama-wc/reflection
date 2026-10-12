@@ -71,8 +71,9 @@ rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .g
 
 - Short bursts: a Cloudflare rate-limiting rule on `/api/chat` (Security → WAF → Rate
   limiting rules) answers "error code: 1015" at about 9 requests per 10 seconds per IP.
-- Longer use: `functions/api/chat.js` allows 60 requests per IP per 10 minutes (JSON
-  "Too many requests"). One Elenchus exchange is 2 requests (chat + ledger).
+  One Elenchus exchange is 2 requests (chat + ledger). A counter in the function using
+  Cloudflare's Cache API was tried (2026-10-11) and never fired in live tests, so don't
+  rebuild that; a longer window needs the WAF rule or KV/Durable Objects.
 - Spending cap: console.groq.com → Settings → Billing → limits.
 
 ## 4. Check it
