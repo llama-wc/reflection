@@ -406,7 +406,7 @@
     function remember(key, rec) {
         const old = snaps.get(key);
         if (old) URL.revokeObjectURL(old.url);
-        snaps.set(key, { w: rec.w, h: rec.h, heading: rec.heading, look: rec.look, url: URL.createObjectURL(rec.blob) });
+        snaps.set(key, { w: rec.w, h: rec.h, heading: rec.heading, look: rec.look, scale: rec.scale, url: URL.createObjectURL(rec.blob) });
     }
     // Storage can be missing or refuse (private windows, blocked site data): then
     // there are just no snapshots, and the stock screenshots are used.
@@ -472,6 +472,9 @@
             return x.getImageData(0, 0, 2, 2).data.join() === '255,0,0,255,255,0,0,255,255,0,0,255,255,0,0,255';
         } catch (e) { return false; }
     })();
+    // Drawn at the screen's own resolution (up to 2x), so the card is as sharp as the page
+    // it hands over to
+    const SNAP_SCALE = Math.min(window.devicePixelRatio || 1, 2);
     const whenIdle = (fn, timeout) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout }) : setTimeout(fn, 0));
 
     let snapTimer = null;
@@ -532,7 +535,7 @@
         if (doc.fonts) await doc.fonts.ready;
         if (!wanted()) return;
         const look = lookOf(doc, win, ht + 40), had = snapFor(n);
-        if (had && had.look === look) return true;   // it looks just as it did: keep the snapshot
+        if (had && had.look === look && had.scale === SNAP_SCALE) return true;   // it looks just as it did: keep the snapshot
         await wait(500);
         if (!wanted()) return;
         if (lookOf(doc, win, ht + 40) !== look) return false;
@@ -546,7 +549,7 @@
         let blob;
         try {
             blob = await modernScreenshot.domToBlob(doc.documentElement, {
-                width: w, height: ht, scale: 0.75, type: 'image/jpeg', quality: 0.75, timeout: 4000,
+                width: w, height: ht, scale: SNAP_SCALE, type: 'image/jpeg', quality: 0.8, timeout: 4000,
                 font: fonts ? { cssText: fonts } : false,
                 backgroundColor: win.getComputedStyle(doc.body).backgroundColor,
                 // Only what shows in the window at the top of the page. A dropdown only
@@ -561,7 +564,7 @@
             h.removeAttribute('data-garden-hide');
         }
         if (!blob || PAGE_W !== w || PAGE_H !== ht || theme() !== t) return;   // the window or theme changed meanwhile
-        const rec = { blob, w, h: ht, heading, look, at: Date.now() };
+        const rec = { blob, w, h: ht, heading, look, scale: SNAP_SCALE, at: Date.now() };
         const key = snapKey(n, t);
         remember(key, rec);
         withStore('readwrite', store => store.put(rec, key));
@@ -595,7 +598,8 @@
     async function predrawNext() {
         if (predrawing) return;
         if (!quiet()) return predrawSoon();
-        const n = [...nodes.values()].find(m => m.thumb && m.predraw !== false && m !== current && !m.predrawFailed && !snapFor(m));
+        const stale = m => { const snap = snapFor(m); return !snap || snap.scale !== SNAP_SCALE; };
+        const n = [...nodes.values()].find(m => m.thumb && m.predraw !== false && m !== current && !m.predrawFailed && stale(m));
         if (!n) return;
         predrawing = true;
         const t = theme(), w = PAGE_W, ht = PAGE_H;
@@ -960,12 +964,24 @@
     }
     const titleRect = n => n.titleEl.getBoundingClientRect();
 
+    // Changes el's look at once, for the next frame only (see .cut in garden.css)
+    const cut = el => {
+        el.classList.add('cut');
+        requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('cut')));
+    };
     // Leaving the open page: it fades into its card (whose title, with the camera on
     // it, is the heading's own size). True if there was a page to fade.
     let hidePage = null;
     function beginLeave() {
         if (page.hidden) return false;
         const n = current;
+        // A card that shows the page just as it is (its own snapshot at this size, or a live
+        // copy, and the page not scrolled) takes over from it at once. Fading, the two would
+        // show at once, out of line, as the camera pulls away.
+        let scrolled = true;
+        try { scrolled = frame.contentWindow.scrollY > 0; } catch (e) { /* can't tell */ }
+        const exact = n && !scrolled && (n.live || (n.thumb && snapFor(n)));
+        if (exact) { cut(page); cut(n.el); }
         if (n) n.el.classList.remove('arrived');
         page.classList.remove('shown');
         clearTimeout(hidePage);
