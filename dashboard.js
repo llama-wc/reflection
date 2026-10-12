@@ -51,6 +51,12 @@ function fetchData(url) {
     return fetch(url, { cache: 'no-cache' });
 }
 
+async function fetchBytes(url) {
+    const res = await fetchData(url);
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+    return new Uint8Array(await res.arrayBuffer());
+}
+
 // RATING BANDS
 // Four fixed colours (coral / amber / soft jade / vivid jade). The colours are
 // CSS variables per theme in movie-reviews.html, so the theme toggle restyles
@@ -109,6 +115,13 @@ async function initializeDashboard() {
             filterGroup.insertBefore(scoreSelect, resetBtn);
         }
 
+        // Download the data while the engine boots rather than after it
+        const dataFiles = Promise.all([
+            fetchBytes('movies.parquet'),
+            fetchBytes('ratings_summary.parquet')
+        ]);
+        dataFiles.catch(() => {}); // reported by the await below
+
         // BOOT DUCKDB
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
@@ -121,12 +134,9 @@ async function initializeDashboard() {
 
         loadingText.innerText = "Loading ratings…";
         
-        const [mRes, rRes] = await Promise.all([
-            fetchData('movies.parquet'),
-            fetchData('ratings_summary.parquet')
-        ]);
-        await db.registerFileBuffer('movies.parquet', new Uint8Array(await mRes.arrayBuffer()));
-        await db.registerFileBuffer('ratings_summary.parquet', new Uint8Array(await rRes.arrayBuffer()));
+        const [moviesFile, summaryFile] = await dataFiles;
+        await db.registerFileBuffer('movies.parquet', moviesFile);
+        await db.registerFileBuffer('ratings_summary.parquet', summaryFile);
         conn = await db.connect();
         
         loadingText.innerText = "Crunching...";
@@ -1001,7 +1011,7 @@ async function loadFullDataset() {
                 bar.style.width = `${Math.min(100, got / total * 100)}%`;
                 setRecordsStatus(`Downloading all ratings… ${(got / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`);
             }),
-            fetchData('titles.parquet').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
+            fetchBytes('titles.parquet'),
         ]);
         const loadedMB = (full.length / 1e6).toFixed(0);  // read before the buffer moves to the worker
         await engine.registerFileBuffer(FULL_FILE, full);
