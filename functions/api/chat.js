@@ -4,6 +4,33 @@ const ALLOWED_ORIGINS = ["https://elenchus.mac-wall.com", "https://mac-wall.com"
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_PREMISE_CHARS = 1000;
+// 20 messages of 2,000 characters plus the premise, with room for JSON overhead
+const MAX_BODY_CHARS = 50000;
+
+// The Origin check only stops other websites; a script can fake the header. So each
+// visitor (by IP) also gets a budget: one exchange is two requests (chat + ledger).
+// Counts live in Cloudflare's cache for this data centre, so the limit is approximate.
+const RATE_LIMIT = 60;
+const RATE_WINDOW_SECONDS = 600;
+
+async function overRateLimit(request) {
+    try {
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        const windowId = Math.floor(Date.now() / 1000 / RATE_WINDOW_SECONDS);
+        const key = new Request(`${new URL(request.url).origin}/__rate-limit/${encodeURIComponent(ip)}/${windowId}`);
+        const cache = caches.default;
+        const hit = await cache.match(key);
+        const count = (hit ? parseInt(await hit.text(), 10) || 0 : 0) + 1;
+        await cache.put(key, new Response(String(count), {
+            headers: { "Cache-Control": `max-age=${RATE_WINDOW_SECONDS}` }
+        }));
+        return count > RATE_LIMIT;
+    } catch (error) {
+        // If the cache is unavailable, let the request through rather than break the page
+        console.error("Rate limit check failed:", error);
+        return false;
+    }
+}
 
 // System prompts live on the server so callers can't repurpose the API key.
 function chatPrompt(premise) {
@@ -77,10 +104,22 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "Forbidden" }, 403);
     }
 
+    if (await overRateLimit(context.request)) {
+        return jsonResponse({ error: "Too many requests" }, 429, origin);
+    }
+
     let body;
     try {
-        body = await context.request.json();
+        if (Number(context.request.headers.get("Content-Length")) > MAX_BODY_CHARS * 4) {
+            return jsonResponse({ error: "Invalid request" }, 413, origin);
+        }
+        const raw = await context.request.text();
+        if (raw.length > MAX_BODY_CHARS) return jsonResponse({ error: "Invalid request" }, 413, origin);
+        body = JSON.parse(raw);
     } catch {
+        return jsonResponse({ error: "Invalid request" }, 400, origin);
+    }
+    if (!body || typeof body !== "object") {
         return jsonResponse({ error: "Invalid request" }, 400, origin);
     }
 
@@ -126,11 +165,16 @@ export async function onRequestPost(context) {
         if (!groqResponse.ok) {
             console.error(`Groq error: ${groqResponse.status} ${await groqResponse.text()}`);
             // Not 502: Cloudflare replaces a function's 502 body with its own error page.
-            return jsonResponse({ error: "Upstream error", status: groqResponse.status }, 503, origin);
+            return jsonResponse({ error: "Upstream error" }, 503, origin);
         }
 
         const data = await groqResponse.json();
-        return jsonResponse({ response: data.choices[0].message.content }, 200, origin);
+        const content = data?.choices?.[0]?.message?.content;
+        if (typeof content !== "string") {
+            console.error("Groq reply had no message content");
+            return jsonResponse({ error: "Upstream error" }, 503, origin);
+        }
+        return jsonResponse({ response: content }, 200, origin);
     } catch (error) {
         console.error(error);
         return jsonResponse({ error: "Server error" }, 500, origin);

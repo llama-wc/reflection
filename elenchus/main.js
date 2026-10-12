@@ -180,6 +180,7 @@ async function handleSend() {
             })
         });
 
+        if (response.status === 429) throw new Error("Too many messages for now. Wait a few minutes and try again.");
         if (!response.ok) throw new Error(`API Route failed with status: ${response.status}`);
 
         const data = await response.json();

@@ -25,7 +25,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
     <style>
         /* THEME VARIABLES */
@@ -161,13 +160,17 @@
             transform: translateX(10px); 
         }
 
-        .nav-item i {
-            font-size: 1rem;
+        /* Arrow icon: Font Awesome Free 6.4.2 arrow-right (CC BY 4.0, fontawesome.com) */
+        .nav-item .arrow {
+            width: 0.875rem;
+            height: 1rem;
+            flex-shrink: 0;
+            fill: currentColor;
             color: var(--accent-color);
             transition: color 0.2s;
         }
 
-        .nav-item:hover i {
+        .nav-item:hover .arrow {
             color: var(--nav-hover-text);
         }
 
@@ -227,17 +230,17 @@
             <div class="nav-grid">
                 <a href="portfolio.html" class="nav-item">
                     Portfolio
-                    <i class="fa-solid fa-arrow-right"></i>
+                    <svg class="arrow" viewBox="0 0 448 512" aria-hidden="true"><path d="M438.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L338.8 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l306.7 0L233.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l160-160z"/></svg>
                 </a>
 
                 <a href="mailto:mac.j.wall@gmail.com" class="nav-item">
                     Email
-                    <i class="fa-solid fa-arrow-right"></i>
+                    <svg class="arrow" viewBox="0 0 448 512" aria-hidden="true"><path d="M438.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L338.8 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l306.7 0L233.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l160-160z"/></svg>
                 </a>
 
-                <a href="https://www.linkedin.com/in/mac-wall-a22b9a206" class="nav-item" target="_blank">
+                <a href="https://www.linkedin.com/in/mac-wall-a22b9a206" class="nav-item" target="_blank" rel="noopener">
                     LinkedIn
-                    <i class="fa-solid fa-arrow-right"></i>
+                    <svg class="arrow" viewBox="0 0 448 512" aria-hidden="true"><path d="M438.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L338.8 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l306.7 0L233.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l160-160z"/></svg>
                 </a>
             </div>
         </section>

@@ -1,0 +1,12 @@
+# Response headers for elenchus.mac-wall.com (Cloudflare Pages reads this file).
+# GitHub Pages can't set headers, and Jekyll skips files starting with _, so this
+# has no effect on mac-wall.com.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  X-Frame-Options: SAMEORIGIN
+
+/elenchus/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'
