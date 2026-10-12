@@ -28,7 +28,7 @@
     const strings = d3.select('#strings');
     const litSheet = document.getElementById('lit-strings');
     const page = document.getElementById('page');
-    const frame = document.getElementById('page-frame');
+    let frame = document.getElementById('page-frame');   // the open page's (see loadFrame)
     const morphLayer = document.getElementById('morph');
     const toggle = document.getElementById('board-toggle');
     const hint = document.getElementById('board-hint');
@@ -1031,18 +1031,49 @@
         page.hidden = true;
     }
 
+    // Pages stay as they were left. Each page opened lives on in a frame of its own,
+    // hidden once it's left, so coming back to it is instant and finds it just as it was:
+    // a search on the dashboard, the Ledger's dots, how far down it was scrolled. This is
+    // only in this tab's memory: nothing is stored or sent, and it's gone when the tab
+    // closes. The KEEP pages open most recently are kept; older ones are let go.
+    const KEEP = 6;
+    const kept = [frame];                 // most recently open last
+    let wanted = null;                    // the page being opened: a slower, older one mustn't take its place
+    function showFrame(f) {
+        kept.splice(kept.indexOf(f), 1);
+        kept.push(f);
+        if (f === frame) return;
+        frame.classList.add('away');
+        f.classList.remove('away');
+        frame = f;
+    }
     function loadFrame(n) {
-        const want = new URL(n.url, location.origin).href;
-        if (frame.dataset.src === want) return Promise.resolve();
-        frame.dataset.src = want;
+        const want = wanted = new URL(n.url, location.origin).href;
+        const have = kept.find(f => f.dataset.src === want);
+        if (have) { showFrame(have); return Promise.resolve(); }
+        // The first page uses the frame already there; every other gets a new one (made
+        // with its address already set, so it adds no history entry: Back moves between
+        // cards, not inside a page)
+        let f = frame.dataset.src ? null : frame;
+        if (!f) {
+            if (kept.length >= KEEP) kept.shift().remove();   // never the open page: it's last
+            f = document.createElement('iframe');
+            f.title = 'Page';
+            f.className = 'away';
+            wire(f);
+            kept.unshift(f);
+        }
+        f.dataset.src = want;
         return new Promise(resolve => {
-            const done = () => { frame.removeEventListener('load', done); resolve(); };
-            frame.addEventListener('load', done);
+            const done = () => {
+                f.removeEventListener('load', done);
+                if (f.isConnected && wanted === want) showFrame(f);
+                resolve();
+            };
+            f.addEventListener('load', done);
             setTimeout(done, 4000);           // never wait forever on a slow page
-            // Swap pages without adding a history entry, so Back moves between
-            // cards instead of stepping back inside the embedded page.
-            if (frame.contentWindow && frame.getAttribute('src')) frame.contentWindow.location.replace(want);
-            else frame.src = want;
+            f.src = want;
+            if (!f.isConnected) page.append(f);
         });
     }
 
@@ -1181,10 +1212,10 @@
     }
     window.addEventListener('popstate', () => open(fromHash()));   // also fires when the address is edited
 
-    // Links inside the open page fly to their card instead of loading normally.
-    frame.addEventListener('load', () => {
+    // Links inside a page fly to their card instead of loading normally.
+    function wire(f) { f.addEventListener('load', () => {
         let doc;
-        try { doc = frame.contentDocument; } catch (e) { return; }
+        try { doc = f.contentDocument; } catch (e) { return; }
         if (!doc) return;
         doc.addEventListener('click', e => {
             const a = e.target.closest && e.target.closest('a[href]');
@@ -1196,7 +1227,8 @@
             const n = nodeFor(url.href);
             if (n) go(n); else window.location.href = url.href;                         // not on the board: leave
         });
-    });
+    }); }
+    wire(frame);
 
     toggle.addEventListener('click', () => (free ? open(current) : enterBoard()));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && free) open(current); });
