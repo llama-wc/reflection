@@ -67,12 +67,12 @@ there. If you rename or add large data files, update it:
 rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .github _config.yml build_parquet.py .gitignore CNAME
 ```
 
-### Limits on the Elenchus API (dashboard only)
+### Limits on the Elenchus API
 
-- Rate limit: mac-wall.com zone → Security → WAF → Rate limiting rules. One rule:
-  URI Path equals `/api/chat`, hostname `elenchus.mac-wall.com`, counted per IP,
-  12 requests per 10 seconds, block for 10 seconds (free plan allows 10-second periods only).
-  One exchange in Elenchus is 2 requests (chat + ledger).
+- Short bursts: a Cloudflare rate-limiting rule on `/api/chat` (Security → WAF → Rate
+  limiting rules) answers "error code: 1015" at about 9 requests per 10 seconds per IP.
+- Longer use: `functions/api/chat.js` allows 60 requests per IP per 10 minutes (JSON
+  "Too many requests"). One Elenchus exchange is 2 requests (chat + ledger).
 - Spending cap: console.groq.com → Settings → Billing → limits.
 
 ## 4. Check it
