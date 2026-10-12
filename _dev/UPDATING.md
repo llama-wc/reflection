@@ -59,13 +59,15 @@ also won't announce itself: open the live site after each change to the garden.
 
 ## 3. Cloudflare (elenchus.mac-wall.com)
 
-The Elenchus subdomain is a Cloudflare Pages build of this repo. Its build command
-(set in the Cloudflare dashboard, not the repo) deletes files too big or not needed
-there. If you rename or add large data files, update it:
+The Elenchus subdomain is a Cloudflare Pages build of the whole repo, so it would serve
+every file in it. Two things keep it to the site:
 
-```
-rm -rf ratings_full.parquet ratings.parquet notes _layouts _data _drafts _dev .github _config.yml build_parquet.py .gitignore CNAME
-```
+- The build command (set in the Cloudflare dashboard, not the repo) deletes
+  `ratings_full.parquet`, which is too big for Cloudflare (25 MB per file).
+- `functions/_middleware.js` answers 404 for the repo's working files (`_dev/`, `.github/`,
+  `_config.yml` and so on). If you add a folder or file that shouldn't be public, add it to
+  both `HIDDEN` there and the `include` list in `_routes.json` (which keeps the middleware
+  from running on every other request).
 
 ### Limits on the Elenchus API
 

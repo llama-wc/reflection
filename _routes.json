@@ -1,0 +1,9 @@
+{
+    "version": 1,
+    "include": [
+        "/api/*",
+        "/_dev/*", "/_data/*", "/_layouts/*", "/_drafts/*", "/.github/*", "/notes/*",
+        "/_config.yml", "/build_parquet.py", "/.gitignore", "/CNAME", "/_headers", "/_routes.json"
+    ],
+    "exclude": []
+}

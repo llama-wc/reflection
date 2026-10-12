@@ -59,9 +59,8 @@
         from history. Old commits can still be opened on GitHub by hash until GitHub Support
         purges them ("Remove data from a repository").
       - The overnight/transitions garden work (6 commits) is merged into main.
-- [ ] Cloudflare Pages build command for elenchus.mac-wall.com: still only removes the 81 MB
-      file, so the subdomain serves _dev/, .github/, _config.yml, _data/. Paste the command
-      from `_dev/UPDATING.md` section 3 into the dashboard and redeploy.
+- [x] elenchus.mac-wall.com no longer serves the repo's working files (_dev/, .github/,
+      _config.yml, _data/…): functions/_middleware.js answers 404 for them (2026-10-11).
 - [ ] Every page costs ~1.2 MB through the garden: it loads both themes' screenshots
       (~600 KB). (Font Awesome, ~250 KB, is gone.)
 - [ ] GitHub turns off scheduled workflows in public repos after 60 days without activity;
