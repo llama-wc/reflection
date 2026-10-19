@@ -131,6 +131,8 @@ a:hover { color: var(--accent); }
     height: calc(100vh - var(--site-bar, 0px) - 150px - var(--compare-h, 0px));
     height: calc(100dvh - var(--site-bar, 0px) - 150px - var(--compare-h, 0px));
     min-height: 480px; overflow: hidden; touch-action: none;
+    /* A margin of plain page on the right: scrolling there moves the page, not the chart */
+    margin-right: 72px; border-right: 1px solid var(--line);
 }
 /* The layers. The ink filter (a slightly ragged pen edge) is off while the view moves; the
    missing links are pencilled in once it settles. The page has a faint paper grain. */
@@ -299,7 +301,7 @@ table button:hover { color: var(--accent); }
     .lede { font-size: 13px; }
     .seg button, .plain { padding: 4px 9px; }
     /* Shorter than the screen, so a thumb can still scroll the page past it */
-    .stage { height: min(72vh, 640px); height: min(72dvh, 640px); min-height: 380px; }
+    .stage { height: min(72vh, 640px); height: min(72dvh, 640px); min-height: 380px; margin-right: 44px; }
     .trail { left: 16px; max-width: calc(100% - 32px); }
     .hint { display: none; }
 }
