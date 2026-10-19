@@ -4,3 +4,9 @@ _site/
 
 # Drafts stay on this machine: the repo is public
 _drafts/
+
+# Tools, tests and feedback live in the private workshop repo beside this one
+# (../workshop), never here: this repo is public and only serves the site.
+_dev/
+workshop/
+feedback/
