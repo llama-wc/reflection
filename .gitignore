@@ -1,12 +1,75 @@
+# This repo is public and holds only what serves mac-wall.com. It's an allow-list:
+# everything is ignored unless it's named below, so a new file stays private until it's
+# deliberately allowed. Tools, tests, drafts and feedback live in the private workshop
+# repo beside this one (../workshop).
+#
+# The git hooks (../workshop/git-hooks) and the site-guard workflow refuse any commit
+# whose files this list ignores, including ones forced in with `git add -f`.
+
+/*
+
+# Site pages and assets
+!/404.html
+!/CNAME
+!/_config.yml
+!/_headers
+!/_routes.json
+!/crumbs.css
+!/dashboard.js
+!/favicon.svg
+!/global-radar.html
+!/index.html
+!/movie-reviews.html
+!/og-image.png
+!/portfolio.html
+!/theme.js
+!/_data/
+!/_layouts/
+!/_posts/
+!/dendrogram/
+!/elenchus/
+!/functions/
+!/garden/
+!/ledger/
+!/notes/
+
+# Data the site reads, and the weekly job that rebuilds it
+!/movies.parquet
+!/ratings_full.parquet
+!/ratings_summary.parquet
+!/titles.parquet
+!/build_parquet.py
+!/.github/
+
+!/.gitignore
+
+# Never published, even inside an allowed folder
+_drafts/
+_dev/
 _site/
 .jekyll-cache/
 .jekyll-metadata
-
-# Drafts stay on this machine: the repo is public
-_drafts/
-
-# Tools, tests and feedback live in the private workshop repo beside this one
-# (../workshop), never here: this repo is public and only serves the site.
-_dev/
 workshop/
 feedback/
+screenshots/
+scratch/
+__pycache__/
+.venv/
+node_modules/
+.claude/
+CLAUDE.md
+*.patch
+*.diff
+*.orig
+*.rej
+*.bak
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.p12

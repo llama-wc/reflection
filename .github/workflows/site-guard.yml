@@ -1,0 +1,35 @@
+name: Site guard
+
+# Backstop for the local git hooks: fails (and GitHub emails the owner) if a push puts
+# anything in this public repo that the .gitignore allow-list doesn't permit, or that
+# looks like a secret. Failing can't unpublish it, so fix it at once, history included.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every tracked file is on the allow-list
+        run: |
+          stray=$(git ls-files -z | git check-ignore --no-index -z --stdin | tr '\0' '\n')
+          if [ -n "$stray" ]; then
+            echo "::error::Files outside the .gitignore allow-list are public:"
+            echo "$stray"
+            exit 1
+          fi
+
+      - name: No secrets in tracked files
+        run: |
+          pattern='-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}'
+          if git grep -IlE -e "$pattern"; then
+            echo "::error::The files above look like they hold a secret."
+            exit 1
+          fi
