@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dendrogram | Mac Wall</title>
+    <meta name="description" content="The tree of life as dendrites along four billion years: every living family, weighted by how many individuals are alive today, in front of the cloud of species we think exist but haven't described.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Dendrogram | Mac Wall">
+    <meta property="og:description" content="The tree of life as dendrites along four billion years: every living family, weighted by how many individuals are alive today, in front of the cloud of species we think exist but haven't described.">
+    <meta property="og:url" content="https://mac-wall.com/dendrogram/">
+    <meta property="og:image" content="https://mac-wall.com/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <script src="/theme.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/crumbs.css">
+    <link rel="stylesheet" href="style.css?v=19">
+</head>
+<body>
+    <!-- The pen's edge: a little displacement by noise, so lines aren't machine-perfect -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+        <filter id="ink-filter" x="-1%" y="-1%" width="102%" height="102%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed="3" result="fibres"/>
+            <feDisplacementMap in="SourceGraphic" in2="fibres" scale="0.7" xChannelSelector="R" yChannelSelector="G" result="edge"/>
+            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="1" seed="11" result="wander"/>
+            <feDisplacementMap in="edge" in2="wander" scale="2" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+    </svg>
+
+    <header class="header">
+        <div class="title-row">
+            <nav class="crumbs" aria-label="Breadcrumb"><a href="https://mac-wall.com/">Home</a><a href="https://mac-wall.com/portfolio.html">Portfolio</a></nav>
+            <h1>Dendrogram</h1>
+        </div>
+        <p class="lede">Every family of life on one timeline, living and extinct, from the last universal common ancestor to today. Line weight is how many individuals are alive now. The pencil lines are the missing links: lineages we infer but haven't seen. <span class="ai-note">Built with AI assistance; see <a href="#how-made">How this was made</a>.</span></p>
+    </header>
+
+    <div class="toolbar" role="toolbar" aria-label="Chart controls">
+        <div class="search">
+            <label for="search" class="visually-hidden">Find a species or group to select</label>
+            <input id="search" type="search" placeholder="Search all life: human, oak, T. rex…" autocomplete="off" spellcheck="false" aria-controls="search-results" aria-expanded="false">
+            <ul id="search-results" role="listbox" hidden></ul>
+        </div>
+        <div class="seg" role="group" aria-label="Line weight">
+            <span class="seg-label">Weight</span>
+            <button type="button" data-metric="ind" aria-pressed="true">Individuals</button>
+            <button type="button" data-metric="bio" aria-pressed="false">Biomass</button>
+        </div>
+        <div class="seg" role="group" aria-label="Undescribed species estimate">
+            <span class="seg-label">Unknown</span>
+            <button type="button" data-dark="lo" aria-pressed="true">Conservative</button>
+            <button type="button" data-dark="hi" aria-pressed="false">Liberal</button>
+        </div>
+        <div class="seg" role="group" aria-label="Which life to show">
+            <span class="seg-label">Life</span>
+            <button type="button" data-life="all" aria-pressed="true">All</button>
+            <button type="button" data-life="living" aria-pressed="false">Living</button>
+        </div>
+        <div class="seg" role="group" aria-label="Time axis">
+            <span class="seg-label">Time</span>
+            <button type="button" data-time="log" aria-pressed="true">Deep</button>
+            <button type="button" data-time="lin" aria-pressed="false">Linear</button>
+        </div>
+        <button type="button" id="reset" class="plain push">Reset view</button>
+    </div>
+
+    <section class="compare" id="compare" aria-label="Selected groups">
+        <div class="compare-row">
+            <ul class="chips" id="chips"></ul>
+            <div class="compare-tools" id="compare-tools" hidden>
+                <button type="button" id="compare-fit" class="plain">Fit</button>
+                <button type="button" id="compare-copy" class="plain">Copy link</button>
+                <button type="button" id="compare-download" class="plain" title="Download the selection as a spreadsheet (CSV)">Download</button>
+                <button type="button" id="compare-clear" class="plain">Clear</button>
+            </div>
+        </div>
+        <div class="compare-result" id="compare-result" aria-live="polite"></div>
+        <div class="compare-credits" id="compare-credits"></div>
+    </section>
+
+    <main class="stage" id="stage">
+        <!-- Layers, back to front: ground (time), deep (the missing links, in pencil), ink
+             (the branches, in fountain-pen inks), and the top layer that takes the pointer -->
+        <canvas id="ground" class="layer" aria-hidden="true"></canvas>
+        <canvas id="deep" class="layer" aria-hidden="true"></canvas>
+        <canvas id="ink" class="layer" aria-hidden="true"></canvas>
+        <canvas id="chart" class="layer" tabindex="0" role="img" aria-label="Dendrogram of life. Use the search box or the data table below to explore it without a pointer."></canvas>
+        <div id="trail" class="trail" aria-live="polite"></div>
+        <div id="tip" class="tip" role="tooltip" hidden></div>
+        <p id="hint" class="hint">Click a branch to select it · double-click to zoom in · scroll or pinch to zoom · drag to pan</p>
+        <div id="loading" class="loading">Growing the tree…</div>
+    </main>
+
+    <section class="legend" aria-label="Legend">
+        <ul class="groups" id="legend-groups"></ul>
+        <div class="weights">
+            <svg id="legend-weights" width="220" height="44" aria-hidden="true"></svg>
+            <span id="legend-weights-label">Living individuals</span>
+        </div>
+        <ul class="keys">
+            <li><span class="key key-pool"></span>Ink pooled at a split: its date is measured (TimeTree, or published dated trees)</li>
+            <li><span class="key key-dry"></span>Drier, lighter stroke: the date is estimated, or the population modelled</li>
+            <li><span class="key key-wash"></span>Wash: a group too small to open here, from its first split to today; its height follows how many families it has</li>
+            <li><span class="key key-fossil"></span>Extinct: dotted while it must have existed but left no fossils yet found, solid across its fossil record, † where that ends</li>
+            <li><span class="key key-cells"></span>Named so far (the squares beside a name): each a tenth of the species thought to exist; filled are named, hollow are still to be found. Hover them for the numbers</li>
+            <li><span class="key key-ghost"></span>Dotted stem on a living family: a ghost lineage, from its split to its oldest fossil, where fossils should exist</li>
+            <li><span class="key key-vein"></span>Pencil lines: missing links. Lineages we infer but haven't seen, reaching today (undescribed species) or ending before it (extinct)</li>
+            <li><span class="key key-mrca"></span>Common ancestor of the groups you select</li>
+            <li><span class="key key-gone">†</span>A selected extinct lineage, marked where its fossil record ends</li>
+        </ul>
+    </section>
+
+    <article class="notes">
+        <details>
+            <summary>Data table</summary>
+            <div class="table-wrap"><table id="table"><thead><tr>
+                <th scope="col">Group</th><th scope="col">Described species</th><th scope="col">Living individuals</th>
+                <th scope="col">Biomass (Gt C)</th><th scope="col">Undescribed species</th><th scope="col">Basis</th>
+            </tr></thead><tbody></tbody></table></div>
+        </details>
+
+        <h2>How it's built</h2>
+        <aside class="disclosure" id="how-made" aria-label="How this was made">
+            <p><strong>How this was made.</strong> This page was built with an AI model, Claude Opus 5.5 (Anthropic), working with Mac Wall in October 2026. The AI wrote the code, the data-processing pipeline and the explanatory text on this page, including these notes, the legend and the hover-card wording. Mac Wall directed the project, chose its design and scope, reviewed and tested the results, and is responsible for the content. The AI is not an author.</p>
+            <p>The tree, dates, names and fossil records come from the published sources listed below, gathered and combined by code, not generated by the AI. The exception is about sixty population and species-count figures, which were entered by hand from the publications cited next to each one in the table below; check the original before relying on any of them. Corrections are welcome.</p>
+        </aside>
+        <p><strong>Branching.</strong> The tree is the <a href="https://tree.opentreeoflife.org/">Open Tree of Life</a> synthetic tree, cut at family level: about ten thousand families of living organisms, joined the way roughly two thousand published phylogenies agree they're related. Where Open Tree can't keep a family together as one branch, the family is drawn where two thirds of its sampled genera sit. A family Open Tree leaves unresolved at the base of a whole domain is placed with the rest of its classification group instead, and its hover card says so. The tree is only as resolved as Open Tree's synthesis: among bacteria especially, some textbook groups don't hold together there (the gammaproteobacteria, for one, so <em>Pseudomonas</em> meets <em>E. coli</em> deeper than it should). Species that belong to no family Open Tree recognises are grouped as <em>Other</em> or <em>Unplaced</em>.</p>
+        <p><strong>Extinct life.</strong> About four thousand extinct families from the <a href="https://paleobiodb.org/">Paleobiology Database</a> are drawn beside the living, each from its first fossil to its last, read conservatively (the young end of each dated interval: <em>Tyrannosaurus</em> 72 to 66 million years ago). Before its first fossil, a lineage is dotted: it must have existed from the moment it split off, but nothing of that age has been found. A few hundred are placed by published phylogenies; most hang from their order or class, since no study places them more exactly, and the hover card says which. Where the synthetic tree can't relate a fossil group to the living (no one study holds both tyrannosaurs and birds), its classification places it on the stem of its nearest living relatives: tyrannosaurs beside the birds, inside Coelurosauria. A fossil group whose classification files it inside a living group it's older than moves back along that group's stem (<em>Morganucodon</em> sits below the mammals, not among them). Fossil dates never move a molecular one. Switch to <em>Living</em> to hide them. The fossil record is far from complete: soft-bodied life and microbes barely fossilise, which is what the pencil lines are for.</p>
+        <p><strong>Still to be found.</strong> Like a periodic table drawn with its gaps left in, the chart marks what should exist but hasn't been found. The cells beside each group's name are its species: filled for those named, hollow for those thought to exist and not yet described (from the estimates under <em>The unknown</em>). A dotted stretch on a living family's stem is a ghost lineage: it split off from its relatives at that point, so it existed from then on, but its oldest known fossil is younger; fossils of that age should be out there. And for the extinct, the known species are a small fraction of those that lived: perhaps 250,000 fossil species are described, of the one to four billion species thought to have ever existed (Raup 1991), since most leave nothing behind.</p>
+        <p><strong>The root.</strong> Life is drawn as a three-way split between Bacteria, Archaea and eukaryotes, as Open Tree leaves it. Most recent studies instead place eukaryotes inside the Archaea, as relatives of the Asgard archaea (Eme et al. 2023, <em>Nature</em>). If they're right, your last common ancestor with any archaeon lived around two billion years ago, when eukaryotes began, not at the root. Where that matters, the page says so.</p>
+        <p><strong>Groups and colours.</strong> Bacteria and Archaea are domains; fungi, animals and green plants (with the green algae) are kingdoms or near it. “Other eukaryotes” isn't a natural group: it's everything left over, from diatoms and amoebae to ciliates, and it includes the red algae, which are relatives of plants. Each group is drawn in an ink standing for a pigment it's known for: the blue-green phycocyanin of cyanobacteria, the purple membrane of salt-loving archaea, the gold-brown of diatoms, chlorophyll, a mushroom brown, haemoglobin red. They're reminders, not claims: most bacteria make no phycocyanin, and globins turn up across all of life.</p>
+        <p><strong>Dates.</strong> Each branch point is dated with <a href="https://timetree.org/">TimeTree</a>, which combines thousands of molecular-clock studies. Where TimeTree has no estimate, the branch point is spaced evenly between the dated points above and below it (the BLADJ method). The hover card says which kind of date you're looking at. Dates deeper than about 600 million years are uncertain: estimates for the last universal common ancestor run from about 3.8 to 4.5 billion years (Moody et al. 2024 put it near 4.2), and for the first animals from about 550 million years (the fossils) to 800 (molecular clocks).</p>
+        <p><strong>Line weight.</strong> How many individuals of a lineage are alive today, on a log scale: a humans-only branch (8 billion) is thin next to the bacteria (around 10<sup>30</sup>). Only a few dozen groups have published counts, such as the ants, birds, nematodes, krill and cyanobacteria. Every other group is modelled. A group's share of its parent's total is taken in proportion to its described species, and a group with figures below it is the sum of those figures. Modelled lines are drawn fainter, and the hover card names the source of every figure that isn't modelled. Biomass, from Bar-On, Phillips &amp; Milo (2018), is a better-measured alternative. Below family level a species' figure is rough, unless it has a census of its own (people, livestock, about forty well-studied wild species), and biomass isn't estimated there at all: sharing a family's carbon by headcount would ignore body size.</p>
+        <p><strong>Space.</strong> A group's height follows how many families taxonomists recognise in it (compressed, so the insects don't swamp everything), not how diverse it is. Bacteria and Archaea hold most of life's genetic and metabolic diversity but have few named families, so they get a thin strip at the top; line weight, not height, shows how much of life they are.</p>
+        <p><strong>The unknown.</strong> Undescribed species are estimated as the share of a group still unnamed: about 86% of eukaryotes (Mora et al. 2011), around 80% of insects (Stork 2018), and almost all of the fungi and prokaryotes. Estimates for prokaryotes run from a few million species to a trillion, which is why there are two settings. <em>Conservative</em> uses the low end of each range; <em>Liberal</em> the high end. Treat these as orders of magnitude: Mora's extrapolation in particular has been questioned.</p>
+        <p><strong>Missing links.</strong> The pencil lines are lineages we infer but haven't seen. Those reaching today stand for undescribed species, as many as each group's estimate allows. Those ending earlier stand for extinct relatives, more along older lineages, since nearly every species that ever lived has died out. How many veins there are follows those estimates; where each one runs is only illustration.</p>
+        <p><strong>Silhouettes.</strong> The groups you select are drawn from <a href="https://www.phylopic.org/">PhyloPic</a>, a library of free silhouettes of organisms, tinted to their lineage. A group without one of its own borrows its nearest relative’s, and the credits above the chart name whose it is.</p>
+        <p><strong>Going deeper.</strong> The page's own data stops at families. Zoom until a family is tall on screen and it loads what's inside it (subfamilies, genera, then species) from the Open Tree of Life, a few levels at a time. Searching for a species loads the way down to it. Inside a family, a branch point takes Open Tree's date for it where there is one: the median age from the published dated trees it was built from. Where there isn't, it's estimated by a pure-birth (Yule) model from species counts, between the nearest dated point above it and today. Those counts include fossil species, so the estimates run old. The hover card says which kind of date you're looking at. Populations and unknowns are shared down by species count, except for species with their own census, such as humans, chickens and cattle. Extinct groups are left out using Open Tree's flags and the <a href="https://paleobiodb.org/">Paleobiology Database</a>, and a branch point whose other lines were all fossils gives way to the living one. Species known only from GBIF or IRMNG are left out too, since that's where unflagged fossils tend to hide (it may drop an obscure living one). The few families Open Tree splits apart load from its taxonomy instead, with their members but not their branching order.</p>
+        <p class="sources" id="sources"></p>
+        <details id="cite">
+            <summary>Sources and download</summary>
+            <p class="cite-version" id="data-version"></p>
+            <!-- Suggested citation, hidden until it's decided how to handle it (CITATION.cff, a DOI…):
+            <p><strong>To cite:</strong> <span id="cite-text"></span></p> -->
+            <p>The sources: Open Tree of Life (Hinchliff et al. 2015, <em>PNAS</em>; synthesis and taxonomy as above), TimeTree (Kumar et al. 2022, <em>Mol Biol Evol</em>), and the Paleobiology Database (paleobiodb.org). Each figure's own source is in its hover card and in the table below.</p>
+            <p><button type="button" id="tree-download" class="plain">Download the whole tree (CSV)</button> Every node in the built data: its parent, name, Open Tree id, age and how it was dated, living or extinct with its fossil range, species counts, and the population and unknown-species estimates (log₁₀). The <em>Download</em> button by the selection gives the same for what you've selected, with its common ancestor.</p>
+        </details>
+        <details>
+            <summary>Every published figure used</summary>
+            <div class="table-wrap"><table id="figures"><thead><tr>
+                <th scope="col">Group</th><th scope="col">Measure</th><th scope="col" class="num">Value</th>
+                <th scope="col">Range</th><th scope="col">Confidence</th><th scope="col">Source</th>
+            </tr></thead><tbody></tbody></table></div>
+        </details>
+    </article>
+
+    <script src="/garden/vendor/d3.v7.min.js"></script>
+    <script src="app.js?v=58"></script>
+</body>
+</html>
