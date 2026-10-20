@@ -1,5 +1,5 @@
 // Dendrogram: the tree of life as dendrites along deep time.
-// The data (data/tree.json) is built by _dev/dendrogram/build_tree.py. World coordinates:
+// The data (data/tree.json) is built by the data pipeline, which isn't in this repo. World coordinates:
 // x is time, y a 0-1 layout position; the zoom (d3.zoom) only ever moves y, since the time
 // axis always shows all of it. Drawn on four stacked canvases (see the layers in index.html):
 // ground, bleed and ink are redrawn when the view changes, the top one on every hover.
@@ -31,9 +31,10 @@
         animals: { label: 'Animals', clade: 'Metazoa', hand: 'animals', pigment: 'Cherry Bomb: haemoglobin red' },
         other: { label: 'Shared ancestry', clade: null, pigment: 'blue-black: the trunk that groups share' },
     };
+    // Line weight: described living species, on a log scale. (Counts of living individuals and
+    // biomass are published for only a few dozen groups, so they're on those groups' cards, not drawn)
     const METRICS = {
-        ind: { key: 'ind', how: 'indHow', label: 'Living individuals', lo: 4, hi: 30.4, legend: [10, 20, 30] },
-        bio: { key: 'bio', how: 'bioHow', label: 'Biomass (carbon)', lo: -8, hi: 2.7, legend: [-6, -2, 2] },
+        spp: { key: 'sppLog', label: 'Described living species', lo: 0, hi: 6.4, legend: [1, 3, 5] },
     };
     // Everyday words for the groups that hold them (the tree stops at families)
     const ALIASES = {
@@ -61,7 +62,21 @@
         dolphin: 'Tursiops truncatus', 'bottlenose dolphin': 'Tursiops truncatus', bear: 'Ursus arctos', frog: 'Rana temporaria',
         snake: 'Python bivittatus', owl: 'Strix aluco', eagle: 'Aquila chrysaetos', shark: 'Carcharodon carcharias', whale: 'Balaenoptera musculus',
         octopus: 'Octopus vulgaris', spider: 'Araneus diadematus', ant: 'Formica rufa', bee: 'Apis mellifera', butterfly: 'Danaus plexippus',
-        mosquito: 'Aedes aegypti', mushroom: 'Agaricus bisporus', oak: 'Quercus robur', rose: 'Rosa canina', tulip: 'Tulipa gesneriana', cockroach: 'Periplaneta americana', 'house cat': 'Felis catus' };
+        mosquito: 'Aedes aegypti', mushroom: 'Agaricus bisporus', oak: 'Quercus robur', rose: 'Rosa canina', tulip: 'Tulipa gesneriana', cockroach: 'Periplaneta americana', 'house cat': 'Felis catus',
+        lettuce: 'Lactuca sativa' };
+    // Old names for groups that aren't natural ones, said instead of a near miss (Protista isn't Proutista)
+    const OLD_NAMES = {
+        protista: 'Protista is an old name, not a natural group: it lumped together every eukaryote that isn’t an animal, plant or fungus, and they sit all over the tree. Try a group within it, like Alveolata or Amoebozoa.',
+        protists: 'Protists aren’t a natural group: the name covers every eukaryote that isn’t an animal, plant or fungus, and they sit all over the tree. Try a group within it, like Alveolata or Amoebozoa.',
+        monera: 'Monera is an old name, not a natural group: it put bacteria and archaea together, but they are two separate domains. Try Bacteria or Archaea.',
+        prokaryota: 'Prokaryotes aren’t a natural group: bacteria and archaea are two separate domains, and archaea are closer to us. Try Bacteria or Archaea.',
+        prokaryotes: 'Prokaryotes aren’t a natural group: bacteria and archaea are two separate domains, and archaea are closer to us. Try Bacteria or Archaea.' };
+    // Everyday words for big groups the names data has none for, for the written answer
+    const PLAIN = { Opisthokonta: 'animals and fungi', Holozoa: 'animals and their closest single-celled relatives', Amorphea: 'animals, fungi and amoebas',
+        Bilateria: 'bilateral animals', Boreoeutheria: 'placental mammals other than elephants, sloths and their kin',
+        Euarchontoglires: 'primates, rodents and rabbits', Laurasiatheria: 'hoofed mammals, carnivores, bats and their kin', Whippomorpha: 'whales and hippos',
+        Coelurosauria: 'birds and their closest dinosaur kin', Archosauria: 'birds, crocodiles and their kin', Amniota: 'reptiles, birds and mammals',
+        Tetrapoda: 'four-limbed animals', Gnathostomata: 'jawed vertebrates', Embryophyta: 'land plants', Magnoliopsida: 'flowering plants', Diaphoretickes: 'plants, algae and their kin' };
     // Plurals that don't just add an s
     const IRREGULAR = { geese: 'goose', mice: 'mouse', lice: 'louse', oxen: 'ox', teeth: 'tooth', feet: 'foot', octopi: 'octopus',
         cacti: 'cactus', fungi: 'fungus', algae: 'alga', larvae: 'larva', wolves: 'wolf', leaves: 'leaf', calves: 'calf', fish: 'fish' };
@@ -94,7 +109,9 @@
                      ['Devonian', 419.2, 358.9], ['Carboniferous', 358.9, 298.9], ['Permian', 298.9, 251.9],
                      ['Triassic', 251.9, 201.4], ['Jurassic', 201.4, 145], ['Cretaceous', 145, 66],
                      ['Paleogene', 66, 23.03], ['Neogene', 23.03, 2.58], ['Quaternary', 2.58, 0]];
-    const EVENTS = [[2400, 'Great Oxidation'], [538.8, 'Cambrian explosion'], [251.9, 'End-Permian extinction'], [66, 'End-Cretaceous extinction']];
+    // (with all five of the great mass extinctions)
+    const EVENTS = [[2400, 'Great Oxidation'], [538.8, 'Cambrian explosion'], [445, 'End-Ordovician extinction'], [372, 'Late Devonian extinction'],
+        [251.9, 'End-Permian extinction'], [201.4, 'End-Triassic extinction'], [66, 'End-Cretaceous extinction']];
 
     const $ = sel => document.querySelector(sel);
     const stage = $('#stage'), canvas = $('#chart');
@@ -102,7 +119,7 @@
     const [gctx, dctx, ictx, octx] = layers.map(c => c.getContext('2d'));
     const tipEl = $('#tip'), trailEl = $('#trail'), hintEl = $('#hint');
 
-    const state = { metric: 'ind', dark: 'lo', time: 'log', life: 'all', hover: -1, flash: -1, compare: [] };
+    const state = { metric: 'spp', dark: 'lo', time: 'log', life: 'all', hover: -1, flash: -1, compare: [] };
     let T = d3.zoomIdentity;
     let W = 0, H = 0, dpr = 1, X0 = 0, X1 = 0, PT = 30, PB = 46, plotH = 0, base = 1, kMax = 1;
     let colors = {}, theme = 'dark', nodeColor = [], nodeRgb = [];
@@ -112,10 +129,16 @@
     let groupNodes = new Map();   // the node where each group begins -> its name, as written on the chart
     let nodeId, deepAnchors;   // each node's id in Open Tree's tree (for loading what's inside it)
     let N0 = 0, SHARDS = 64, EXTINCT_NAMES = [], META = {};   // nodes in the built data; files its inner dates are split into
+    let FORMS = new Map();   // species -> the extinct forms below it the build dates (the Neanderthal), each drawn as a tip of its own
+    let PARATAXA = new Set();   // trace-fossil and egg families: named for what was found, not lineages, so never drawn
 
     // ---------- data ----------
 
-    fetch('data/tree.json')
+    // The data files carry a version, so a browser never mixes this script with data cached
+    // from an earlier build: tree.json this script's own (app.js?v=…), the rest the build date
+    const RELEASE = (document.currentScript && new URL(document.currentScript.src).searchParams.get('v')) || '';
+    const fresh = path => `${path}?v=${encodeURIComponent(META.built || RELEASE)}`;
+    fetch(`data/tree.json?v=${RELEASE}`)
         .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(start)
         .catch(err => { $('#loading').textContent = 'Couldn’t load the tree data.'; console.error(err); });
@@ -126,14 +149,20 @@
         // Open Tree's placeholder names for unnamed clades (h2007-2...) read as noise
         D.name = D.name.map(n => /^[a-z]\d{4}-\d+$/i.test(n) ? '' : n);
         // Deeper tiers add nodes after load, so every column must be able to grow
-        for (const k of ['indHow', 'bioHow', 'other', 'placed']) D[k] = (D[k] || '').split('');
+        for (const k of ['sppEst', 'other', 'placed']) D[k] = (D[k] || '').split('');
         D.first = D.first || new Array(N).fill(null); D.last = D.last || new Array(N).fill(null);
+        D.sppLog = D.spp.map((n, i) => n > 0 && D.last[i] == null ? Math.log10(n) : null);
         D.fossilFrom = D.fossilFrom || new Array(N).fill(null);
         D.crown = D.crown || new Array(N).fill(0);
+        // TimeTree's interval for a date [low, high] (Ma), for a branch point and a family's crown;
+        // a first appearance the build set aside as misfiled [the database's, genus, rule]
+        for (const k of ['ci', 'crownCi', 'firstAside']) D[k] = D[k] || new Array(N).fill(null);
         nodeId = D.ott.map(o => o ? `ott${o}` : '');
         deepAnchors = data.deep || [];
         N0 = N; SHARDS = data.meta.dateShards || 64; META = data.meta;
         EXTINCT_NAMES = data.meta.extinct || [];
+        for (const f of data.forms || []) FORMS.set(f.species, [...(FORMS.get(f.species) || []), f]);
+        PARATAXA = new Set(data.meta.parataxa || []);
         D.crownBy = D.crownBy || '';
         ROOT_AGE = data.meta.rootAge;
         tMax = ROOT_AGE;
@@ -417,6 +446,9 @@
                 const lo = PT + plotH - t.k * (PT + plotH), hi = PT - t.k * PT;
                 return d3.zoomIdentity.translate(0, Math.max(lo, Math.min(hi, t.y))).scale(t.k);
             })
+            // Map-style: a plain wheel scrolls the page; ctrl/cmd + wheel (and a trackpad pinch,
+            // which arrives as ctrl + wheel) zooms. Touch pinch and drag are untouched.
+            .filter(e => e.type === 'wheel' ? e.ctrlKey || e.metaKey : !e.ctrlKey && !e.button)
             .on('start', () => hintEl.classList.add('gone'))
             .on('zoom', e => {
                 T = e.transform;
@@ -427,6 +459,16 @@
             .on('end.fit', () => { fitting = null; });
         d3.select(canvas).on('wheel.fit mousedown.fit touchstart.fit', () => { fitting = null; }, { passive: true });
         d3.select(canvas).call(zoom).on('dblclick.zoom', null);
+        // A plain wheel over the chart says how to zoom, briefly
+        const wheelHint = $('#wheel-hint');
+        let wheelHintTimer = 0;
+        wheelHint.textContent = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '\u2318' : 'Ctrl'} + scroll to zoom`;
+        canvas.addEventListener('wheel', e => {
+            if (e.ctrlKey || e.metaKey) { wheelHint.classList.add('gone'); return; }
+            wheelHint.classList.remove('gone');
+            clearTimeout(wheelHintTimer);
+            wheelHintTimer = setTimeout(() => wheelHint.classList.add('gone'), 1400);
+        }, { passive: true });
     }
 
     function zoomTo(i, after) { zoomToRange(y0[i], y1[i], after); }
@@ -611,17 +653,19 @@
         c.setLineDash([2, 4]);
         c.strokeStyle = colors.muted; c.globalAlpha = 0.45; c.lineWidth = 1;
         c.textAlign = 'left'; c.font = '10.5px Inter, sans-serif';
-        let lastRight = -1e9;
+        // A name that would run into the one before it steps up a line (three at most; past
+        // that it's left out, and its line stays)
+        const rowRight = [-1e9, -1e9, -1e9];
         for (const [age, name] of EVENTS) {
             if (age > tMax) continue;
             const x = Math.round(xOf(age)) + 0.5;
             c.beginPath(); c.moveTo(x, yTop); c.lineTo(x, yBot); c.stroke();
-            const w = c.measureText(name).width;
-            if (x + 4 > lastRight && x + 4 + w < X1) {
+            const w = c.measureText(name).width, row = rowRight.findIndex(r => x + 4 > r);
+            if (row >= 0 && x + 4 + w < X1) {
                 c.globalAlpha = 0.9; c.fillStyle = colors.muted;
-                c.fillText(name, x + 4, yBot - 8);
+                c.fillText(name, x + 4, yBot - 8 - row * 13);
                 c.globalAlpha = 0.45;
-                lastRight = x + 4 + w + 10;
+                rowRight[row] = x + 4 + w + 10;
             }
         }
         c.restore();
@@ -633,7 +677,7 @@
     // gets a small pool of ink; one with an estimated date is drawn drier and lighter. A group
     // too small to open here is a wash of diluted ink, from its own first split to today. On
     // the light page the washes multiply, so where they overlap they darken as real ink does.
-    const isDated = i => D.dated[i] === 1 || D.dated[i] === 3;
+    const isDated = i => D.dated[i] === 1 || D.dated[i] === 3 || D.dated[i] === 5 || D.dated[i] === 7;   // (7: set by a fossil)
     // Where a closed line stops and fans out: a group's own first split, or, for a family
     // with nothing loaded below it, its dated crown (it keeps branching to today, unseen)
     const crownOf = i => kids[i].length ? D.age[i] : i < N0 && D.crown[i] > 0 ? D.crown[i] : 0;
@@ -645,7 +689,6 @@
         return g;
     }
     function drawInk() {
-        const how = D[METRICS[state.metric].how];
         const comparing = state.compare.length > 0;
         clear(ictx);
         ictx.save();
@@ -670,7 +713,7 @@
         for (const s of segs) {
             const quiet = comparing && !ties.path.has(s.i);   // a neighbour: graphite, behind
             if (s.fossil) { drawFossil(ictx, s, rgbOf(s.i, quiet), (far(s) ? 0.35 : 1) * (quiet ? 0.12 : 1)); continue; }
-            const modelled = how[s.i] === 'm' || D.other[s.i] === '1';
+            const modelled = D.sppEst[s.i] === '1' || D.other[s.i] === '1';   // (a count stood in for, or shared out)
             const dry = (s.open || kids[s.i].length) && !isDated(s.i);
             const grabBag = D.other[s.i] === '1';   // "Other fungi": species in no family, not a lineage
             const a = (grabBag ? 0.3 : modelled ? 0.62 : 0.95) * (far(s) ? 0.35 : 1) * (quiet ? 0.22 : 1) * (dry ? 0.8 : 1);
@@ -706,7 +749,7 @@
     // the undescribed estimate (under the Unknown setting). Null where there's no estimate.
     function namedShare(i) {
         if (extinct(i)) return null;
-        const named = D.tips[i] || 0, waiting = D[state.dark === 'lo' ? 'darkLo' : 'darkHi'][i];
+        const named = D.spp[i] || 0, waiting = D[state.dark === 'lo' ? 'darkLo' : 'darkHi'][i];
         if (!named) return null;
         if (waiting == null) return speciesBasis(i) === 'no estimate' ? null : 1;   // (an estimate that leaves none unnamed)
         return named / (named + Math.pow(10, waiting));
@@ -793,7 +836,7 @@
         }
         // The undescribed (lines that reach the present)
         if (!kids[i].length) {
-            const dk = darkLog(i), known = Math.max(1, D.tips[i]);
+            const dk = darkLog(i), known = Math.max(1, D.spp[i]);
             const f = dk > 0 ? 1 - known / (Math.pow(10, dk) + known) : 0;
             const n = Math.round(Math.min(60, dk * f * 5));
             for (let k = 0; k < n; k++) grow(begun * (0.02 + 0.55 * Math.pow(r(), 1.3)), 0, 0, 1.8, 0);
@@ -966,26 +1009,29 @@
         // Each mark as near its line as it can be: pushed apart downwards, then, if that runs
         // off the bottom, pulled back up, so every one stays on the chart
         // The extinct, marked where they ended; one that would sit on another moves down
-        const markH = Math.max(36, scale ? PORTRAIT_H * scale + 8 : 0), stacked = [];
-        for (const i of sel.filter(v => ends(v) && extinct(v)).sort((a, b) => at(a).y - at(b).y)) {
-            const { x, y } = at(i);
-            let ly = y;
-            while (stacked.some(t => Math.abs(t - ly) < markH)) ly += markH;
-            stacked.push(ly);
-            fossilMark(c, i, x, y, scale, ly);
-        }
         const order = sel.filter(v => !(ends(v) && extinct(v))).sort((a, b) => at(a).y - at(b).y), lys = [];
         let below = -1e9;
         for (const i of order) { below = Math.max(at(i).y, below + gap); lys.push(below); }
         const floor = PT + plotH - gap / 2, ceil = PT + gap / 2;
         for (let k = lys.length - 1; k >= 0; k--) lys[k] = Math.min(lys[k], k === lys.length - 1 ? floor : lys[k + 1] - gap);
         for (let k = 0; k < lys.length; k++) lys[k] = Math.max(lys[k], k ? lys[k - 1] + Math.min(gap, 14) : ceil);
+        // A group that died out almost today (a Neanderthal) is named out in the margin with the
+        // living, clear of their names: left of its mark, its name would lie across ages it never saw
+        const markH = Math.max(36, scale ? PORTRAIT_H * scale + 8 : 0), stacked = [];
+        for (const i of sel.filter(v => ends(v) && extinct(v)).sort((a, b) => at(a).y - at(b).y)) {
+            const { x, y } = at(i), recent = x > X1 - 60;
+            let ly = y;
+            while (stacked.some(t => Math.abs(t - ly) < markH) || (recent && lys.some(t => Math.abs(t - ly) < markH))) ly += markH;
+            stacked.push(ly);
+            fossilMark(c, i, x, y, scale, ly, recent);
+        }
         order.forEach((i, k) => { const { x, y } = at(i); chosenMark(c, i, x, y, lys[k], scale); });
         // Joins, then the ancestor of all on top
         c.font = '500 10.5px Inter, sans-serif';
         for (const { v } of ties.joins) {
             if (v === ties.mrca || sel.includes(v)) continue;
             const { x, y } = at(v);
+            if (y < PT || y > PT + plotH) continue;   // off the chart: its date would sit on the time axis
             ring(c, x, y, 3.5, colors.ink);
             ties.points.push({ i: v, x, y });
             c.font = '700 15px Caveat, cursive';
@@ -996,7 +1042,7 @@
         c.beginPath(); c.moveTo(x, Math.max(PT, Math.min(PT + plotH, y)) + 10); c.lineTo(x, PT + plotH + 16); c.stroke();
         c.setLineDash([]); c.globalAlpha = 1;
         c.font = '700 16px Caveat, cursive'; c.textAlign = 'left';
-        haloText(c, fmtAge(D.age[m]), x + 5, PT + plotH - 8, colors.accent);
+        haloText(c, fmtAge(D.age[m]), x + 5, PT + plotH - 50, colors.accent);   // (above the extinctions' three rows of names)
         if (y >= PT - 10 && y <= PT + plotH + 10) {
             c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill();
             c.strokeStyle = colors.stage; c.lineWidth = 2; c.stroke();
@@ -1064,7 +1110,7 @@
     // A chosen extinct lineage's end, marked where it ended rather than in the column of the
     // living: a dagger, then (to its right, or its left if today is too close) its silhouette,
     // faded, and its name, greyed, with when it died out
-    function fossilMark(c, i, x, y, scale, ly = y) {
+    function fossilMark(c, i, x, y, scale, ly = y, margin = false) {
         c.save();
         ring(c, x, y, 4, colors.muted);
         ties.points.push({ i, x, y });
@@ -1072,14 +1118,26 @@
         haloText(c, '\u2020', x + 7, y + 0.5, colors.muted);
         const lineY = y;
         y = ly;   // (the mark itself, which may sit below its line's end)
-        const s = scale, pw = s ? PORTRAIT_W * s : 0;
+        const s = scale;
+        let pw = s ? PORTRAIT_W * s : 0;
         const when = D.last[i] < 0.012 ? 'died out within the last 12,000 years' : `died out ${fmtAge(D.last[i])} ago`;
         c.font = '700 17px Caveat, cursive';
-        const name = `\u2020 ${D.common[i] || D.name[i] || display(i)}`, sub = D.common[i] ? `${D.name[i]}, ${when}` : when;
-        const tw = Math.max(c.measureText(name).width, (c.font = 'italic 400 10.5px Inter, sans-serif', c.measureText(sub).width));
-        const need = 18 + (pw ? pw + 6 : 0) + tw;
-        const right = x + need < X1 - 8 || x - need < X0;
+        const name = `\u2020 ${D.common[i] || D.name[i] || display(i)}`;
+        let subs = [D.common[i] ? `${D.name[i]}, ${when}` : when];
+        const nw = c.measureText(name).width;
+        c.font = 'italic 400 10.5px Inter, sans-serif';
+        const width = () => Math.max(nw, ...subs.map(t => c.measureText(t).width));
+        let tw = width();
+        // Right of the mark if it fits, else left. Where neither side fits it drops the portrait,
+        // then puts the name and the date on lines of their own, then keeps it inside the chart.
+        // (one that ended near today may use the margin, and never goes left)
+        const side = w => { const need = 18 + (w ? w + 6 : 0) + tw; return x + need < (margin ? W - 6 : X1 - 8) ? 1 : !margin && x - need > X0 ? -1 : 0; };
+        let fit = side(pw);
+        if (!fit && pw) { pw = 0; fit = side(0); }
+        if (!fit && D.common[i]) { subs = [D.name[i], when]; tw = width(); fit = side(0); }
+        const right = fit ? fit > 0 : margin || X1 - x > x - X0;
         let tx = right ? x + 18 : x - 10 - tw;
+        if (!fit) tx = right ? Math.min(tx, W - 6 - tw) : Math.max(tx, 6);
         const px = right ? tx : x - 10 - tw - pw - 6;
         if (Math.abs(y - lineY) > 3) {   // a thin leader from the line's end down to its mark
             c.strokeStyle = colors.halo; c.lineWidth = 3.5;   // (in its own ink, over a halo, to read across the tips)
@@ -1089,10 +1147,11 @@
         }
         if (pw) { c.globalAlpha = 0.85; drawPortrait(c, i, px, y, s); c.globalAlpha = 1; if (right) tx += pw + 6; }
         c.textAlign = 'left';
-        c.font = '700 17px Caveat, cursive'; haloText(c, name, tx, y - 6, colors.muted);
-        c.font = 'italic 400 10.5px Inter, sans-serif'; haloText(c, sub, tx, y + 10, colors.muted);
+        const up = 12 * (subs.length - 1);   // (two lines under the name: the block rises, clear of what's below)
+        c.font = '700 17px Caveat, cursive'; haloText(c, name, tx, y - 6 - up, colors.muted);
+        c.font = 'italic 400 10.5px Inter, sans-serif'; subs.forEach((t, k) => haloText(c, t, tx, y + 10 - up + 12 * k, colors.muted));
         const x0 = Math.min(px, tx) - 4, x1 = Math.max(tx + tw, px + pw) + 4;
-        const half = Math.max(16, (s ? PORTRAIT_H * s : 0) / 2);
+        const half = Math.max(16 + 6 * (subs.length - 1), (pw ? PORTRAIT_H * s : 0) / 2);
         ties.marks.push({ i, x0, x1, y0: y - half, y1: y + half });
         ties.boxes.push([x0, y - half - 2, x1, y + half + 2]);
         c.restore();
@@ -1149,10 +1208,13 @@
             const node = await r.json(), im = node._embedded && node._embedded.primaryImage;
             if (!im) throw new Error('no silhouette');
             const files = (im._links.rasterFiles || []).slice().sort((a, b) => parseInt(a.sizes.split('x')[1]) - parseInt(b.sizes.split('x')[1]));
-            // Smallest first that's big enough; some CDN copies lack CORS headers, so fall through the sizes
+            // Smallest first that's big enough; some CDN copies lack CORS headers (T. rex's large
+            // PNGs, in Chrome), so fall through the sizes, then the vector and the source file,
+            // which are cached apart, then whatever smaller sizes are left
             const tall = files.filter(f => parseInt(f.sizes.split('x')[1]) >= 256);
+            const hrefs = [...new Set([...tall, ...[im._links.vectorFile, im._links.sourceFile].filter(Boolean), ...files.slice().reverse()].map(f => f.href))];
             let img = null, href = '';
-            for (const f of tall.length ? tall : files) if ((img = await loadImage(f.href).catch(() => null))) { href = f.href; break; }
+            for (const h of hrefs) if ((img = await loadImage(h).catch(() => null))) { href = h; break; }
             if (!img) throw new Error('silhouette blocked');
             const of = (im._links.specificNode && im._links.specificNode.title) || '';
             const licence = (im._links.license && im._links.license.href) || '';
@@ -1164,8 +1226,11 @@
             try { localStorage.setItem(key, JSON.stringify({ href, credit: p.credit })); } catch (e) { /* (private window: fine) */ }
         } catch (e) {
             p.state = 'none';
-            // A timeout may pass: one more try, a little later
-            if (/timed out/.test(e.message) && !p.retried) setTimeout(() => { p.retried = true; p.state = 'loading'; fetchPortrait(i); }, 3000);
+            // A stalled request, or an image the CDN refused, may pass: one more try, a little
+            // later. Only "PhyloPic has none" is final; anything else tries again when the
+            // group is chosen again (portraitOf)
+            p.final = /no silhouette|no Open Tree id/.test(e.message);
+            if (!p.final && !p.retried) { p.state = 'loading'; setTimeout(() => { p.retried = true; fetchPortrait(i); }, 3000); }
         }
         showCredits();
         schedule('top');
@@ -1252,10 +1317,21 @@
         c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
     }
 
-    function splitWords(v) {
-        const [a, b] = [...kids[v]].sort((x, y) => leaves[y] - leaves[x]).map(c => repName[c]).filter(Boolean);
+    // (in the written answer, the everyday name first: "chimpanzees (Pan)"; and the lines
+    // already named in the sentence aren't named again, "where their lines split apart")
+    function splitWords(v, named = []) {
+        const two = [...kids[v]].sort((x, y) => leaves[y] - leaves[x]).slice(0, 2);
+        const [a, b] = two.map(c => repName[c] ? plainName(c, repName[c]) : '').filter(Boolean);
+        if (two.length === 2 && two.every(c => named.some(i => i === c || repName[c] === D.name[i]))) return 'where their lines split apart';
         return b ? `where ${a} and ${b} split apart` : 'at an unnamed branch point';
     }
+    // Plain words first, the scientific name after: "animals and fungi (Opisthokonta)"
+    function plainName(v, sci = D.name[v]) {
+        const plain = sci === D.name[v] ? D.common[v] || PLAIN[sci] : '';
+        return plain && fold(plain) !== fold(sci || '') ? `${plain} (${sci})` : sci;
+    }
+    // A name that's plural takes "are" and "their" (birds, moths & butterflies, fungi)
+    const isPlural = i => { const n = (D.common[i] || '').trim(); return /&| and |,/.test(n) || /([^su]s|fungi|algae|people|fish|geese|mice)$/i.test(n); };
     // An ancestor's name; an unnamed one is known by the two largest groups it joins
     function ancestorName(v, short) {
         if (D.name[v]) return D.common[v] ? `${D.name[v]} (${D.common[v]})` : D.name[v];
@@ -1309,7 +1385,9 @@
                 let inside = (await fromSynth(i)) || (await fromTaxonomy(i));
                 if (inside) inside = await sortFossils(inside);
                 if (inside && inside.length) {
-                    if (graft(i, inside, await dates) === 'again') { expanding.delete(i); loadingNow--; pending.delete(i); schedule(); return; }
+                    const published = await dates;
+                    inside = withForms(inside, published);
+                    if (graft(i, inside, published) === 'again') { expanding.delete(i); loadingNow--; pending.delete(i); schedule(); return; }
                     expanding.set(i, 'done');
                 }
                 else expanding.set(i, 'none');
@@ -1322,13 +1400,32 @@
         return pending.get(i);
     }
 
+    // An extinct form of a species that the build dates (the Neanderthal, which Open Tree files
+    // inside Homo sapiens) is drawn as a tip of its own, split off the species' stem at its
+    // published date, rather than hanging inside the species from today
+    function withForms(specs, published) {
+        return specs.map(sp => {
+            let out = { ...sp, children: withForms(sp.children, published) };
+            for (const f of FORMS.get(sp.ott) || []) {
+                if (nodeOfOtt(f.ott) >= 0) continue;
+                const id = `mrcaott${sp.ott}ott${f.ott}`;
+                published[id] = [f.split, 'c'];
+                cited.set(id, `${f.source}: ${f.splitRange[0]}\u2013${f.splitRange[1]} Ma`);
+                const form = { id: `ott${f.ott}`, name: f.name, ott: f.ott, rank: 'subspecies', tips: 1, hints: [], hint: '', flagged: false, children: [],
+                               first: f.first, last: f.last, span: f.span };
+                out = { id, name: '', ott: 0, rank: '', tips: sp.tips, hints: [sp.name], hint: sp.name, flagged: false, children: [out, form] };
+            }
+            return out;
+        });
+    }
+
     // Published dates inside a family, from the build's shards (by the family's index)
     const dateShards = new Map();
     function datesFor(i) {
         let f = i;
         while (f >= N0) f = D.parent[f];
         const k = f % SHARDS;
-        if (!dateShards.has(k)) dateShards.set(k, fetch(`data/dates/${k}.json`).then(r => r.ok ? r.json() : {}).catch(() => ({})));
+        if (!dateShards.has(k)) dateShards.set(k, fetch(fresh(`data/dates/${k}.json`)).then(r => r.ok ? r.json() : {}).catch(() => ({})));
         return dateShards.get(k);
     }
 
@@ -1351,9 +1448,14 @@
         const onPath = v => on.has(nodeId[v]) || (D.ott[v] && on.has(`ott${D.ott[v]}`));
         const depthOf = v => { let d = 0; for (; v > 0; v = D.parent[v]) d++; return d; };
         for (let guard = 0; guard < 16; guard++) {
+            const now = nodeOfOtt(ott);   // (an extinct form arrives beside its species, not inside it)
+            if (now >= 0) return now;
             let best = -1, bestD = -1;
             for (let v = 0; v < N; v++) if (onPath(v)) { const d = depthOf(v); if (d > bestD) { bestD = d; best = v; } }
-            if (best < 0 || D.ott[best] === ott || kids[best].length || !canExpand(best)) return best;
+            if (best < 0 || D.ott[best] === ott) return best;
+            // Already loading for another lookup (two species in one family): wait for it, then look again
+            if (expanding.get(best) === 'loading') { await pending.get(best); continue; }
+            if (kids[best].length || !canExpand(best)) return best;
             await expand(best);
             if (!kids[best].length && !canExpand(best)) return best;   // (else it became a group that opens further)
         }
@@ -1421,32 +1523,47 @@
     const informal = name => /\b(cf|aff|sp|spp|nr|indet)\.|\bsp\b|BOLD:|[A-Z]{2,}[-_]?\d|\d{3,}/.test(name)
         || /environmental sample|uncultured|unidentified|unclassified|incertae sedis/i.test(name);
 
+    // A fossil range from the Paleobiology Database's bounds on a taxon's oldest and youngest
+    // records: [first, last, oldest possible, youngest possible] in Ma, or null. The oldest
+    // record is read at its young end (it lived by then), the youngest at its middle: many are
+    // dated only to an epoch, and the Pleistocene's young end, 11,700 years, would carry Homo
+    // erectus to the present. A youngest record in the Holocene keeps its young end (some died
+    // out in historical times); a taxon known only from one broad interval sits at its middle.
+    // So does one whose youngest record ends at a mass extinction: Tyrannosaurus, last found in
+    // the Maastrichtian (72.2 to 66), died out with the rest at 66, not halfway through it.
+    const MASS_EXTINCTIONS = [66, 201.4, 251.902, 372.15, 443.1];   // the stage tops PBDB uses, Ma
+    function fossilRange(rec) {
+        if (rec.firstapp_max_ma == null || rec.lastapp_min_ma == null) return null;
+        const fMax = +rec.firstapp_max_ma, fMin = +(rec.firstapp_min_ma ?? fMax);
+        const lMin = Math.max(0.0001, +rec.lastapp_min_ma), lMax = +(rec.lastapp_max_ma ?? lMin);
+        const atMass = MASS_EXTINCTIONS.some(t => Math.abs(lMin - t) < 0.2);
+        const last = lMax <= 0.0117 || atMass ? lMin : (lMax + lMin) / 2;
+        return [fMin > last ? fMin : (fMax + fMin) / 2, last, fMax, lMin];
+    }
+    const fossilSpan = new Map();   // node -> [oldest, youngest] its records allow, for the card
+
     // Sort what was loaded into living and extinct. The Paleobiology Database is asked about
     // every named member at once: what it calls extinct, with dates, stays as a fossil lineage
-    // (first and last appearance, the young end of each dated interval); something extinct it
-    // can't date, or that only Open Tree's flags call extinct, goes, since it can't be drawn
-    // in time. Informal specimen names go too.
+    // (first and last appearance, by fossilRange); something extinct it can't date, or that
+    // only Open Tree's flags call extinct, goes, since it can't be drawn in time. Informal
+    // specimen names go too.
     async function sortFossils(specs) {
         const names = [];
         const gather = list => list.forEach(sp => { if (sp.name) names.push(sp.name); names.push(...sp.hints); gather(sp.children); });
         gather(specs);
         names.splice(0, names.length, ...new Set(names));
-        const range = new Map();   // name -> [first, last], for the extinct
+        const range = new Map();   // name -> fossilRange, for the extinct
         for (let k = 0; k < names.length; k += 120) {
             try {
                 const q = encodeURIComponent(names.slice(k, k + 120).join(','));
                 const r = await fetch(`https://paleobiodb.org/data1.2/taxa/list.json?name=${q}&vocab=pbdb&show=app`).then(r => r.ok ? r.json() : {});
                 for (const rec of r.records || []) {
-                    if (rec.is_extant !== 'extinct' || rec.firstapp_max_ma == null || rec.lastapp_min_ma == null) continue;
-                    // (the known range, read conservatively, as the build does)
-                    const last = Math.max(0.0001, +rec.lastapp_min_ma);
-                    let first = +(rec.firstapp_min_ma ?? rec.firstapp_max_ma);
-                    if (first <= last) first = +rec.firstapp_max_ma;   // (a record all in one interval: its old end)
-                    range.set(rec.taxon_name, [first, last]);
+                    const f = rec.is_extant === 'extinct' && fossilRange(rec);
+                    if (f) range.set(rec.taxon_name, f);
                 }
             } catch (e) { break; }
         }
-        for (const n of EXTINCT_NAMES) if (!range.has(n)) range.set(n, [0.126, 0.0004]);   // gone in historical times
+        for (const n of EXTINCT_NAMES) if (!range.has(n)) range.set(n, [0.126, 0.0004, 0.126, 0.0004]);   // gone in historical times
         const sort = list => list.flatMap(sp => {
             if (informal(sp.name)) return [];
             const r = range.get(sp.name);
@@ -1454,9 +1571,16 @@
             const kids = sort(sp.children);
             if (sp.children.length && !kids.length && !r) return [];   // nothing left in it that can be drawn
             const out = { ...sp, children: kids, hint: sp.hints.find(h => !informal(h)) || '' };
-            if (r) [out.first, out.last] = r;
+            if (r) { [out.first, out.last] = r; out.span = r.slice(2); }
             else if (kids.length && kids.every(k => k.last != null)) {   // a group of fossils: earliest in, latest out
                 out.first = Math.max(...kids.map(k => k.first)); out.last = Math.min(...kids.map(k => k.last));
+            }
+            else if (sp.flagged && !sp.name && !sp.children.length) {
+                // An unnamed extinct group whose members weren't loaded yet (Paranthropus boisei's
+                // pair): dated by the members it's named for, or left out, never drawn as living
+                const hr = sp.hints.map(h => range.get(h)).filter(Boolean);
+                if (!hr.length) return [];
+                out.first = Math.max(...hr.map(h => h[0])); out.last = Math.min(...hr.map(h => h[1]));
             }
             return [!out.name && kids.length === 1 ? kids[0] : out];
         });
@@ -1475,12 +1599,17 @@
             D.name[p] = sp.name; D.ott[p] = sp.ott; nodeId[p] = sp.id; D.tips[p] = sp.tips; D.rank[p] = rankIndex(sp.rank);
             D.common[p] = commonByOtt.get(sp.ott) || ''; repName[p] = sp.name || sp.hint || repName[p];
             const own = dateIn(published, sp.id);
-            if (own && own[0] < D.age[D.parent[p]]) { D.age[p] = own[0]; D.dated[p] = own[1]; }
+            if (own && own[0] < D.age[D.parent[p]]) { D.age[p] = own[0]; D.dated[p] = own[1]; D.ci[p] = own[2]; }
             const census = anchorsIn(sp.id).find(a => a.path[0] === sp.id);
-            if (census) { D.ind[p] = Math.log10(census.value || Math.sqrt(census.low * census.high)); D.indHow[p] = 'a'; anchorsBy.set(`${p}:individuals`, census); }
+            if (census) anchorsBy.set(`${p}:individuals`, census);
             if (D.name[p]) addEntry(p, D.name[p], 'latin');
+            if (sp.last != null) {   // a fossil (Paranthropus boisei, the one dated member of its pair): it ends at its last record
+                D.first[p] = sp.first; D.last[p] = sp.last; fossilSpan.set(p, sp.span);
+                if (!sp.children.length) { D.age[p] = Math.min(sp.last, D.age[D.parent[p]] * 0.97); D.dated[p] = 4; }
+            }
             if (!sp.children.length) {   // a species ends there; a group can open again
-                if (ranks[D.rank[p]] === 'species' || sp.tips <= 1) D.age[p] = 0;
+                if ((ranks[D.rank[p]] === 'species' || sp.tips <= 1) && sp.last == null) D.age[p] = 0;
+                if (sp.last != null) layout();   // (now a fossil: it may leave the living-only view)
                 colorNodes();
                 return ranks[D.rank[p]] === 'species' || sp.tips <= 1 ? 'done' : 'again';
             }
@@ -1491,6 +1620,7 @@
             const crown = D.crown[p] > 0 ? D.crown[p] : D.age[D.parent[p]] * 0.5;
             D.age[p] = crown;
             D.dated[p] = D.crownBy[p] === 't' ? 1 : D.crownBy[p] === 'p' ? 3 : 0;
+            D.ci[p] = D.crownBy[p] === 't' ? D.crownCi[p] : null;
             tier.set(p, { T: crown, n: Math.max(2, D.tips[p] || specs.length) });
         }
         const { T, n } = tier.get(p);
@@ -1504,13 +1634,14 @@
             let y = y0[parent];
             list.forEach((sp, k) => {
                 const i = N++;
-                for (const key of ['name', 'parent', 'rank', 'common', 'ott', 'age', 'dated', 'tips', 'ind', 'indHow', 'bio', 'bioHow', 'darkLo', 'darkHi', 'other', 'crown', 'first', 'last', 'placed', 'fossilFrom']) D[key].push(null);
+                for (const key of ['name', 'parent', 'rank', 'common', 'ott', 'age', 'dated', 'tips', 'spp', 'sppLog', 'sppEst', 'darkLo', 'darkHi', 'other', 'crown', 'first', 'last', 'placed', 'fossilFrom', 'ci', 'crownCi', 'firstAside']) D[key].push(null);
                 D.name[i] = sp.name; D.parent[i] = parent; D.rank[i] = rankIndex(sp.rank); D.common[i] = commonByOtt.get(sp.ott) || ''; D.ott[i] = sp.ott;
                 const own = dateIn(published, sp.id);
-                D.age[i] = own ? own[0] : 0; D.dated[i] = own ? own[1] : 2; D.tips[i] = sp.tips;
+                D.age[i] = own ? own[0] : 0; D.dated[i] = own ? own[1] : 2; D.ci[i] = own ? own[2] : null; D.tips[i] = sp.tips;
                 D.other[i] = '0'; D.crown[i] = 0; D.placed[i] = '-';
                 D.first[i] = sp.first == null ? null : sp.first; D.last[i] = sp.last == null ? null : sp.last;
-                D.ind[i] = sp.ind; D.indHow[i] = sp.indHow; D.bio[i] = sp.bio; D.bioHow[i] = 'm';
+                if (sp.span) fossilSpan.set(i, sp.span);
+                D.spp[i] = sp.spp; D.sppLog[i] = sp.spp > 0 ? Math.log10(sp.spp) : null; D.sppEst[i] = sp.sppEst ? '1' : '0';
                 D.darkLo[i] = sp.darkLo; D.darkHi[i] = sp.darkHi;
                 if (sp.census) anchorsBy.set(`${i}:individuals`, sp.census);
                 kids.push([]); kids[parent].push(i); leaves.push(1); group.push(group[parent]); nodeId.push(sp.id);
@@ -1527,7 +1658,7 @@
         for (let k = added.length - 1; k >= 0; k--) {
             const i = added[k], c = kids[i];
             if (c.length) ymid[i] = (ymid[c[0]] + ymid[c[c.length - 1]]) / 2;
-            if (!D.name[i] && c.length) repName[i] = repName[c.reduce((a, b) => (D.tips[b] > D.tips[a] ? b : a))];
+            if (!D.name[i] && c.length) repName[i] = repName[c.reduce((a, b) => (D.tips[b] > D.tips[a] || D.tips[b] === D.tips[a] && extinct(a) && !extinct(b) ? b : a))];
             if (D.name[i]) addEntry(i, D.name[i], 'latin');
         }
         layout();
@@ -1541,14 +1672,15 @@
     // a pure-birth (Yule) estimate from species counts, between the nearest dated ancestor
     // and today, kept older than any dated node below it. Every node stays younger than its
     // parent.
-    // A node's own date, from the build's shards: [Ma, basis], TimeTree (1) before published
-    // trees (3). (Older shards held a bare number: published.)
+    // A node's own date, from the build's shards: [Ma, basis, interval], TimeTree (1) before published
+    // trees (3), or a single published study (5, 'c': an extinct form's split, see withForms). A
+    // TimeTree date may carry its interval and its studies' median ([Ma, 't', low, high, median]). (Older shards held a bare number.)
     function dateIn(shard, id) {
         const d = shard[id];
         if (d == null) return null;
-        return Array.isArray(d) ? [d[0], d[1] === 't' ? 1 : 3] : [d, 3];
+        return Array.isArray(d) ? [d[0], d[1] === 't' ? 1 : d[1] === 'c' ? 5 : 3, d.length > 3 ? d.slice(2) : null] : [d, 3, null];
     }
-    const hasOwn = i => D.dated[i] === 1 || D.dated[i] === 3;
+    const hasOwn = i => D.dated[i] === 1 || D.dated[i] === 3 || D.dated[i] === 5;
     function dateGraft(p, added) {
         const floor = new Map();   // the oldest dated age below each node
         for (let k = added.length - 1; k >= 0; k--) {
@@ -1571,6 +1703,7 @@
                 D.age[i] = Math.max(est, (floor.get(i) || 0) * 1.06);
             }
             if (D.age[i] >= D.age[parent] * 0.97 && hasOwn(i)) liftAncestors(i);   // a real date outranks estimates above it
+            if (D.age[i] > D.age[parent] * 0.97 && hasOwn(i)) { D.dated[i] = 6; D.ci[i] = null; }   // (it gave way: no longer its own date)
             D.age[i] = Math.min(D.age[i], D.age[parent] * 0.97);
         }
     }
@@ -1591,30 +1724,22 @@
         }
     }
 
-    // Share parent's figures among its new children: species with a census keep theirs; the
-    // rest of the parent's total goes by species count. Biomass follows individuals (siblings
-    // are similar in size); undescribed species follow species count.
+    // Share parent's figures among its new children by the tree's species counts: its described
+    // living species (a species is one; a group's share is approximate) and its undescribed
+    // estimate. A species with a census of its own keeps it, for its card.
     function share(parent, list) {
         const tipsOf = sp => sp.last != null ? 0 : Math.max(1, sp.tips || 1);   // (none of it goes to the extinct)
         const tipsAll = list.reduce((a, sp) => a + tipsOf(sp), 0) || 1;
         const pow = v => v == null ? null : Math.pow(10, v);
         const lg = v => v > 0 ? Math.log10(v) : null;
-        const ind = pow(D.ind[parent]), bio = pow(D.bio[parent]);
-        const census = list.map(sp => anchorsIn(sp.id));
-        const fixed = census.map(as => as.reduce((a, x) => a + (x.value || Math.sqrt(x.low * x.high)), 0));
-        const fixedAll = fixed.reduce((a, b) => a + b, 0);
-        const free = ind == null ? null : Math.max(ind - fixedAll, ind * 0.02);
-        const weights = list.map((sp, k) => Math.max(0, tipsOf(sp) - census[k].length));
-        const wAll = weights.reduce((a, b) => a + b, 0) || 1;
-        const indOf = list.map((sp, k) => ind == null ? null : fixed[k] + free * weights[k] / wAll);
-        const indAll = indOf.reduce((a, b) => a + (b || 0), 0) || 1;
-        list.forEach((sp, k) => {
-            sp.ind = lg(indOf[k]);
-            sp.indHow = census[k].some(a => a.path[0] === sp.id) ? 'a' : 'm';
-            sp.bio = bio == null ? null : lg(bio * (indOf[k] || 0) / indAll);
-            sp.darkLo = D.darkLo[parent] == null ? null : lg(pow(D.darkLo[parent]) * tipsOf(sp) / tipsAll);
-            sp.darkHi = D.darkHi[parent] == null ? null : lg(pow(D.darkHi[parent]) * tipsOf(sp) / tipsAll);
-            sp.census = census[k].find(a => a.path[0] === sp.id);
+        const named = D.spp[parent] || 0;
+        list.forEach(sp => {
+            const one = sp.rank === 'species' || isSpecies(sp.name);
+            sp.spp = sp.last != null ? 0 : one ? 1 : Math.max(1, Math.round(named * tipsOf(sp) / tipsAll));
+            sp.sppEst = sp.last == null && !one;
+            sp.darkLo = D.darkLo[parent] == null || one ? null : lg(pow(D.darkLo[parent]) * tipsOf(sp) / tipsAll);   // (a species is one species)
+            sp.darkHi = D.darkHi[parent] == null || one ? null : lg(pow(D.darkHi[parent]) * tipsOf(sp) / tipsAll);
+            sp.census = anchorsIn(sp.id).find(a => a.path[0] === sp.id);
         });
     }
 
@@ -1643,6 +1768,8 @@
         const maxW = W - X1 - 16;
         const comparing = state.compare.length > 0;
         let lastBottom = -1e9, lastFossil = -1e9;
+        // (a name that would run into the comparison's own labels is left out)
+        const onTies = (x0, x1, y) => comparing && (ties.boxes || []).some(b => x0 < b[2] && x1 > b[0] && y - 11 < b[3] && y + 11 > b[1]);
         for (const s of terms) {
             if (state.compare.includes(s.i)) continue;   // named by drawTies
             if (comparing && ties.labelYs.some(o => Math.abs(o.y - s.yc) < o.r)) continue;
@@ -1655,12 +1782,13 @@
                 c.globalAlpha = comparing ? 0.5 : 1;
                 c.font = 'italic 500 11px Inter, sans-serif';
                 const name = clip(c, display(s.i), room), nw = c.measureText(name).width;
+                if (onTies(x - 12, x + nw, s.yc)) continue;
                 haloText(c, name, x, s.yc, colors.muted);
                 if (D.common[s.i] && room - nw > 50) { c.font = '400 10.5px Inter, sans-serif'; haloText(c, clip(c, D.common[s.i], room - nw - 6), x + nw + 6, s.yc, colors.muted); }
                 lastFossil = s.yc + 6;
                 continue;
             }
-            if (s.yc - 6 < lastBottom) continue;
+            if (s.yc - 6 < lastBottom || onTies(X1 + 12, X1 + 12 + maxW, s.yc)) continue;
             const other = D.other[s.i] === '1';
             c.globalAlpha = comparing ? 0.5 : 1;
             c.font = `${other ? 'italic ' : ''}500 11.5px Inter, sans-serif`;
@@ -1742,15 +1870,27 @@
     function drawTrail() {
         const mid = (T.invertY(PT + plotH / 2) - PT) / base;   // as a 0-1 layout position
         const names = [];
-        let v = 0;
+        let v = 0, last = '';
         while (kids[v].length) {
             const c = kids[v].find(c => y0[c] <= mid && mid < y1[c]);
             if (c == null || (yS(y1[c]) - yS(y0[c])) < plotH * 0.5) break;
             v = c;
-            if (D.name[v]) names.push(D.common[v] ? `${D.name[v]} (${D.common[v]})` : D.name[v]);
+            if (!D.name[v]) continue;
+            const name = D.common[v] ? `${D.name[v]} (${D.common[v]})` : D.name[v];
+            if (D.name[v] === last) names[names.length - 1] = name;   // (one name at two ranks, once)
+            else names.push(name);
+            last = D.name[v];
         }
-        const html = names.length ? names.slice(0, -1).map(esc).join(' › ') + (names.length > 1 ? ' › ' : '') + `<b>${esc(names[names.length - 1])}</b>` : '';
-        if (trailEl.innerHTML !== html) trailEl.innerHTML = html;
+        const key = names.join('\n');
+        if (trailEl.dataset.key === key) return;
+        trailEl.dataset.key = key;
+        // Where you are matters most: a trail too long to fit loses its start, never its end
+        const html = from => (from ? '… › ' : '') + names.slice(from, -1).map(esc).join(' › ')
+            + (names.length - from > 1 ? ' › ' : '') + `<b>${esc(names[names.length - 1])}</b>`;
+        if (!names.length) { trailEl.innerHTML = ''; return; }
+        let from = 0;
+        trailEl.innerHTML = html(from);
+        while (from < names.length - 1 && trailEl.scrollWidth > trailEl.clientWidth + 1) trailEl.innerHTML = html(++from);
     }
 
     // ---------- hover ----------
@@ -1784,10 +1924,11 @@
         return best;
     }
 
-    let dragging = false;
-    canvas.addEventListener('pointerdown', () => { dragging = true; });
+    let dragging = false, touching = false;   // (touching: the last press was a finger)
+    canvas.addEventListener('pointerdown', e => { dragging = true; touching = e.pointerType === 'touch'; });
     window.addEventListener('pointerup', () => { dragging = false; });
     canvas.addEventListener('pointermove', e => {
+        if (e.pointerType === 'mouse') touching = false;
         if (dragging && e.buttons) return;
         const r = canvas.getBoundingClientRect();
         const px = e.clientX - r.left, py = e.clientY - r.top;
@@ -1805,10 +1946,10 @@
         const i = hitTest(px, py);
         if (i < 0) { if (state.hover >= 0) { state.hover = -1; hideTip(); schedule('top'); } return; }
         hintEl.classList.add('gone');
+        // Touch has no hover: a tap shows the card, and its Select button selects
+        if (touching) { state.hover = i; showTip(i, px, py); schedule('top'); return; }
         select(i);
-        // Touch has no hover: the tap shows the card too
-        if (e.pointerType === 'touch') { state.hover = i; showTip(i, px, py); schedule('top'); }
-        else if (!tipEl.hidden) showTip(i, px, py);   // (its "click to select" now reads "deselect")
+        if (!tipEl.hidden) showTip(i, px, py);   // (its "click to select" now reads "deselect")
     });
     canvas.addEventListener('dblclick', e => {
         const r = canvas.getBoundingClientRect();
@@ -1827,8 +1968,11 @@
         e.preventDefault();
     });
 
+    let tipFor = -1;
     function showTip(i, px, py) {
+        tipFor = i;
         tipEl.innerHTML = tipHtml(i);
+        tipEl.classList.toggle('tapped', touching);
         tipEl.hidden = false;
         const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
         let x = px + 16, y = py + 14;
@@ -1837,10 +1981,24 @@
         if (y + th > H - 8) y = Math.max(8, py - th - 14);
         tipEl.style.left = `${x}px`; tipEl.style.top = `${y}px`;
     }
-    function hideTip() { tipEl.hidden = true; }
+    function hideTip() { tipEl.hidden = true; tipEl.classList.remove('tapped'); }
+    // A tapped card stays until a tap elsewhere
+    document.addEventListener('pointerdown', e => {
+        if (tipEl.classList.contains('tapped') && !tipEl.contains(e.target) && e.target !== canvas) {
+            state.hover = -1; hideTip(); schedule('top');
+        }
+    });
+    // The tapped card's buttons
+    tipEl.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('button[data-act]');
+        if (!b || tipFor < 0) return;
+        const i = tipFor;
+        if (b.dataset.act === 'select') { select(i); tipEl.innerHTML = tipHtml(i); }
+        else { hideTip(); zoomTo(kids[i].length ? i : D.parent[i]); }
+    });
     // What a row of named-so-far cells means, for that group
     function showCellTip(i, px, py) {
-        const share = namedShare(i), named = D.tips[i] || 0, filled = Math.max(1, Math.min(10, Math.round(share * 10)));
+        const share = namedShare(i), named = D.spp[i] || 0, filled = Math.max(1, Math.min(10, Math.round(share * 10)));
         const total = share > 0 ? named / share : named;
         const ratio = share >= 0.95 ? 'nearly all' : share > 0.5 ? `about ${Math.round(share * 100)}%` : `about 1 in ${fmtInt(Math.round(1 / share))}`;
         tipEl.innerHTML = `<h3><i style="background:${nodeColor[i]}"></i>${esc(display(i))}</h3>`
@@ -1855,16 +2013,25 @@
         tipEl.style.left = `${x}px`; tipEl.style.top = `${y}px`;
     }
 
-    function basisOf(i, m) {
-        const how = D[METRICS[m].how][i];
-        if (how === 'a') {
-            const a = anchorsBy.get(`${i}:${m === 'ind' ? 'individuals' : 'biomass'}`);
-            return a ? `${a.confidence}: ${a.source}` : 'published estimate';
-        }
-        if (how === 's') return 'sum of the published estimates within it';
-        if (D[METRICS[m].key][i] == null) return 'no estimate';
-        if (i >= N0) return 'rough: its share of the family’s total, by species count';
-        return 'modelled from its relatives’ figures';
+    // Figures published for this group itself, with their units and source: how many are alive,
+    // and their biomass. (The build doesn't spread them to groups without one: shared out by
+    // species they came out impossible, and cells, shoots and animals can't be added up)
+    const UNIT_WORDS = { individuals: 'individuals', cells: 'cells', shoots: 'shoots', 'cell-equivalents': 'cell-equivalents' };
+    const midOf = a => a.value || Math.sqrt(a.low * a.high);
+    const rangeOf = (a, fmt) => a.low != null && a.high != null && a.low !== a.high ? `; range ${fmt(Math.log10(a.low))} to ${fmt(Math.log10(a.high))}` : '';
+    function publishedRows(i) {
+        const pop = anchorsBy.get(`${i}:individuals`), mass = anchorsBy.get(`${i}:biomass`);
+        const unit = a => UNIT_WORDS[a.unit] || a.unit || 'individuals';
+        return (pop ? `<dt>Alive now</dt><dd>${fmtCount(Math.log10(midOf(pop)))} ${esc(unit(pop))}<span class="basis">${esc(`${pop.confidence}: ${pop.source}${rangeOf(pop, fmtCount)}`)}</span></dd>` : '')
+            + (mass ? `<dt>Biomass</dt><dd>${fmtMass(Math.log10(midOf(mass)))}<span class="basis">${esc(`${mass.confidence}: ${mass.source}${rangeOf(mass, v => fmtMass(v).replace(' of carbon', ''))}`)}</span></dd>` : '');
+    }
+    // Where a living group's described species count comes from
+    function sppBasis(i) {
+        if (extinct(i)) return 'fossil species (Paleobiology Database)';
+        if (D.other[i] === '1' && !D.spp[i]) return 'counted in the families they’re filed in';
+        if (i >= N0) return D.sppEst[i] === '1' ? 'approximate: its share of the family’s count, by the species Open Tree places in it' : 'Open Tree of Life';
+        return D.sppEst[i] === '1' ? 'Open Tree’s count: its taxonomy lists none of them as living, so this may include fossils'
+            : 'living species named in the Open Tree taxonomy (fossils and duplicate names left out)';
     }
     function speciesBasis(i) {
         for (let v = i; v >= 0; v = v ? D.parent[v] : -1) {
@@ -1872,11 +2039,28 @@
             if (a) return `share unnamed in ${a.name}: ${a.source}`;
             if (!v) break;
         }
-        return 'no estimate';
+        return kids[i].length && D.darkHi[i] != null ? 'the sum of the estimates for the groups in it' : 'no estimate';
+    }
+
+    // A branch point the tree leaves unresolved (more than two lines from one point, as Open Tree
+    // or the classification gives it): how many lines, or 0. (The written answer says so where the
+    // date isn't measured for the split itself: there the two may have split far more recently,
+    // as English and sessile oaks did, inside Quercus.)
+    function unresolvedAt(v) {
+        const n = kids[v].filter(c => y1[c] > y0[c]).length;
+        return n > 2 ? n : 0;
     }
 
     // Where a lineage split from its nearest living relatives: the nearest ancestor that
     // branches (one holding a single living line, like Homo, isn't a split)
+    // ...and where it split from its nearest living ones
+    function livingSplit(i) {
+        for (let c = i, v = splitOf(i); v > 0; c = v, v = splitOf(v)) {
+            while (D.parent[c] !== v) c = D.parent[c];
+            if (kids[v].some(k => k !== c && y1[k] > y0[k] && !extinct(k))) return v;
+        }
+        return -1;
+    }
     function splitOf(i) {
         let v = D.parent[i];
         while (v > 0 && kids[v].filter(c => y1[c] > y0[c]).length < 2) v = D.parent[v];   // (counting what's shown)
@@ -1890,14 +2074,17 @@
         const gone = extinct(i);
         const sub = [gone ? '† extinct' : '', rank, fams].filter(Boolean).join(' · ');
         const isSpeciesNode = rankName(i) === 'species' || (i >= N0 && D.tips[i] === 1 && !kids[i].length);
-        const [lo, hi] = [D.darkLo[i], D.darkHi[i]].filter(v => v != null).sort((a, b) => a - b).concat([null, null]);
+        const lo = D.darkLo[i], hi = D.darkHi[i];   // (the high end is never below the low)
+        const none = v => v == null || v < -0.3;   // (fewer than half a species)
         const unknown = isSpeciesNode ? 'none (it is one species)'
-            : lo == null ? 'none estimated' : hi == null || Math.abs(hi - lo) < 0.05 ? `about ${fmtCount(lo)}` : `${fmtCount(lo)} to ${fmtCount(hi)}`;
+            : none(hi) ? (hi == null && speciesBasis(i) === 'no estimate' ? 'none estimated' : 'none') : !none(lo) && hi - lo < 0.05 ? `about ${fmtCount(lo)}` : `${none(lo) ? 'none' : fmtCount(lo)} to ${fmtCount(hi)}`;
         const trail = [];
         for (let v = D.parent[i]; v > 0 && trail.length < 4; v = D.parent[v]) if (D.name[v]) trail.unshift(D.name[v]);
         const canCompare = D.other[i] !== '1';
         const inTree = state.compare.includes(i);
-        const act = (canCompare ? (inTree ? 'Click to deselect' : 'Click to select') : 'Unnamed: can\u2019t be selected')
+        const act = touching
+            ? `<div class="tip-acts">${canCompare ? `<button type="button" data-act="select">${inTree ? 'Deselect' : 'Select'}</button>` : '<span>Unnamed: can\u2019t be selected</span>'}<button type="button" data-act="zoom">Zoom in</button></div>`
+            : (canCompare ? (inTree ? 'Click to deselect' : 'Click to select') : 'Unnamed: can\u2019t be selected')
             + ' · double-click to zoom in';
         const sil = cardSilhouette(i);
         return (sil ? `<img class="sil" src="${sil.src}" width="${sil.w}" height="${sil.h}" alt="">` : '')
@@ -1905,38 +2092,76 @@
             + (D.common[i] ? `<div class="common">${esc(D.common[i])}</div>` : '')
             + (sub ? `<div class="rank">${esc(sub)}</div>` : '')
             + '<dl>'
-            + (p >= 0 ? `<dt>Split off</dt><dd>${fmtAge(D.age[p])} ago<span class="basis">${DATE_BASIS[D.dated[p]]}</span></dd>` : '')
-            + (kids[i].length ? `<dt>Diversified</dt><dd>${fmtAge(D.age[i])} ago<span class="basis">${DATE_BASIS[D.dated[i]]}</span></dd>` : '')
+            + (p >= 0 ? `<dt>Split off</dt><dd>${agoOrUndated(D.age[p])}${rangeWords(p)}<span class="basis">${dateBasis(p)}${ciNote(p)}${unresolvedAt(p) ? `; unresolved: one of ${unresolvedAt(p)} lines from that point` : ''}</span></dd>` : '')
+            + (kids[i].length ? `<dt>Diversified</dt><dd>${agoOrUndated(D.age[i])}${rangeWords(i)}<span class="basis">${dateBasis(i)}${ciNote(i)}</span></dd>` : '')
             + (gone ? fossilRows(i) : livingRows(i, unknown, isSpeciesNode))
             + '</dl>'
             + (trail.length ? `<div class="path">${trail.map(esc).join(' › ')}</div>` : '')
             + `<div class="act">${act}</div>`;
     }
     function fossilRows(i) {
-        const end = D.last[i] < 0.012 ? 'within the last 12,000 years' : `${fmtAge(D.last[i])} ago`;
+        const end = D.last[i] < 0.012 ? 'within the last 12,000 years' : `${fmtAgeWords(D.last[i])}`;
         const lived = D.first[i] == null ? `until ${end}` : D.first[i] < 0.012 ? 'within the last 12,000 years'
-            : `from ${fmtAge(D.first[i])} ago to ${end}`;
-        return `<dt>Lived</dt><dd>${lived}<span class="basis">first and last fossils (Paleobiology Database)</span></dd>`
+            : fmtAge(D.first[i]) === fmtAge(D.last[i]) ? `about ${end}`   // (known from one loosely dated interval)
+            : `from ${fmtAgeWords(D.first[i])} to ${end}`;
+        // Records dated only to a long interval (an epoch) are read at its middle: say how wide the record allows
+        const [old, young] = fossilSpan.get(i) || [];
+        const loose = old != null && (old > D.first[i] * 1.2 && old >= 0.012 || young < D.last[i] * 0.8 && D.last[i] >= 0.012)
+            ? `; some are dated only loosely, and the records allow anywhere from ${fmtAgeWords(old)} to ${young < 0.012 ? 'within the last 12,000 years' : `${fmtAgeWords(young)}`}` : '';
+        return `<dt>Lived</dt><dd>${lived}<span class="basis">first and last fossils (Paleobiology Database)${loose}${asideWords(i)}</span></dd>`
             + `<dt>Described species</dt><dd>${D.tips[i] ? fmtInt(D.tips[i]) : 'not counted'}<span class="basis">known from fossils</span></dd>`
             + `<dt>Living today</dt><dd>none</dd>`
-            + (D.placed[i] === 'x' ? '<dt>Placed</dt><dd>by its classification<span class="basis">no published tree includes it, so it hangs from its order or class</span></dd>' : '');
+            + (D.placed[i] === 'x' ? '<dt>Placed</dt><dd>by its classification<span class="basis">no published tree includes it, so it hangs from its order or class</span></dd>'
+                : D.placed[i] === 's' ? '<dt>Placed</dt><dd>on the stem of the living group it was filed in<span class="basis">its fossils are older than that group’s molecular date allows (beyond TimeTree’s range), so it can’t be inside it: it split off before the living members did</span></dd>' : '');
+    }
+    // A first appearance the build set aside as misfiled, said in words
+    function asideWords(i) {
+        const a = D.firstAside[i];
+        if (!a) return '';
+        return a[2] === 'o' ? `; the database's oldest record, ${fmtAge(a[0])} (the genus ${esc(a[1])}), is set aside: far older than any other genus in it, so likely misfiled`
+            : `; the database's first appearance, ${fmtAge(a[0])}, is set aside: older than any genus in it, so it rests on fossils identified only to this group, or on spores or leaves named as form genera`;
     }
     function livingRows(i, unknown, isSpeciesNode) {
         const f = D.fossilFrom[i], stem = D.parent[i] >= 0 ? D.age[D.parent[i]] : null;
-        const fossilRow = f == null ? '' : `<dt>Oldest fossil</dt><dd>${fmtAge(f)} ago<span class="basis">${stem == null ? ''
+        const fossilRow = f == null ? '' : `<dt>Oldest fossil</dt><dd>${fmtAgeWords(f)}<span class="basis">${stem == null ? ''
+            : D.dated[D.parent[i]] === 7 && f > stem * 0.95 ? 'it sets the date of its split: a lineage is at least as old as its oldest fossil'
             : f < stem ? `a gap of ${fmtAge(stem - f).replace(' Ma', ' million years')} since it split off, where fossils should exist but none are known yet`
-            : `older than this tree's date for its split (${fmtAge(stem)}): the molecular date is probably too young`}</span></dd>`;
+            : `older than this tree's date for its split (${fmtAge(stem)})`}${asideWords(i)}</span></dd>`;
         const share = namedShare(i);
         const namedRow = share == null || isSpeciesNode ? '' : `<dt>Named so far</dt><dd>${share > 0.5 ? `${Math.round(share * 100)}%` : `about 1 in ${fmtInt(Math.round(1 / share))}`}<span class="basis">of the species thought to exist (the cells beside its name); the rest are still to be found</span></dd>`;
         const placedRow = D.placed[i] === 'x' ? '<dt>Placed</dt><dd>by its classification<span class="basis">no published tree resolves where it branches, so it sits with the rest of its group</span></dd>' : '';
-        return fossilRow + `<dt>Described species</dt><dd>${D.tips[i] ? fmtInt(D.tips[i]) : 'not counted'}</dd>` + namedRow + placedRow
+        const spp = D.spp[i] ? `${D.sppEst[i] === '1' ? 'about ' : ''}${fmtInt(D.spp[i])}` : 'none here';
+        return fossilRow + `<dt>Described species</dt><dd>${spp}${isSpeciesNode ? '' : `<span class="basis">${esc(sppBasis(i))}</span>`}</dd>` + namedRow + placedRow
             + `<dt>Undescribed</dt><dd>${unknown}${isSpeciesNode ? '' : `<span class="basis">${esc(speciesBasis(i))}</span>`}</dd>`
-            + `<dt>Living individuals</dt><dd>${D.ind[i] == null ? '—' : fmtCount(D.ind[i])}<span class="basis">${esc(basisOf(i, 'ind'))}</span></dd>`
-            + (i >= N0 ? '<dt>Biomass</dt><dd>—<span class="basis">not estimated below family level: sharing a family’s carbon by headcount ignores body size</span></dd>'
-                : `<dt>Biomass</dt><dd>${D.bio[i] == null ? '—' : fmtMass(D.bio[i])}<span class="basis">${esc(basisOf(i, 'bio'))}</span></dd>`);
+            + publishedRows(i);
     }
     let ranks = [];
-    const DATE_BASIS = ['between dated branch points (interpolated)', 'TimeTree estimate', 'estimated from species counts (Yule model)', 'median of published dated trees (Open Tree)', 'from the fossil record (Paleobiology Database)'];
+    const DATE_BASIS = ['between dated branch points (interpolated)', 'TimeTree estimate', 'estimated from species counts (Yule model)', 'median of published dated trees (Open Tree)',
+        'from the fossil record (Paleobiology Database)', 'published estimate', 'adjusted for consistency: moved to fit the dates around it',
+        'set by the oldest fossil below it (a minimum age: Paleobiology Database)', 'an assumption, not a measurement'];
+    const cited = new Map();   // node id -> the study a published estimate (5) is from
+    const dateBasis = i => D.dated[i] === 5 && cited.has(nodeId[i]) ? `${DATE_BASIS[5]} (${cited.get(nodeId[i])})`
+        : D.dated[i] === 8 && META.rootSource ? `${DATE_BASIS[8]}: ${META.rootSource}` : DATE_BASIS[D.dated[i]];
+    // Where a date comes from, for the CSV
+    const DATE_SOURCE = ['interpolated (BLADJ)', 'TimeTree (timetree.org)', 'Yule model on species counts', 'Open Tree of Life (dates.opentreeoflife.org)',
+        'Paleobiology Database', 'published study', 'adjusted for consistency', 'Paleobiology Database (fossil minimum)', 'assumption'];
+    const dateSource = i => D.dated[i] === 5 && cited.has(nodeId[i]) ? cited.get(nodeId[i]) : D.dated[i] === 8 && META.rootSource ? META.rootSource : DATE_SOURCE[D.dated[i]];
+    // TimeTree's interval for a node's date [low, high, median of its studies], where it has one
+    // (a single study gives none)
+    const ciOf = i => D.dated[i] === 1 && D.ci[i] && D.ci[i][0] != null ? D.ci[i] : null;
+    // TimeTree's date is its adjusted time, fitted to its whole tree; the interval is around its
+    // studies' median, and may not hold it. As words after the age: ", range 6.2–6.7" (same units)
+    const ciHolds = i => { const ci = ciOf(i); return ci && ci[0] <= D.age[i] && D.age[i] <= ci[1]; };
+    const fmtIn = (a, x) => a >= 1000 ? (x / 1000).toFixed(2) : a >= 10 ? String(Math.round(x)) : a >= 0.1 ? x.toFixed(1) : String(Math.round(x * 1000));
+    function rangeWords(i) {
+        return ciHolds(i) ? `, range ${fmtIn(D.age[i], ciOf(i)[0])}–${fmtIn(D.age[i], ciOf(i)[1])}` : '';
+    }
+    // ...and for the card's small print, where the interval doesn't hold the adjusted time
+    function ciNote(i) {
+        const ci = ciOf(i);
+        if (!ci || ciHolds(i)) return '';
+        return `; adjusted to fit TimeTree's whole tree: its studies' median is ${fmtAge(ci[2])}, range ${fmtIn(ci[2], ci[0])}–${fmtIn(ci[2], ci[1])}`;
+    }
     function rankName(i) { const r = ranks[D.rank[i]]; return r && r !== 'no rank' ? r : ''; }
 
     // ---------- formatting ----------
@@ -1952,8 +2177,14 @@
     function fmtAgeWords(a) {
         if (a >= 1000) return `${(a / 1000).toFixed(2).replace(/\.?0+$/, '')} billion years ago`;
         if (a >= 10) return `${Math.round(a)} million years ago`;
-        return `${a.toFixed(1)} million years ago`;
+        if (a >= 0.1) return `${a.toFixed(1)} million years ago`;
+        if (a >= 0.001) return `${fmtInt(Math.round(a * 1000))} thousand years ago`;
+        if (a > 0) return `${fmtInt(a < 0.0001 ? Math.max(1, Math.round(a * 1e6)) : Math.round(a * 1e6 / 100) * 100)} years ago`;
+        return 'too recently for this tree to date';   // (a lineage hung from a living species' tip)
     }
+    const agoOrUndated = a => a > 0 ? fmtAgeWords(a) : 'too recently to date';
+    // "about 6.5 million years ago", for the written answer (no "about" where there's no date)
+    const aboutAge = (a, bold = true) => (a > 0 ? 'about ' : '') + (bold ? `<strong>${fmtAgeWords(a)}</strong>` : fmtAgeWords(a));
     const fmtInt = n => Math.round(n).toLocaleString('en-US');
     const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
     function fmtCount(lg) {
@@ -2023,7 +2254,7 @@
     let namesLoaded = null;
     const commonByOtt = new Map();   // a species' or genus' everyday name, for the labels
     function loadNames() {
-        if (!namesLoaded) namesLoaded = fetch('data/names.json')
+        if (!namesLoaded) namesLoaded = fetch(fresh('data/names.json'))
             .then(r => r.ok ? r.json() : [])
             .then(rows => {
                 for (const [label, i, ott, sci, preferred] of rows) {
@@ -2069,7 +2300,8 @@
         const consider = (e, tier) => {
             // A species or genus by its own name beats the everyday word for its family
             const meant = PREFER[q] && e.sci === PREFER[q] ? -5e5 : 0;   // (beats even an exact match elsewhere)
-            const own = (e.ott && tier === 0 ? -600 : e.kind === 'species' && !e.ott ? 300 : e.kind === 'alias' ? 200 : 0) + (e.pref ? -150 : 0) + meant;
+            // (only by its preferred or scientific name: a plant also called "ape" doesn't beat the apes)
+            const own = (e.ott && tier === 0 ? (e.pref || fold(e.sci || '') === e.key ? -600 : 400) : e.kind === 'species' && !e.ott ? 300 : e.kind === 'alias' ? 200 : 0) + (e.pref ? -150 : 0) + meant;
             const rank = tier * 1e6 + Math.abs(e.key.length - q.length) * 400 + own
                 - Math.min(900, Math.log2(leaves[e.i] + 1) * 60);
             const key = taxon(e), cur = best.get(key);
@@ -2085,7 +2317,10 @@
         const tail = qw.join(' ');
         for (const e of index.get(qw[0].slice(0, 2)) || []) {
             const w = e.words;
+            // A scientific name is found by its genus first: Quercus alba before Lasiocampa quercus
+            const epithet = e.sci && fold(e.sci) === e.key && w.length > 1 && !same(qw[0], w[0]);
             if (e.key === q) consider(e, 0);
+            else if (epithet) { if (qw.every(x => w.some(y => y.startsWith(x)))) consider(e, 2); }
             else if (forms(e.key).some(f => lq.includes(f))) consider(e, 0.5);
             // The word as the name's last word, the thing it names ("rock dove", "greylag goose"),
             // beats the word used as a modifier ("dove weed") or the start of another ("goosefish")
@@ -2147,23 +2382,32 @@
             const q = input.value;
             results = VIRUS.test(q.trim()) ? [] : findGroups(q);
             if (q.trim().length < 2) { close(); return; }
+            // (another name for a group here takes its place: Angiospermae → Magnoliopsida)
+            const syn = new Set(more.filter(e => e.syn).map(e => e.ott));
+            results = results.filter(e => !syn.has(e.ott || D.ott[e.i]));
             const have = new Set(results.map(e => e.ott || D.ott[e.i]));
+            // (and Open Tree's homonyms of a name here, "Plasmodium falciparum (species in Opisthokonta)")
+            const named = new Set(results.flatMap(e => [e.key, e.sci ? fold(e.sci) : ''].concat(e.i >= 0 && D.name[e.i] ? [fold(D.name[e.i])] : [])));
+            more = more.filter(e => e.syn || !named.has(fold(e.label.replace(/ \(.*\)$/, ''))));
             const meant = fossilWord(q);
             const exact = e => e.key === fold(q) || meant && e.sci === meant ? 0 : 1;   // Open Tree's exact match beats weak matches here
             results = results.concat(more.filter(e => !have.has(e.ott)));
             if (more.length && (meant || !results.some(e => e.i >= 0 && e.key === fold(q)))) results.sort((a, b) => exact(a) - exact(b));
             results = results.slice(0, 10);
             // (asked too when nothing here even starts with what was typed)
-            const willAsk = !asked && !VIRUS.test(q.trim()) && (fossilWord(q) || q.trim().length >= 4 && (results.length < 4 || !results.some(e => e.key.startsWith(fold(q)))));
+            const old = OLD_NAMES[fold(q).trim()];
+            const few = fossilWord(q) || q.trim().length >= 4 && (results.length < 4 || !results.some(e => e.key.startsWith(fold(q))));
+            // (and for one word named nowhere here exactly, which may be a genus: Quercus)
+            const willAsk = !asked && !old && !VIRUS.test(q.trim()) && (few || /^[a-z-]{4,}$/i.test(q.trim()) && !results.some(e => [fold(q), fold(q) + 's'].includes(e.key) || e.sci && fold(e.sci) === fold(q)));
             const id = input.id;
             list.innerHTML = results.map((e, k) => {
                 const i = e.i, latin = e.kind === 'latin', far = i < 0;
                 const sci = e.sci && fold(e.sci) !== e.key ? e.sci : '';
-                const also = e.kind === 'pbdb' ? '' : e.ott ? (sci ? ` <span class="sub"><i>${esc(sci)}</i></span>` : '')
+                const also = e.kind === 'pbdb' ? '' : e.syn ? ` <span class="sub">→</span> ${esc(e.sci)}` : e.ott ? (sci ? ` <span class="sub"><i>${esc(sci)}</i></span>` : '')
                     : latin ? (D.common[i] ? ` <span class="sub">${esc(D.common[i])}</span>` : '')
-                    : ` <span class="sub">→</span> ${esc(D.name[i])}`;
+                    : D.name[i] ? ` <span class="sub">→</span> ${esc(D.name[i])}` : '';
                 const where = e.kind === 'pbdb' ? ['a fossil in the Paleobiology Database']
-                    : far ? [e.higher ? 'a group in Open Tree’s taxonomy' : 'a species or genus in Open Tree’s taxonomy']
+                    : e.syn ? [`another name for ${e.sci}`] : far ? [e.higher ? 'a group in Open Tree’s taxonomy' : 'a species or genus in Open Tree’s taxonomy']
                     : e.ott ? [D.common[i] || D.name[i], placeOf(i)]
                     : [placeOf(i), leaves[i] > 1 ? `${fmtInt(leaves[i])} families` : (rankName(i) || 'family')];
                 const chosen = !far && state.compare.some(c => c === i && !e.ott || e.ott && D.ott[c] === e.ott);
@@ -2173,29 +2417,41 @@
                     + `<span class="ctx">${esc(where.filter(Boolean).join(' · '))}</span></span>`
                     + (chosen ? '<span class="tag">selected</span>' : '')
                     + '</li>';
-            }).join('') || `<li class="none" aria-disabled="true">${willAsk ? 'Looking further…' : VIRUS.test(q.trim())
+            }).join('') || `<li class="none" aria-disabled="true">${old ? esc(old) : willAsk ? 'Looking further…' : VIRUS.test(q.trim())
                 ? 'Viruses aren’t cellular life, and can’t be placed on one tree with it, so they aren’t here.'
                 : `Nothing called “${esc(q.trim())}” in the tree. It holds cellular life, living and fossil; viruses aren’t included.`}</li>`;
             list.hidden = false; input.setAttribute('aria-expanded', 'true');
             active = -1;
-            farPending = willAsk ? further(q) : null;
+            farPending = willAsk ? further(q, few) : null;
         };
         // Few results here: ask Open Tree's own name index, which knows every scientific name
         // in its taxonomy (Wolbachia, Penicillium), and add what it finds
         let farPending = null;
-        const further = q => {
+        const further = (q, few) => {
             const key = q.trim().toLowerCase(), term = fossilWord(q) || q.trim();
             if (!farCache.has(key)) farCache.set(key, fetch(OTOL + 'tnrs/autocomplete_name', {
                 method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: term }),
             }).then(r => r.ok ? r.json() : []).catch(() => []));
             return farCache.get(key).then(found => {
                 if (input.value !== q || document.activeElement !== input) return;
-                const looksLike = n => { const a = fold(n).split(' ')[0], b = fold(term).split(' ')[0]; return a.startsWith(b) || b.startsWith(a) || editDistance(a, b, 2) <= 2; };
+                found = Array.isArray(found) ? found : [];
+                // (a leading "Candidatus" isn't part of the name: Candidatus Lokiarchaeota; and a
+                // near miss counts only when nothing has the very name, Protista not Proutista)
+                const bare = n => fold(n).replace(/^candidatus /, '').split(' ')[0];
+                const exactly = found.some(t => bare(t.unique_name) === bare(term));
+                const looksLike = n => { const a = bare(n), b = bare(term); return a.startsWith(b) || b.startsWith(a) || !exactly && editDistance(a, b, 2) <= 2; };
                 // (the name as asked first, then the shortest: the species before its serovars)
-                const rank = t => (fold(t.unique_name) === fold(term) ? 0 : 1) * 1000 + t.unique_name.length;
-                const more = (Array.isArray(found) ? found : []).filter(t => !t.is_suppressed && looksLike(t.unique_name)).sort((a, b) => rank(a) - rank(b)).slice(0, 6)
+                const rank = t => (bare(t.unique_name) === bare(term) ? 0 : 1) * 1000 + t.unique_name.length;
+                const more = [...new Map(found.filter(t => !t.is_suppressed && looksLike(t.unique_name)).sort((a, b) => rank(a) - rank(b)).map(t => [t.ott_id, t])).values()].slice(0, 6)   // (one row per taxon)
                     .map(t => ({ i: -1, label: t.unique_name, kind: 'far', key: fold(t.unique_name), ott: t.ott_id, sci: t.unique_name, higher: t.is_higher, words: [] }));
-                if (more.length) { render(more, true); farPending = null; return; }
+                // Open Tree found it by another name: a synonym (Compositae is Asteraceae)
+                const other = found.some(t => !t.is_suppressed && !looksLike(t.unique_name)) ? post('tnrs/match_names', { names: [term], do_approximate_matching: false })
+                    .then(d => ((d.results || [])[0] || {}).matches || []).catch(() => []) : Promise.resolve([]);
+                return other.then(ms => {
+                    if (input.value !== q || document.activeElement !== input) return;
+                    const syns = [...new Map(ms.filter(m => m.is_synonym && m.taxon && !m.taxon.is_suppressed).map(m => [m.taxon.ott_id, m])).values()]
+                        .map(m => ({ i: -1, label: term, kind: 'far', syn: true, key: fold(term), ott: m.taxon.ott_id, sci: m.taxon.unique_name, higher: m.taxon.is_higher, words: [] }));
+                    if (syns.length || more.length || !few) { render(syns.concat(more.filter(e => !syns.some(s => s.ott === e.ott))), true); farPending = null; return; }
                 // Nothing there: the Paleobiology Database knows fossils Open Tree doesn't (Dimetrodon)
                 return fetch(`https://paleobiodb.org/data1.2/taxa/auto.json?name=${encodeURIComponent(term)}&limit=5`).then(r => r.ok ? r.json() : {}).catch(() => ({}))
                     .then(d => {
@@ -2205,6 +2461,7 @@
                         render(fossils, true);
                         farPending = null;
                     });
+                });
             });
         };
         const pick = e => { close(); input.value = ''; go(e); };
@@ -2240,15 +2497,14 @@
     const EXAMPLES = [['human', 'dog'], ['human', 'common octopus'], ['human', 'button mushroom'], ['English oak', 'wheat'], ['honey bee', 'ant'], ['blue whale', 'hippopotamus'], ['E. coli', 'human']];
 
     function setupControls() {
-        document.querySelectorAll('[data-metric],[data-dark],[data-time],[data-life]').forEach(b => {
+        document.querySelectorAll('[data-dark],[data-time],[data-life]').forEach(b => {
             b.addEventListener('click', () => {
-                const [k, v] = b.dataset.metric ? ['metric', b.dataset.metric] : b.dataset.dark ? ['dark', b.dataset.dark]
-                    : b.dataset.life ? ['life', b.dataset.life] : ['time', b.dataset.time];
+                const [k, v] = b.dataset.dark ? ['dark', b.dataset.dark] : b.dataset.life ? ['life', b.dataset.life] : ['time', b.dataset.time];
                 if (k === 'life') { setLife(v); return; }
                 state[k] = v;
                 b.parentElement.querySelectorAll('button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
-                if (k === 'metric') buildLegend();
-                draw();
+                if (k === 'dark' && state.compare.length) compareChanged();   // (the answer's species counts change too)
+                else draw();
             });
         });
         $('#reset').addEventListener('click', resetView);
@@ -2285,7 +2541,8 @@
             const b = e.target.closest('button[data-node]');
             if (b) select(+b.dataset.node);
         });
-        new ResizeObserver(fitStage).observe($('#compare'));
+        const above = new ResizeObserver(fitStage);
+        for (const el of ['.header', '.toolbar', '#compare']) above.observe($(el));
         window.addEventListener('hashchange', readHash);
     }
 
@@ -2312,6 +2569,10 @@
     let note = '';   // said after the next answer: what search couldn't do exactly
     async function targetOf(e) {
         note = '';
+        if (PARATAXA.has(e.sci || e.label)) {   // (found by Open Tree's or the Paleobiology Database's own search)
+            $('#compare-result').textContent = `${e.sci || e.label} is a trace-fossil or egg family: it is named for what was found (tracks, nests, eggshell), not for the animals that left them, so the tree doesn’t draw it as a lineage.`;
+            return -1;
+        }
         if (e.kind === 'pbdb') {   // known only to the Paleobiology Database
             busy(`Finding ${e.label}…`);
             const i = await placeByRecord(e.label, -1);
@@ -2326,26 +2587,36 @@
                     note = `${e.label} is the same branch as ${D.common[loaded] || D.name[loaded]} here (${D.name[loaded]}), already selected${/familiaris|dog/i.test(e.sci + e.label + D.common[loaded]) ? ': the dog is a domesticated form of the gray wolf' : ''}.`;
                 return loaded;
             }
-            if (e.kind === 'species' && !e.sci.includes(e.label) && fold(e.label) !== fold(D.name[loaded])) D.common[loaded] = e.label;
+            nameAs(loaded, e);
             return loaded;
         }
         busy(`Finding ${e.label}${e.sci && fold(e.sci) !== e.key ? ` (${e.sci})` : ''}…`);
         let i = await reach(e.ott);
-        if (i >= 0 && D.ott[i] === e.ott && e.kind === 'species' && !e.sci.includes(e.label) && fold(e.label) !== fold(D.name[i])) D.common[i] = e.label;
-        if (i >= 0 && D.ott[i] === e.ott) return i;
+        if (i >= 0 && D.ott[i] === e.ott) { nameAs(i, e); return i; }
         // Not a branch of its own in Open Tree's tree: hang it beside its relatives instead, a
         // fossil with its dates from the Paleobiology Database, or a living one by its
         // classification, rather than selecting some large group that holds it
         const name = e.sci || e.label;
         const placed = await placeByRecord(name, i, e.ott);
         if (placed >= 0) {
-            if (e.kind === 'species' && !name.includes(e.label) && fold(e.label) !== fold(D.name[placed])) D.common[placed] = e.label;
+            nameAs(placed, e, name);
             return placed;
         }
         if (i < 0) { busy(''); $('#compare-result').textContent = `Couldn’t place ${e.label} in the tree.`; return -1; }
         note = `${e.label} isn’t in the tree as its own branch; selected the nearest group that holds it.`;
         return i;
     }
+
+    // A species found by an everyday word is called by it (dog, not the wolf it's a form of),
+    // in the chip and in the shared link
+    const picked = new Map();   // node -> { label, sci }: the word it was found by, and that word's species
+    function nameAs(i, e, sci = e.sci) {
+        if (e.kind !== 'species' || sci.includes(e.label) || fold(e.label) === fold(D.name[i])) return;
+        D.common[i] = e.label;
+        picked.set(i, { label: e.label, sci });
+    }
+    // The name a selection shows: the subspecies it was picked as, when the tree folds it into this species
+    const shownName = i => picked.has(i) && picked.get(i).sci.startsWith(`${D.name[i]} `) ? picked.get(i).sci : display(i);
 
     // Hang a taxon the tree doesn't have beside its nearest relatives that it does. The
     // Paleobiology Database gives its ancestors (and, if it's extinct, its first and last
@@ -2357,8 +2628,21 @@
         try {
             recs = (await inTime(fetch(`https://paleobiodb.org/data1.2/taxa/list.json?name=${encodeURIComponent(name)}&rel=all_parents&show=app&vocab=pbdb`).then(r => r.ok ? r.json() : {}), 12000)).records || [];
         } catch (e) { recs = []; }
-        const self = recs.find(r => r.taxon_name === name) || recs[recs.length - 1];
-        const gone = self && self.is_extant === 'extinct';
+        let self = recs.find(r => r.taxon_name === name) || recs[recs.length - 1];
+        let flags = [];
+        if (!self && ott) {   // a name it doesn't know: Open Tree's flags, and its synonyms (Homo sapiens neanderthalensis is Homo neanderthalensis there)
+            const info = await post('taxonomy/taxon_info', { ott_id: ott }).catch(() => null);
+            flags = (info && info.flags) || [];
+            for (const syn of ((info && info.synonyms) || []).filter(isSpecies).slice(0, 3)) {
+                try {
+                    recs = (await inTime(fetch(`https://paleobiodb.org/data1.2/taxa/list.json?name=${encodeURIComponent(syn)}&rel=all_parents&show=app&vocab=pbdb`).then(r => r.ok ? r.json() : {}), 8000)).records || [];
+                } catch (e) { recs = []; }
+                self = recs.find(r => r.taxon_name === syn);
+                if (self) break;
+            }
+            if (!self) recs = [];
+        }
+        const gone = self ? self.is_extant === 'extinct' : flags.includes('extinct');
         if (!self && near < 0) return -1;
         const byName = name => { for (let v = 0; v < N; v++) if (D.name[v] === name && y1[v] > y0[v]) return v; return -1; };
         const depth = v => { let d = 0; for (; v > 0; v = D.parent[v]) d++; return d; };
@@ -2373,24 +2657,20 @@
             const found = ott ? nodeOfOtt(ott) : byName(name);
             if (found >= 0) return found;
         }
-        let first = null, last = null;
-        if (gone && self.lastapp_min_ma != null) {
-            last = Math.max(0.0001, +self.lastapp_min_ma);
-            first = +(self.firstapp_min_ma ?? self.firstapp_max_ma);
-            if (!(first > last)) first = +self.firstapp_max_ma;
-        }
+        const [first = null, last = null, ...span] = (gone && self && fossilRange(self)) || [];
         if (gone && last == null) return -1;   // extinct, but undated: it can't be drawn in time
         while (first != null && host > 0 && D.age[host] <= first) host = D.parent[host];   // older than the group: on its stem
-        return addLeaf(host, { name, ott, first, last, rank: (self && (self.taxon_rank || self.accepted_rank)) || 'species' });
+        return addLeaf(host, { name, ott, first, last, span, rank: (self && (self.taxon_rank || self.accepted_rank)) || 'species' });
     }
 
     // One new tip under host, placed by its classification
     function addLeaf(host, sp) {
         const i = N++;
-        for (const key of ['name', 'parent', 'rank', 'common', 'ott', 'age', 'dated', 'tips', 'ind', 'indHow', 'bio', 'bioHow', 'darkLo', 'darkHi', 'other', 'crown', 'first', 'last', 'placed', 'fossilFrom']) D[key].push(null);
+        for (const key of ['name', 'parent', 'rank', 'common', 'ott', 'age', 'dated', 'tips', 'spp', 'sppLog', 'sppEst', 'darkLo', 'darkHi', 'other', 'crown', 'first', 'last', 'placed', 'fossilFrom', 'ci', 'crownCi', 'firstAside']) D[key].push(null);
         D.name[i] = sp.name; D.parent[i] = host; D.rank[i] = rankIndex(sp.rank); D.ott[i] = sp.ott || 0;
         D.common[i] = commonByOtt.get(sp.ott) || ''; D.tips[i] = 1; D.other[i] = '0'; D.crown[i] = 0; D.placed[i] = 'x';
-        D.first[i] = sp.first; D.last[i] = sp.last; D.indHow[i] = 'm'; D.bioHow[i] = 'm';
+        D.first[i] = sp.first; D.last[i] = sp.last; D.spp[i] = sp.last != null ? 0 : 1; D.sppLog[i] = sp.last != null ? null : 0; D.sppEst[i] = '0';
+        if (sp.span && sp.span.length) fossilSpan.set(i, sp.span);
         D.age[i] = Math.min(sp.last != null ? sp.last : 0, D.age[host] * 0.97); D.dated[i] = sp.last != null ? 4 : 2;
         kids.push([]); kids[host].push(i); leaves.push(1); group.push(group[host]); nodeId.push(sp.ott ? `ott${sp.ott}` : '');
         repName.push(sp.name); y0.push(0); y1.push(0); ymid.push(0);
@@ -2408,11 +2688,12 @@
         if (!text) compareChanged();
     }
 
-    // The chart gives up the selection panel's height, so it still fits the window. Resizing
-    // here, before any zoom starts, keeps the resize from cutting that zoom short.
+    // The chart gives up the height of everything above it (header, toolbar, selection panel),
+    // so its time axis sits above the site bar on first load. Resizing here, before any zoom
+    // starts, keeps the resize from cutting that zoom short.
     function fitStage() {
-        const panel = $('#compare');
-        document.documentElement.style.setProperty('--compare-h', `${panel.offsetHeight}px`);
+        const top = stage.getBoundingClientRect().top + window.scrollY;
+        document.documentElement.style.setProperty('--stage-top', `${Math.round(top)}px`);
         resize();
     }
 
@@ -2443,37 +2724,60 @@
     }
 
     // After the selection changes: the chips, the written answer, the URL, the view
+    let wasChosen = new Set();
     function compareChanged(refit) {
         computeTies();
         const sel = state.compare;
-        $('#chips').innerHTML = sel.map(i => `<li><i style="background:${nodeColor[i]}"></i>${esc(display(i))}${D.common[i] ? ` <span class="sub">${esc(D.common[i])}</span>` : ''}<button type="button" data-node="${i}" aria-label="Deselect ${esc(display(i))}">×</button></li>`).join('');
+        // A silhouette that failed for a passing reason gets a fresh try when its group is chosen again
+        for (const i of sel) {
+            const p = portraits.get(i);
+            if (p && p.state === 'none' && !p.final && !wasChosen.has(i)) portraits.delete(i);
+        }
+        wasChosen = new Set(sel);
+        $('#chips').innerHTML = sel.map(i => `<li><i style="background:${nodeColor[i]}"></i>${esc(shownName(i))}${D.common[i] ? ` <span class="sub">${esc(D.common[i])}</span>` : ''}<button type="button" data-node="${i}" aria-label="Deselect ${esc(display(i))}">×</button></li>`).join('');
         $('#compare-tools').hidden = !sel.length;
         $('#compare').classList.toggle('empty', !sel.length);
         const out = $('#compare-result');
         const names = list => list.map(i => esc(D.common[i] || display(i)));
+        const and = a => a.length < 3 ? a.join(' and ') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
+        // The lines beside i's own at v, by name (none past two: "3 lines"); living ones only, if asked
+        const relatives = (i, v, living) => {
+            let c = i;
+            while (D.parent[c] !== v && c > 0) c = D.parent[c];
+            const r = kids[v].filter(k => k !== c && y1[k] > y0[k] && (!living || !extinct(k)));
+            return r.length > 2 ? [`${r.length} lines`] : r.map(k => esc(D.common[k] || display(k)));
+        };
         if (!sel.length) {
             out.innerHTML = `Search, or click any branch, to select it. Select two or more to see where they meet. Try `
                 + EXAMPLES.map(([a, b]) => `<button type="button" class="try" data-try="${esc(a)}|${esc(b)}">${esc(a)} &amp; ${esc(b)}</button>`).join(' ');
         } else if (sel.length === 1) {
-            const i = sel[0], p = D.parent[i] >= 0 ? splitOf(i) : -1;
+            const i = sel[0], p = D.parent[i] >= 0 ? splitOf(i) : -1, its = isPlural(i) ? 'their' : 'its';
+            // A living lineage whose nearest relatives are all extinct (the Neanderthal, for us)
+            // also says when it split from its nearest living ones
+            const live = p >= 0 && !extinct(i) ? livingSplit(i) : p, gone = live !== p ? relatives(i, p) : [];
             out.innerHTML = `<b>${names([i])[0]}</b>`
-                + (p >= 0 ? ` branched off from its nearest relatives about <strong>${fmtAgeWords(D.age[p])}</strong>.` : '.')
-                + tally(i) + ' Select another to see where they meet.';
+                + (p >= 0 ? ` branched off from ${its} nearest relatives${gone.length ? `, now extinct (${and(gone)}),` : ''} ${aboutAge(D.age[p])}${rangeWords(p)} <span class="note">(${dateBasis(p).replace(/ \(.*\)$/, '')})</span>`
+                    + (live > 0 && live !== p ? `, and from ${its} nearest living relatives${relatives(i, live, true).length ? ` (${and(relatives(i, live, true))})` : ''} ${aboutAge(D.age[live])}${rangeWords(live)}` : '')
+                    + `${unresolvedAt(p) ? ` <span class="note">(one of ${unresolvedAt(p)} lines that branch from that point: which of them are ${its} nearest relatives is unresolved)</span>` : ''}.` : '.')
+                + tally(i, its) + ' Select another to see where they meet.';
         } else if (sel.includes(ties.mrca)) {   // a group and members of it
-            const m = ties.mrca, inside = sel.filter(i => i !== m), and = a => a.length < 3 ? a.join(' and ') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
-            out.innerHTML = `<b>${and(names(inside))}</b> ${inside.length > 1 ? 'are' : 'is'} among the <b>${names([m])[0]}</b>, whose last common ancestor lived about <strong>${fmtAgeWords(D.age[m])}</strong>.`
-                + (inside.length === 1 && splitOf(inside[0]) >= 0 ? ` ${names(inside)[0][0].toUpperCase() + names(inside)[0].slice(1)} split from its nearest relatives about ${fmtAgeWords(D.age[splitOf(inside[0])])}.` : '');
+            const m = ties.mrca, inside = sel.filter(i => i !== m);
+            out.innerHTML = `<b>${and(names(inside))}</b> ${inside.length > 1 || isPlural(inside[0]) ? 'are' : 'is'} among the <b>${names([m])[0]}</b>, whose last common ancestor lived ${aboutAge(D.age[m])}${rangeWords(m)}.`
+                + (inside.length === 1 && splitOf(inside[0]) >= 0 ? ` ${names(inside)[0][0].toUpperCase() + names(inside)[0].slice(1)} split from ${isPlural(inside[0]) ? 'their' : 'its'} nearest relatives ${aboutAge(D.age[splitOf(inside[0])], false)}.` : '');
         } else {
             const m = ties.mrca;
             const others = ties.joins.filter(j => j.v !== m);
-            const and = a => a.length < 3 ? a.join(' and ') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
-            out.innerHTML = `The last common ancestor of ${sel.length === 2 ? and(names(sel)) : `all ${sel.length}`} lived about <strong>${fmtAgeWords(D.age[m])}</strong>`
-                + ` (${DATE_BASIS[D.dated[m]].replace(/ \(.*\)$/, '')}), `
-                + (D.name[m] ? `the ancestor of all <strong>${esc(ancestorName(m))}</strong>.` : `${esc(splitWords(m))}.`)
+            // Fossils hung from the ancestor itself by classification, far younger than it (a Neanderthal under Homo)
+            const placedBy = sel.filter(i => D.placed[i] === 'x' && D.parent[i] === m && D.first[i] != null && D.first[i] < D.age[m] * 0.25);
+            out.innerHTML = `The last common ancestor of ${sel.length === 2 ? and(names(sel)) : `all ${sel.length}`} lived ${aboutAge(D.age[m])}${rangeWords(m)}`
+                + ` (${dateBasis(m).replace(/ \(.*\)$/, '')}), `
+                + (D.name[m] ? `the ancestor of all <strong>${esc(plainName(m))}</strong>.` : `${esc(splitWords(m, sel.length === 2 ? sel : []))}.`)
                 + (m === 0 && !sel.some(i => group[i] === 'bacteria') && sel.some(i => group[i] === 'archaea')
                     ? ' <span class="note">But many biologists now place eukaryotes inside the Archaea, which would make this ancestor about two billion years old.</span>'
                     : D.age[m] > 600 ? ' <span class="note">Dates this deep are uncertain by hundreds of millions of years.</span>' : '')
-                + (others.length ? ` <span class="joins">Along the way, ${others.slice(0, 2).map(j => `<b>${and(names(j.under))}</b> ${fmtAgeWords(D.age[j.v])}${D.name[j.v] ? ` (${esc(D.common[j.v] || D.name[j.v])})` : ''}`).join('; ')}`
+                + (m > 0 && unresolvedAt(m) && !hasOwn(m) ? ` <span class="note">The tree leaves this branch point unresolved (${unresolvedAt(m)} lines branch from it), so it doesn’t say how they’re related within ${D.name[m] ? esc(D.name[m]) : 'it'}: they may have split more recently than this.</span>` : '')
+                + (placedBy.length ? ` <span class="note">${and(names(placedBy))} ${placedBy.length > 1 ? 'aren’t' : 'isn’t'} in any published tree, so ${placedBy.length > 1 ? 'they hang' : 'it hangs'} from ${placedBy.length > 1 ? 'their' : 'its'} group: the real split may be more recent.</span>` : '')
+                + (others.length ? ` <span class="joins">Along the way, ${others.slice(0, 2).map(j => `<b>${and(names(j.under))}</b> met ${fmtAgeWords(D.age[j.v])}${D.name[j.v] ? `, in the ancestor of all ${esc(plainName(j.v))}` : ''}`).join('; ')}`
                     + (others.length > 2 ? `; ${others.length - 2} more marked on the chart` : '') + '.</span>' : '');
         }
         if (note) { out.insertAdjacentHTML('beforeend', ` <span class="note">${esc(note)}</span>`); note = ''; }
@@ -2485,12 +2789,12 @@
     }
 
     // What's known of a selected group, against what's thought to exist
-    function tally(i) {
+    function tally(i, its = 'its') {
         if (extinct(i)) return D.tips[i] > 1 ? ` Known from ${fmtInt(D.tips[i])} fossil species, a small fraction of those that lived: most species never fossilise.` : '';
         const share = namedShare(i);
-        if (share == null || D.tips[i] < 2) return '';
-        const total = D.tips[i] / share;
-        return ` Science has named <strong>${fmtCount(Math.log10(D.tips[i]))}</strong> of its species, of about ${fmtCount(Math.log10(total))} thought to exist${share < 0.5 ? ` (1 in ${fmtInt(Math.round(1 / share))})` : ''}.`;
+        if (share == null || D.spp[i] < 2) return '';
+        const total = D.spp[i] / share;
+        return ` Science has named <strong>${fmtCount(Math.log10(D.spp[i]))}</strong> of ${its} living species, of about ${fmtCount(Math.log10(total))} thought to exist${share < 0.5 ? ` (1 in ${fmtInt(Math.round(1 / share))})` : ''}.`;
     }
 
     // ---------- cite and download ----------
@@ -2500,9 +2804,16 @@
         return `Wall, M. (${year}). Dendrogram: every family of life on one timeline. https://mac-wall.com/dendrogram/ `
             + `(data built ${META.built}; Open Tree of Life ${META.synth}, OTT ${META.taxonomy}; TimeTree; Paleobiology Database).`;
     }
+    // Every download opens with where its data comes from and on what terms (lines starting
+    // with #, which most spreadsheet and data tools can be told to skip)
+    function attribution() {
+        return [`# Dendrogram (https://mac-wall.com/dendrogram/) data built ${META.built}`,
+            `# Sources: Open Tree of Life (synthesis ${META.synth}; taxonomy ${META.taxonomy}; https://tree.opentreeoflife.org); TimeTree (https://timetree.org); NCBI Taxonomy (common names; https://www.ncbi.nlm.nih.gov/taxonomy)`,
+            '# Fossil data from the Paleobiology Database (https://paleobiodb.org) under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); this file is derived from it'];
+    }
     function csv(rows) {
         const cell = v => v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
-        return rows.map(r => r.map(cell).join(',')).join('\n') + '\n';
+        return [...attribution(), ...rows.map(r => r.map(cell).join(','))].join('\n') + '\n';
     }
     function download(name, text) {
         const a = document.createElement('a');
@@ -2514,45 +2825,86 @@
     const round = (v, d = 3) => v == null || !Number.isFinite(v) ? null : +v.toFixed(d);
     // The selection, a row each, then their common ancestor
     function selectionRows() {
-        const rows = [['name', 'common_name', 'rank', 'ott_id', 'status', 'first_fossil_ma', 'last_fossil_ma', 'split_off_ma', 'split_off_basis',
-            'described_species', 'named_share', 'living_individuals', 'individuals_basis', 'placed_by', 'path']];
+        const rows = [['name', 'common_name', 'rank', 'ott_id', 'status', 'first_fossil_ma', 'last_fossil_ma', 'split_off_ma', 'split_off_ci_low_ma', 'split_off_ci_high_ma', 'split_off_median_ma', 'split_off_basis', 'split_off_source',
+            ...SPECIES_COLUMNS, 'named_share', ...PUBLISHED_COLUMNS, 'placed_by', 'path']];
         for (const i of state.compare) {
             const p = D.parent[i] >= 0 ? splitOf(i) : -1, share = namedShare(i), path = [];
             for (let v = D.parent[i]; v > 0; v = D.parent[v]) if (D.name[v]) path.unshift(D.name[v]);
             rows.push([display(i), D.common[i], rankName(i), D.ott[i] || null, extinct(i) ? 'extinct' : 'living', round(D.first[i]), round(D.last[i], 4),
-                p >= 0 ? round(D.age[p], 2) : null, p >= 0 ? DATE_BASIS[D.dated[p]] : null, D.tips[i] || null, share == null ? null : round(share, 3),
-                D.ind[i] == null || extinct(i) ? null : Math.round(Math.pow(10, D.ind[i])), extinct(i) ? null : basisOf(i, 'ind'),
-                D.placed[i] === 'x' ? 'classification' : 'phylogeny', path.join(' > ')]);
+                p >= 0 ? round(D.age[p], 2) : null, ...(p >= 0 && ciOf(p) ? ciOf(p) : [null, null, null]),
+                p >= 0 ? dateBasis(p) : null, p >= 0 ? dateSource(p) : null, ...speciesCells(i), share == null ? null : round(share, 3),
+                ...publishedCells(i), D.placed[i] === 'x' ? 'classification' : 'phylogeny', path.join(' > ')]);
         }
         const m = ties.mrca;
-        if (m >= 0) rows.push([`common ancestor: ${ancestorName(m)}`, '', rankName(m), D.ott[m] || null, '', null, null, round(D.age[m], 2), DATE_BASIS[D.dated[m]], D.tips[m] || null, null, null, null, '', '']);
+        if (m >= 0) rows.push([`common ancestor: ${ancestorName(m)}`, '', rankName(m), D.ott[m] || null, '', null, null, round(D.age[m], 2),
+            ...(ciOf(m) || [null, null, null]), dateBasis(m), dateSource(m), ...speciesCells(m), null, ...publishedCells(m), '', '']);
         return rows;
     }
     // The whole tree as built (families and everything above them), a row a node
     function treeRows() {
-        const rows = [['id', 'parent_id', 'name', 'common_name', 'rank', 'ott_id', 'age_ma', 'age_basis', 'status', 'first_fossil_ma', 'last_fossil_ma',
-            'described_species', 'living_individuals_log10', 'biomass_gtC_log10', 'undescribed_low_log10', 'undescribed_high_log10', 'placed_by']];
-        for (let i = 0; i < N0; i++) rows.push([i, D.parent[i], D.name[i], D.common[i], rankName(i), D.ott[i] || null, round(D.age[i], 2), DATE_BASIS[D.dated[i]],
-            extinct(i) ? 'extinct' : 'living', round(D.first[i]), round(D.last[i], 4), D.tips[i] || null, D.ind[i], D.bio[i], D.darkLo[i], D.darkHi[i],
+        const rows = [['id', 'parent_id', 'name', 'common_name', 'rank', 'ott_id', 'age_ma', 'age_ci_low_ma', 'age_ci_high_ma', 'age_median_ma', 'age_basis', 'age_source', 'status', 'first_fossil_ma', 'last_fossil_ma',
+            ...SPECIES_COLUMNS, ...PUBLISHED_COLUMNS, 'placed_by']];
+        for (let i = 0; i < N0; i++) rows.push([i, D.parent[i], D.name[i], D.common[i], rankName(i), D.ott[i] || null, round(D.age[i], 2),
+            ...(ciOf(i) || [null, null, null]), dateBasis(i), dateSource(i),
+            extinct(i) ? 'extinct' : 'living', round(D.first[i]), round(D.last[i], 4), ...speciesCells(i), ...publishedCells(i),
             D.placed[i] === 'x' ? 'classification' : 'phylogeny']);
         return rows;
     }
+    // Species, as counts: described (living, or for the extinct their fossil species), and the
+    // undescribed estimate under each setting, each with where it comes from
+    const SPECIES_COLUMNS = ['described_species', 'described_species_source', 'undescribed_species_conservative', 'undescribed_species_liberal', 'undescribed_source'];
+    function speciesCells(i) {
+        const n = extinct(i) ? D.tips[i] : D.spp[i], count = v => v == null ? 0 : Math.round(Math.pow(10, v));
+        return [n || null, sppBasis(i), extinct(i) ? null : count(D.darkLo[i]), extinct(i) ? null : count(D.darkHi[i]), extinct(i) ? null : speciesBasis(i)];
+    }
+    // Figures published for the group itself (empty for the rest): how many are alive, in what
+    // units, and its biomass in gigatonnes of carbon
+    const PUBLISHED_COLUMNS = ['alive_now', 'alive_now_unit', 'alive_now_source', 'biomass_gt_carbon', 'biomass_source'];
+    function publishedCells(i) {
+        const pop = anchorsBy.get(`${i}:individuals`), mass = anchorsBy.get(`${i}:biomass`);
+        return [pop ? midOf(pop) : null, pop ? pop.unit || 'individuals' : null, pop ? `${pop.confidence}: ${pop.source}` : null,
+            mass ? midOf(mass) : null, mass ? `${mass.confidence}: ${mass.source}` : null];
+    }
 
     // The selection lives in the address (#compare=ott ids), so it can be shared; ids below
-    // the loaded tree are loaded the way down to
+    // the loaded tree are loaded the way down to. An id found by an everyday word carries
+    // it (#compare=247341:dog), so the link opens with the words its sender saw.
+    function hashOf(sel) {
+        const ids = sel.filter(i => D.ott[i]).map(i => picked.has(i) && picked.get(i).label === D.common[i] && D.common[i] !== commonByOtt.get(D.ott[i])
+            ? `${D.ott[i]}:${encodeURIComponent(D.common[i])}` : D.ott[i]);
+        return ids.length ? `#compare=${ids.join(',')}` : '';
+    }
     function writeHash() {
-        const ids = state.compare.map(i => D.ott[i]).filter(Boolean);
-        const want = ids.length ? `#compare=${ids.join(',')}` : '';
+        const want = hashOf(state.compare);
         if (location.hash !== want) history.replaceState(null, '', want || location.pathname + location.search);
     }
+    let hashReads = 0;   // (a later address wins over one still loading)
     async function readHash() {
-        const m = location.hash.match(/^#compare=([\d,]+)$/);
-        if (!m) return;
-        const otts = [...new Set(m[1].split(',').map(Number))].slice(0, MAX_COMPARE);
-        if (otts.join() === state.compare.map(i => D.ott[i]).join()) return;
+        const m = location.hash.match(/^#compare=(\d+(?::[^,:]*)?(?:,\d+(?::[^,:]*)?)*)$/);
+        if (!m) {   // (back to the page with nothing selected)
+            if (!location.hash && state.compare.length) { state.compare = []; compareChanged(); }
+            return;
+        }
+        if (location.hash === hashOf(state.compare)) return;
+        const ticket = ++hashReads;
+        const asked = new Map();   // ott -> the word it was found by, if any
+        const parts = m[1].split(',');
+        for (const part of parts) {
+            const [o, word] = part.split(':');
+            if (asked.size < MAX_COMPARE && !asked.has(+o)) { try { asked.set(+o, word ? decodeURIComponent(word) : ''); } catch (e) { asked.set(+o, ''); } }
+        }
+        const otts = [...asked.keys()];
         if (otts.some(o => nodeOfOtt(o) < 0)) busy('Loading the shared selection…');
-        const sel = (await Promise.all(otts.map(o => reach(o)))).filter(i => i >= 0 && D.name[i]);
-        state.compare = [...new Set(sel)];
+        if ([...asked.values()].some(Boolean)) await loadNames();
+        const found = await Promise.all(otts.map(o => reach(o)));
+        if (ticket !== hashReads) return;
+        // Only a word the names list has for that species is taken from the address
+        found.forEach((i, k) => {
+            const e = asked.get(otts[k]) && searchIndex.find(e => e.kind === 'species' && e.ott === otts[k] && e.label === asked.get(otts[k]));
+            if (i >= 0 && e && D.ott[i] === e.ott) nameAs(i, e);
+        });
+        state.compare = [...new Set(found.filter(i => i >= 0 && D.name[i]))];
+        if (new Set(parts.map(x => x.split(':')[0])).size > MAX_COMPARE) note = `The link names ${new Set(parts.map(x => x.split(':')[0])).size} groups; up to ${MAX_COMPARE} can be selected at once, so the first ${MAX_COMPARE} are shown.`;
         compareChanged(true);
     }
 
@@ -2575,7 +2927,7 @@
         const svg = $('#legend-weights');
         svg.innerHTML = m.legend.map((v, k) => {
             const x = 6 + k * 72, w = widthForLog(v);
-            const label = state.metric === 'ind' ? `10${String(v).split('').map(c => SUP[c]).join('')}` : fmtMass(v).replace(' of carbon', ' C');
+            const label = fmtInt(Math.pow(10, v));
             return `<line x1="${x}" x2="${x + 52}" y1="14" y2="14" stroke="${colors['text-2']}" stroke-width="${w.toFixed(1)}" stroke-linecap="round"/>`
                 + `<text x="${x}" y="38">${label}</text>`;
         }).join('');
@@ -2591,13 +2943,12 @@
         const tb = $('#table tbody');
         tb.innerHTML = [...rows].sort((a, b) => a - b).map(i => {
             const lo = D.darkLo[i], hi = D.darkHi[i];
-            const how = D.indHow[i] === 'a' ? 'published estimate' : D.indHow[i] === 's' ? 'sum of estimates' : 'modelled';
+            const pop = anchorsBy.get(`${i}:individuals`), mass = anchorsBy.get(`${i}:biomass`);
             return `<tr><td><button type="button" data-node="${i}">${esc(D.name[i])}</button>${D.common[i] ? ` <span class="sub">${esc(D.common[i])}</span>` : ''}</td>`
-                + `<td class="num">${fmtInt(D.tips[i])}</td>`
-                + `<td class="num">${D.ind[i] == null ? '—' : fmtCount(D.ind[i])}</td>`
-                + `<td class="num">${D.bio[i] == null ? '—' : fmtMass(D.bio[i]).replace(' of carbon', '')}</td>`
+                + `<td class="num">${fmtInt(D.spp[i])}</td>`
                 + `<td class="num">${lo == null ? '0' : fmtCount(lo)} to ${hi == null ? '0' : fmtCount(hi)}</td>`
-                + `<td>${how}</td></tr>`;
+                + `<td class="num">${pop ? `${fmtCount(Math.log10(midOf(pop)))} ${esc(UNIT_WORDS[pop.unit] || pop.unit)}` : '—'}</td>`
+                + `<td class="num">${mass ? fmtMass(Math.log10(midOf(mass))).replace(' of carbon', '') : '—'}</td></tr>`;
         }).join('');
         tb.addEventListener('click', e => {
             const b = e.target.closest('button[data-node]');
@@ -2612,11 +2963,11 @@
     function buildSources(data) {
         const m = data.meta;
         $('#sources').innerHTML = `Built ${esc(m.built)} from the ${esc(m.sources.tree)}, ${esc(m.sources.names)}, and ${esc(m.sources.dates)}.`;
-        const metric = { individuals: 'Individuals', biomass: 'Biomass (Gt C)', species: 'Total species' };
+        const metric = a => a.metric === 'individuals' ? `Alive now (${a.unit || 'individuals'})` : a.metric === 'biomass' ? 'Biomass (Gt C)' : 'Total species';
         const num = v => v == null ? '' : v >= 1e5 || v < 0.01 ? v.toExponential(1).replace('e+', 'e') : String(v);
         $('#figures tbody').innerHTML = data.anchors.map(a => {
             const range = a.low != null && a.high != null ? `${num(a.low)} to ${num(a.high)}` : '';
-            return `<tr><td>${esc(a.name)}</td><td>${metric[a.metric]}</td><td class="num">${esc(num(a.value) || range)}</td>`
+            return `<tr><td>${esc(a.name)}</td><td>${esc(metric(a))}</td><td class="num">${esc(num(a.value) || range)}</td>`
                 + `<td>${esc(a.value != null ? range : '')}</td><td>${esc(a.confidence)}</td><td>${esc(a.source)}</td></tr>`;
         }).join('');
     }

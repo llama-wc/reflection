@@ -126,11 +126,12 @@ a:hover { color: var(--accent); }
 
 /* ---------- the chart ---------- */
 .stage {
-    /* Fills the window below the header, toolbar and (when open) the compare panel */
+    /* Fills the window below the header, toolbar and compare panel (--stage-top, measured)
+       and above the site bar, so the time axis shows without scrolling */
     position: relative;
-    height: calc(100vh - var(--site-bar, 0px) - 150px - var(--compare-h, 0px));
-    height: calc(100dvh - var(--site-bar, 0px) - 150px - var(--compare-h, 0px));
-    min-height: 480px; overflow: hidden; touch-action: none;
+    height: calc(100vh - var(--site-bar, 0px) - var(--stage-top, 300px));
+    height: calc(100dvh - var(--site-bar, 0px) - var(--stage-top, 300px));
+    min-height: 360px; overflow: hidden; touch-action: none;
     /* A margin of plain page on the right: scrolling there moves the page, not the chart */
     margin-right: 72px; border-right: 1px solid var(--line);
 }
@@ -162,6 +163,13 @@ a:hover { color: var(--accent); }
     background: var(--bg); border-radius: 4px; pointer-events: none; transition: opacity 0.6s;
 }
 .hint.gone { opacity: 0; }
+.wheel-hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 8px 14px;
+    font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    z-index: 5; pointer-events: none; transition: opacity 0.3s;
+}
+.wheel-hint.gone { opacity: 0; }
+.gutter-cue { display: none; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; letter-spacing: 1px; }
 .loading[hidden] { display: none; }
 
@@ -183,12 +191,20 @@ a:hover { color: var(--accent); }
 .tip p.basis { margin: 0; color: var(--muted); font-size: 11px; max-width: 40ch; }
 .tip .path { margin-top: 8px; color: var(--muted); font-size: 11px; }
 .tip .act { margin-top: 6px; color: var(--muted); font-size: 11px; font-style: italic; }
+.tip.tapped { pointer-events: auto; }
+.tip-acts { display: flex; gap: 8px; align-items: center; font-style: normal; }
+.tip-acts button {
+    font: inherit; font-size: 13px; min-height: 40px; padding: 0 16px; cursor: pointer;
+    color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+}
+.tip-acts button[data-act="select"] { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- compare ---------- */
 /* One fixed height whatever it holds, so the chart never shifts under the pointer as a
-   selection fills in: chips scroll sideways, a long answer scrolls inside */
+   selection fills in: chips scroll sideways, a long answer scrolls inside. Tall enough for
+   the chips, four whole lines of answer and the credits */
 .compare {
-    height: 128px; box-sizing: border-box; display: flex; flex-direction: column;
+    height: 156px; box-sizing: border-box; display: flex; flex-direction: column;
     padding: 10px 40px 8px; border-bottom: 1px solid var(--line); font-size: 13px;
 }
 .compare-row { display: flex; align-items: center; gap: 12px; flex: none; }
@@ -211,7 +227,7 @@ a:hover { color: var(--accent); }
     background: none; color: var(--muted);
 }
 .chips button:hover, .chips button:focus-visible { color: var(--accent); background: var(--grid); outline: none; }
-.compare.empty .compare-result { margin-top: 0; -webkit-line-clamp: 5; line-clamp: 5; }
+.compare.empty .compare-result { margin-top: 0; }
 .compare-result .busy { color: var(--muted); }
 .compare-result .busy::after { content: ''; display: inline-block; width: 10px; height: 10px; margin-left: 8px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -1px; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -219,9 +235,10 @@ a:hover { color: var(--accent); }
 .search li .tag { margin-left: auto; align-self: center; color: var(--muted); font-size: 11px; }
 .compare-result {
     flex: none; margin-top: 6px; color: var(--text-2); max-width: 90ch; line-height: 1.5;
-    /* whole lines only: a long answer ends in an ellipsis, never a line cut in half */
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+    /* whole lines only: a longer answer scrolls inside, never shows a line cut in half */
+    max-height: 6em; overflow-y: auto; scrollbar-width: thin;
 }
+.compare.empty .compare-result { max-height: none; }
 .compare-result .note { color: var(--muted); }
 .compare-result:empty { display: none; }
 .compare-result strong { color: var(--accent); font-weight: 600; }
@@ -292,9 +309,14 @@ table button:hover { color: var(--accent); }
     .toolbar { gap: 8px 12px; }
     .search { max-width: none; flex-basis: 100%; }
     .plain.push { margin-left: 0; }
-    .compare { padding-left: 16px; padding-right: 16px; height: 176px; }
+    /* On a phone the panel grows to fit: chips wrap, and the answer and credits are read in full */
+    .compare { padding-left: 16px; padding-right: 16px; height: auto; min-height: 176px; }
     .compare-row { flex-wrap: wrap; gap: 6px; }
-    .chips { flex-basis: 100%; }
+    .chips { flex-basis: 100%; flex-wrap: wrap; overflow: visible; }
+    .chips li { white-space: normal; }
+    .chips button { width: 32px; height: 32px; }
+    .compare-result { overflow: visible; max-height: none; }
+    .compare-credits { white-space: normal; }
     .compare-tools { margin-left: 0; }
     .compare-tools .plain { padding: 3px 9px; }
     .seg-label { display: none; }
@@ -302,6 +324,15 @@ table button:hover { color: var(--accent); }
     .seg button, .plain { padding: 4px 9px; }
     /* Shorter than the screen, so a thumb can still scroll the page past it */
     .stage { height: min(72vh, 640px); height: min(72dvh, 640px); min-height: 380px; margin-right: 44px; }
+    /* The strip beside the chart scrolls the page (a drag on the chart pans it): say so */
+    .gutter-cue {
+        display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+        width: 44px; margin: calc(-1 * max(380px, min(72vh, 640px))) 0 0 auto;
+        margin-top: calc(-1 * max(380px, min(72dvh, 640px)));
+        height: min(72vh, 640px); height: min(72dvh, 640px); min-height: 380px;
+        border-left: 1px dashed var(--line); color: var(--muted); font-size: 11px; letter-spacing: 1.5px;
+        writing-mode: vertical-rl;
+    }
     .trail { left: 16px; max-width: calc(100% - 32px); }
     .hint { display: none; }
 }

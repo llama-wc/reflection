@@ -166,10 +166,21 @@
         document.documentElement.setAttribute('data-theme', theme);
     }
 
-    const saved = read(KEY, 'dark|light');
-    apply(saved === 'light' ? 'light' : 'dark');
+    // A choice made with the toggle wins; until then the theme follows the system's
+    // light/dark setting, and changes with it.
+    const systemLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
+    const chosen = () => { const t = read(KEY, 'dark|light'); return t === 'light' || t === 'dark' ? t : null; };
+    const current = () => chosen() || (systemLight && systemLight.matches ? 'light' : 'dark');
+
+    const saved = chosen();
+    apply(current());
     // Copy a choice made before the shared cookie existed, so the subdomain sees it too.
-    if (saved === 'light' || saved === 'dark') save(KEY, saved);
+    if (saved) save(KEY, saved);
+    if (systemLight) {
+        const follow = () => { if (!chosen()) apply(current()); };
+        if (systemLight.addEventListener) systemLight.addEventListener('change', follow);
+        else if (systemLight.addListener) systemLight.addListener(follow);
+    }
 
     function toggle() {
         const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -182,7 +193,7 @@
     // the garden if the setting changed meanwhile.
     window.addEventListener('pageshow', (e) => {
         if (!e.persisted) return;
-        apply(read(KEY, 'dark|light') === 'light' ? 'light' : 'dark');
+        apply(current());
         showMotion();
         if (inGarden() && !motionOn()) location.replace(plainUrl());
         else toGarden();
