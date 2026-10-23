@@ -404,6 +404,10 @@
     // ---------- size and zoom ----------
 
     function resize() {
+        // Opened out of sight (the garden loads a page in a hidden frame), Firefox computes
+        // no styles, so the inks read empty and everything draws black: read them again
+        // once the page is shown
+        if (!colors.bg) { readColors(); buildLegend(); }
         const r = stage.getBoundingClientRect();
         if (r.width === W && r.height === H) return;   // (re-applying the zoom would stop a zoom in flight)
         const narrow = r.width < 700;

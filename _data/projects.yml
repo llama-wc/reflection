@@ -12,3 +12,7 @@ virtue-ledger:
 elenchus:
   name: Elenchus Engine
   url: https://elenchus.mac-wall.com/elenchus/
+
+dendrogram:
+  name: Dendrogram
+  url: /dendrogram/

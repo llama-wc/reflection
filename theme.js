@@ -31,7 +31,7 @@
     // tab (FAILED_KEY) and sends it to the page on its own; the next visit tries again.
     const MOTION_KEY = 'site-animations';
     const FAILED_KEY = 'garden-failed';
-    const GARDEN_PAGE = /^\/(portfolio\.html|movie-reviews\.html|ledger\/|elenchus\/|notes\/.*)?$/;
+    const GARDEN_PAGE = /^\/(portfolio\.html|movie-reviews\.html|ledger\/|elenchus\/|dendrogram\/|notes\/.*)?$/;
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const motionSaved = read(MOTION_KEY, 'on|off');
     const motionOn = () => (read(MOTION_KEY, 'on|off') || (reduceMotion ? 'off' : 'on')) === 'on';
