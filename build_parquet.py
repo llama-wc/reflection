@@ -1,3 +1,4 @@
+import hashlib
 import polars as pl
 import requests
 import zipfile
@@ -16,6 +17,11 @@ TMDB_BASE = "https://api.themoviedb.org/3"
 # (ml-25m is a frozen 2019 snapshot and drops every movie released since.)
 ML_URL = "https://files.grouplens.org/datasets/movielens/ml-latest.zip"
 ML_DIR = "raw_data/ml-latest"
+# The 2023-07-20 release (MD5 matches grouplens's published ml-latest.zip.md5).
+# Since 2026-09 files.grouplens.org serves a chain to an emSign root that the
+# standard trust stores lack, so the download falls back to an unverified
+# connection and this hash is what proves the file is intact.
+ML_SHA256 = "66a9e518c747d76b241d9a859b001a2619d3ed1672ceef599eb50daf73a7b4a3"
 
 # Only the most-rated movies get TMDB metadata; keeps movies.parquet small.
 TOP_N_MOVIES = 2500
@@ -206,8 +212,16 @@ def main():
 
     # DOWNLOAD AND EXTRACT RAW DATA
     print(f"Downloading {ML_URL}...")
-    response = requests.get(ML_URL, timeout=600)
+    try:
+        response = requests.get(ML_URL, timeout=600)
+    except requests.exceptions.SSLError:
+        print("⚠️ Certificate check failed; retrying unverified and checking the SHA-256 instead.")
+        requests.packages.urllib3.disable_warnings()
+        response = requests.get(ML_URL, timeout=600, verify=False)
     response.raise_for_status()
+    digest = hashlib.sha256(response.content).hexdigest()
+    if digest != ML_SHA256:
+        sys.exit(f"❌ {ML_URL} has SHA-256 {digest}, expected {ML_SHA256}; refusing to use it.")
 
     print("Extracting files...")
     with zipfile.ZipFile(io.BytesIO(response.content)) as z:
